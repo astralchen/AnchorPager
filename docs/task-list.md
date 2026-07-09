@@ -68,6 +68,8 @@
 - [x] 定义 accessibility category
 - [x] 定义 resource category
 - [x] 提供内部可注入 log sink 以便测试
+- [x] `AnchorPagerLogger.log` 支持非主线程调用
+- [x] 测试非主线程日志会将 sink 事件投递回 MainActor
 - [x] 测试日志 category 和 level 记录
 - [x] 测试日志不依赖人工查看控制台
 

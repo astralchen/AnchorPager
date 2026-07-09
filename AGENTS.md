@@ -134,6 +134,7 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExa
 8. 日志不得输出业务数据、用户内容、完整 view 层级或可能包含隐私的数据。
 9. 新增关键日志事件时必须同步提交日志测试。
 10. 日志测试应通过内部可注入 log sink 或等价机制验证，不依赖人工查看控制台。
+11. 日志门面不得整体限制为 `@MainActor`；`AnchorPagerLogger.log` 必须可从非主线程内部路径调用。需要隔离的测试 sink 可以单独使用 MainActor 或等价同步机制保护。
 
 ## UIKit 与并发要求
 

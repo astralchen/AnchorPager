@@ -59,14 +59,14 @@
 - Create: `Tests/AnchorPagerTests/AnchorPagerLoggerTests.swift`
 
 **Interfaces:**
-- Produces: `@MainActor internal enum AnchorPagerLogger`
+- Produces: internal `AnchorPagerLogger`，`log` 不绑定 MainActor
 - Produces: `AnchorPagerLogger.Category` with `lifecycle`、`layout`、`header`、`paging`、`children`、`scroll`、`inset`、`overscroll`、`gesture`、`accessibility`、`resource`
 - Produces: `AnchorPagerLogger.Level`
-- Produces: injectable `AnchorPagerLogger.sink`
+- Produces: injectable `AnchorPagerLogger.sink`，sink 单独由 MainActor 隔离
 
 - [x] Step 1: 先写日志 category、level 和 sink 捕获测试。
 - [x] Step 2: 运行 logger 单测，预期因类型不存在失败。
-- [x] Step 3: 实现 `AnchorPagerLogger`，底层用 `os.Logger`，sink 用于测试。
+- [x] Step 3: 实现 `AnchorPagerLogger`，底层用 `os.Logger`，`log` 支持非主线程调用，sink 用于测试。
 - [x] Step 4: 运行 logger 单测，预期通过。
 
 ### Task 3: Public API Skeleton

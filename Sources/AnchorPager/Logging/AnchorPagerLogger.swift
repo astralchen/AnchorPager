@@ -1,9 +1,10 @@
+import Foundation
 import OSLog
 
-@MainActor
 enum AnchorPagerLogger {
     static let subsystem = "com.anchorpager.AnchorPager"
 
+    @MainActor
     static var sink: ((Event) -> Void)?
 
     enum Category: String, CaseIterable, Sendable {
@@ -34,7 +35,7 @@ enum AnchorPagerLogger {
 
     static func log(_ level: Level, category: Category, event: String) {
         let record = Event(category: category, level: level, event: event)
-        sink?(record)
+        emitToSink(record)
 
         let logger = Logger(subsystem: subsystem, category: category.rawValue)
         switch level {
@@ -44,6 +45,18 @@ enum AnchorPagerLogger {
             logger.info("\(event, privacy: .public)")
         case .error:
             logger.error("\(event, privacy: .public)")
+        }
+    }
+
+    private static func emitToSink(_ record: Event) {
+        if Thread.isMainThread {
+            MainActor.assumeIsolated {
+                sink?(record)
+            }
+        } else {
+            Task { @MainActor in
+                sink?(record)
+            }
         }
     }
 }
