@@ -4,7 +4,7 @@
 
 **Goal:** 建立 AnchorPager v0.1 的可编译 UIKit/Swift Package 基础，交付 Public API skeleton、日志门面、Header/Child/Scroll 基础能力和 Tabman/Pageboy internal adapter 边界。
 
-**Current Status:** 已完成 v0.1 foundation 范围并提交到 `codex/v0-1-foundation`，并已创建可构建的 `AnchorPagerExample` 示例工程与基础启动 UI test。本计划覆盖的是基础设施、API 骨架、内部承载、scroll discovery、adapter 边界和示例工程接入；完整 v0.1 可视分页验收仍需要后续把 Header、Tabman/Pageboy adapter、child store 和 fallback host 串入 `AnchorPagerViewController`。
+**Current Status:** 已完成 v0.1 foundation 范围并提交到 `codex/v0-1-foundation`，并已创建可构建的 `AnchorPagerExample` 示例工程与基础启动 UI test。当前已继续按 v0.1 节奏把 Header、Tabman/Pageboy adapter 和页面内容串入 `AnchorPagerViewController` 的基础可视路径；分段栏点击切页、横向滑动切页、完整 child store/fallback host 接入和纵向滚动协调仍按后续 v0.1 子任务推进。
 
 **Architecture:** `AnchorPagerViewController` 是唯一 public 容器入口；Public API 不暴露 Tabman/Pageboy 类型。Header、Children、Paging、Logging 按目录分层，v0.1 只实现可测试的基础承载和分页选择状态，不实现完整纵向滚动协调、overscroll owner 或尺寸变化状态机。
 
@@ -190,10 +190,29 @@
 - [x] Step 3: 运行 `xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test`，预期通过。
 - [x] Step 4: 示例工程已创建，运行 `Examples/AnchorPagerExample.xcodeproj` build 和基础启动测试。
 
+### Task 10: v0.1 主容器基础可视接线
+
+**Files:**
+- Modify: `Sources/AnchorPager/Public/AnchorPagerViewController.swift`
+- Modify: `Sources/AnchorPager/Header/AnchorPagerHeaderViewHost.swift`
+- Modify: `Tests/AnchorPagerTests/AnchorPagerViewControllerTests.swift`
+- Modify: `Examples/AnchorPagerExample/AnchorPagerExampleUITests/AnchorPagerExampleUITests.swift`
+
+**Interfaces:**
+- Consumes: `AnchorPagerHeaderViewHost`、`AnchorPagerPagingAdapter`
+- Produces: `reloadData()` 后 Header、分段栏和当前页面内容可见的基础主容器路径
+
+- [x] Step 1: 先写 `AnchorPagerViewController` 单测，验证 `reloadData()` 会把 Header 和 paging adapter 安装进主容器。
+- [x] Step 2: 先写示例 UI test，验证启动后可看到 Header、分段栏和当前页面内容。
+- [x] Step 3: 将 Header host 和 `AnchorPagerPagingAdapter` 串入 `AnchorPagerViewController`，并保持 Tabman/Pageboy 类型不进入 public API。
+- [x] Step 4: 运行新增单测和 UI test，确认基础可视路径通过。
+
 ## Verification Record
 
 - `git diff --check`：通过。
 - `swift package resolve`：通过，解析到 Tabman `4.0.1`、Pageboy `5.0.2`。
-- `xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcodebuild test`：通过，37 个测试、0 失败。
+- `xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcodebuild test`：通过，38 个测试、0 失败。
 - `xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'generic/platform=iOS Simulator' -derivedDataPath .build/example-xcodebuild build`：通过。
-- `xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/example-xcodebuild test`：通过，1 个示例工程单测和 1 个基础启动 UI test 通过。
+- `xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/example-xcodebuild test`：通过，1 个示例工程单测和 2 个 UI test 通过。
+- `xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcodebuild -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testReloadDataInstallsVisibleHeaderAndPagingAdapter test`：通过。
+- `xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/example-xcodebuild -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testLaunchShowsHeaderTabBarAndSelectedPageContent test`：通过。

@@ -12,9 +12,13 @@ final class AnchorPagerHeaderViewHost {
         view.translatesAutoresizingMaskIntoConstraints = false
     }
 
-    func install(_ content: AnchorPagerHeaderContent, in parentViewController: UIViewController) {
+    func install(
+        _ content: AnchorPagerHeaderContent,
+        in parentViewController: UIViewController,
+        hostParentView: UIView? = nil
+    ) {
         self.parentViewController = parentViewController
-        installHostViewIfNeeded(in: parentViewController.view)
+        installHostViewIfNeeded(in: hostParentView ?? parentViewController.view)
         removeContent(keepHostView: true)
 
         switch content {
@@ -46,8 +50,9 @@ final class AnchorPagerHeaderViewHost {
     }
 
     private func installHostViewIfNeeded(in parentView: UIView) {
-        guard view.superview == nil else { return }
+        guard view.superview !== parentView else { return }
 
+        view.removeFromSuperview()
         parentView.addSubview(view)
         NSLayoutConstraint.activate([
             view.leadingAnchor.constraint(equalTo: parentView.leadingAnchor),

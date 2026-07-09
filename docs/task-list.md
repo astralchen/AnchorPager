@@ -182,7 +182,7 @@
 - [x] `docs/architecture.md` 记录 Tabman/Pageboy 验证版本
 - [x] `docs/architecture.md` 说明日志策略、category、过滤方式和性能注意事项
 - [x] README 说明如何查看和过滤 AnchorPager 日志
-- [ ] 示例工程显示 Header、分段栏和多个页面
+- [x] 示例工程显示 Header、分段栏和多个页面
 - [ ] 示例工程支持点击分段栏切页
 - [ ] 示例工程支持横向滑动切页
 
@@ -212,13 +212,14 @@
 - [x] fallback host 日志测试
 - [x] `AnchorPagerAssertions` 非 MainActor 调用测试
 - [x] 示例工程基础启动 UI test
+- [x] 示例工程 Header、分段栏和页面内容 UI test
 
 ### v0.1 验收
 
 - [x] `swift package resolve` 通过
 - [x] Package 单测通过
 - [x] 示例工程可构建
-- [ ] 示例工程可显示 Header、分段栏和多个页面
+- [x] 示例工程可显示 Header、分段栏和多个页面
 - [ ] 点击、横滑、API 三种切页方式可用
 - [x] v0.1 关键事件日志测试通过
 - [x] `git diff --check` 通过

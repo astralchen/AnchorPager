@@ -1,6 +1,6 @@
 # AnchorPager 架构说明
 
-本文档面向维护者，记录当前 v0.1 foundation 的架构边界和已固定的基础契约。
+本文档面向维护者，记录当前 v0.1 可视分页核心阶段的架构边界和已固定的基础契约。
 
 ## 模块划分
 
@@ -66,7 +66,17 @@ Public API source scan 测试会检查 `Sources/AnchorPager/Public/` 不包含 `
 4. Header view `intrinsicContentSize.height`
 5. 无有效结果时为 `0`
 
-完整 header 折叠、safe area 和 runtime frame 恢复在后续版本实现。
+`AnchorPagerViewController` 现在会在主容器内安装 Header host，并把测量后的 Header 高度接入纵向内容布局。完整 header 折叠、safe area 和 runtime frame 恢复在后续版本实现。
+
+## 主容器可视装配
+
+`AnchorPagerViewController.reloadData()` 会从 data source 收集 Header、标题和 child view controller，并在 view loaded 后安装：
+
+- `verticalScrollView`：主容器纵向滚动入口
+- Header host：承载 `.view` 或 `.viewController` Header
+- `AnchorPagerPagingAdapter`：内部 Tabman/Pageboy adapter，负责分段栏和横向分页内容
+
+主容器只持有内部 adapter，不向 Public API 暴露 Tabman/Pageboy 类型。当前装配提供基础可视路径和 `setSelectedIndex(_:animated:)` 到 adapter 的转发；完整 child cache window、scroll inset ownership、点击/横滑切页 UI 验收和纵向嵌套滚动协调仍继续按 v0.1/v0.3 节奏推进。
 
 ## Child Lifecycle
 
@@ -107,9 +117,9 @@ category 覆盖：
 
 ## Known Limitations
 
-当前 v0.1 foundation 尚未完成：
+当前 v0.1 尚未完成：
 
-- 示例工程已创建并可构建；当前只验证 public API 接入和基础启动，完整 Header/分段栏/多页面可视装配仍未串入主容器
+- 示例工程已验证基础 Header、分段栏和当前页面内容可见；分段栏点击切页和横向滑动切页仍需补充 UI 验收
 - Header 折叠/展开布局引擎
 - managed inset ownership
 - 完整 child cache window 和 appearance lifecycle 转发

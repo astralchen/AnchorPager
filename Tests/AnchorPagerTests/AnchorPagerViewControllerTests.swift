@@ -72,6 +72,38 @@ final class AnchorPagerViewControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testReloadDataInstallsVisibleHeaderAndPagingAdapter() {
+        let pager = AnchorPagerViewController()
+        let headerView = UIView()
+        headerView.heightAnchor.constraint(equalToConstant: 96).isActive = true
+        let first = UIViewController()
+        let second = UIViewController()
+        let dataSource = StubDataSource(
+            count: 2,
+            titles: ["First", "Second"],
+            viewControllers: [first, second],
+            headerContent: .view(headerView)
+        )
+        pager.dataSource = dataSource
+        pager.loadViewIfNeeded()
+
+        pager.reloadData()
+
+        XCTAssertTrue(headerView.isDescendant(of: pager.view))
+
+        let adapter = pager.children.compactMap { $0 as? AnchorPagerPagingAdapter }.first
+        guard let adapter else {
+            XCTFail("reloadData 应安装分页 adapter。")
+            return
+        }
+        XCTAssertTrue(adapter.parent === pager)
+        XCTAssertTrue(adapter.view.isDescendant(of: pager.view))
+        XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 2)
+        XCTAssertTrue(adapter.viewController(for: adapter, at: 0) === first)
+        XCTAssertTrue(adapter.viewController(for: adapter, at: 1) === second)
+    }
+
+    @MainActor
     func testReloadDataAndSelectionWriteLifecycleAndPagingLogs() {
         let pager = AnchorPagerViewController()
         let dataSource = StubDataSource(count: 2)
@@ -120,9 +152,20 @@ final class AnchorPagerViewControllerTests: XCTestCase {
 @MainActor
 private final class StubDataSource: AnchorPagerViewControllerDataSource {
     var count: Int
+    var titles: [String]
+    var viewControllers: [UIViewController]
+    var headerContent: AnchorPagerHeaderContent
 
-    init(count: Int) {
+    init(
+        count: Int,
+        titles: [String]? = nil,
+        viewControllers: [UIViewController]? = nil,
+        headerContent: AnchorPagerHeaderContent = .view(UIView())
+    ) {
         self.count = count
+        self.titles = titles ?? (0..<max(0, count)).map { "Page \($0)" }
+        self.viewControllers = viewControllers ?? (0..<max(0, count)).map { _ in UIViewController() }
+        self.headerContent = headerContent
     }
 
     func numberOfViewControllers(in pagerViewController: AnchorPagerViewController) -> Int {
@@ -133,18 +176,18 @@ private final class StubDataSource: AnchorPagerViewControllerDataSource {
         _ pagerViewController: AnchorPagerViewController,
         titleForViewControllerAt index: Int
     ) -> String {
-        "Page \(index)"
+        titles.indices.contains(index) ? titles[index] : "Page \(index)"
     }
 
     func pagerViewController(
         _ pagerViewController: AnchorPagerViewController,
         viewControllerAt index: Int
     ) -> UIViewController {
-        UIViewController()
+        viewControllers.indices.contains(index) ? viewControllers[index] : UIViewController()
     }
 
     func headerContent(in pagerViewController: AnchorPagerViewController) -> AnchorPagerHeaderContent {
-        .view(UIView())
+        headerContent
     }
 }
 

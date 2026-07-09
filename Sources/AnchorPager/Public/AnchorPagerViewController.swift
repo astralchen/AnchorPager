@@ -23,12 +23,21 @@ open class AnchorPagerViewController: UIViewController {
     /// AnchorPager 管理的纵向容器滚动视图。
     public let verticalScrollView = UIScrollView()
 
+    private let contentView = UIView()
+    private let headerViewHost = AnchorPagerHeaderViewHost()
+    private let pagingAdapter = AnchorPagerPagingAdapter()
+    private var headerHeightConstraint: NSLayoutConstraint?
+    private var pagingHeightConstraint: NSLayoutConstraint?
+    private var currentHeaderContent: AnchorPagerHeaderContent?
+    private var currentTitles: [String] = []
+    private var currentViewControllers: [UIViewController] = []
     private var pageCount = 0
 
     /// 创建 AnchorPager 容器。
     public init(configuration: AnchorPagerConfiguration = .default) {
         self.configuration = configuration
         super.init(nibName: nil, bundle: nil)
+        configurePagingAdapter()
         AnchorPagerLogger.log(.info, category: .lifecycle, event: "init")
     }
 
@@ -36,18 +45,23 @@ open class AnchorPagerViewController: UIViewController {
     public required init?(coder: NSCoder) {
         self.configuration = .default
         super.init(coder: coder)
+        configurePagingAdapter()
         AnchorPagerLogger.log(.info, category: .lifecycle, event: "init")
     }
 
     deinit {
-        MainActor.assumeIsolated {
-            AnchorPagerLogger.log(.info, category: .lifecycle, event: "deinit")
-        }
+        AnchorPagerLogger.log(.info, category: .lifecycle, event: "deinit")
     }
 
     open override func viewDidLoad() {
         super.viewDidLoad()
         installVerticalScrollViewIfNeeded()
+        reloadVisibleContentIfNeeded()
+    }
+
+    open override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        updateVisibleLayout()
     }
 
     /// 重新加载页面、标题和 Header 数据。
@@ -64,10 +78,21 @@ open class AnchorPagerViewController: UIViewController {
 
         if pageCount == 0 {
             selectedIndex = 0
+            currentTitles = []
+            currentViewControllers = []
         } else if selectedIndex >= pageCount {
             selectedIndex = pageCount - 1
         }
 
+        currentHeaderContent = dataSource?.headerContent(in: self)
+        currentTitles = (0..<pageCount).map { index in
+            dataSource?.pagerViewController(self, titleForViewControllerAt: index) ?? ""
+        }
+        currentViewControllers = (0..<pageCount).map { index in
+            dataSource?.pagerViewController(self, viewControllerAt: index) ?? UIViewController()
+        }
+
+        reloadVisibleContentIfNeeded()
         AnchorPagerLogger.log(.info, category: .lifecycle, event: "reloadData.end")
     }
 
@@ -84,6 +109,7 @@ open class AnchorPagerViewController: UIViewController {
         self.selectedIndex = selectedIndex
         AnchorPagerLogger.log(.info, category: .paging, event: "setSelectedIndex.commit")
         delegate?.pagerViewController(self, didSelectViewControllerAt: selectedIndex)
+        pagingAdapter.setSelectedIndex(selectedIndex, animated: animated)
     }
 
     /// 重新测量并布局 Header。
@@ -96,6 +122,7 @@ open class AnchorPagerViewController: UIViewController {
     private func installVerticalScrollViewIfNeeded() {
         guard verticalScrollView.superview == nil else { return }
 
+        verticalScrollView.alwaysBounceVertical = true
         verticalScrollView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(verticalScrollView)
         NSLayoutConstraint.activate([
@@ -104,5 +131,118 @@ open class AnchorPagerViewController: UIViewController {
             verticalScrollView.topAnchor.constraint(equalTo: view.topAnchor),
             verticalScrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
+
+        contentView.translatesAutoresizingMaskIntoConstraints = false
+        verticalScrollView.addSubview(contentView)
+        NSLayoutConstraint.activate([
+            contentView.leadingAnchor.constraint(equalTo: verticalScrollView.contentLayoutGuide.leadingAnchor),
+            contentView.trailingAnchor.constraint(equalTo: verticalScrollView.contentLayoutGuide.trailingAnchor),
+            contentView.topAnchor.constraint(equalTo: verticalScrollView.contentLayoutGuide.topAnchor),
+            contentView.bottomAnchor.constraint(equalTo: verticalScrollView.contentLayoutGuide.bottomAnchor),
+            contentView.widthAnchor.constraint(equalTo: verticalScrollView.frameLayoutGuide.widthAnchor)
+        ])
     }
+
+    private func configurePagingAdapter() {
+        pagingAdapter.eventDelegate = self
+    }
+
+    private func reloadVisibleContentIfNeeded() {
+        guard isViewLoaded else { return }
+
+        installVerticalScrollViewIfNeeded()
+        installHeaderHost()
+        installPagingAdapterIfNeeded()
+        updateVisibleLayout()
+        pagingAdapter.reload(
+            titles: currentTitles,
+            viewControllers: currentViewControllers,
+            selectedIndex: selectedIndex
+        )
+    }
+
+    private func installHeaderHost() {
+        let headerContent = currentHeaderContent ?? .view(UIView())
+        headerViewHost.install(headerContent, in: self, hostParentView: contentView)
+
+        if headerHeightConstraint == nil {
+            let headerHeightConstraint = headerViewHost.view.heightAnchor.constraint(equalToConstant: 0)
+            headerHeightConstraint.isActive = true
+            self.headerHeightConstraint = headerHeightConstraint
+        }
+    }
+
+    private func installPagingAdapterIfNeeded() {
+        let didAddPagingAdapter = pagingAdapter.parent == nil
+        if pagingAdapter.parent == nil {
+            addChild(pagingAdapter)
+        }
+
+        if pagingAdapter.view.superview == nil {
+            let adapterView = pagingAdapter.view!
+            adapterView.translatesAutoresizingMaskIntoConstraints = false
+            contentView.addSubview(adapterView)
+            NSLayoutConstraint.activate([
+                adapterView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+                adapterView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+                adapterView.topAnchor.constraint(equalTo: headerViewHost.view.bottomAnchor),
+                adapterView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
+            ])
+
+            let pagingHeightConstraint = adapterView.heightAnchor.constraint(equalTo: verticalScrollView.frameLayoutGuide.heightAnchor)
+            pagingHeightConstraint.isActive = true
+            self.pagingHeightConstraint = pagingHeightConstraint
+        }
+
+        if didAddPagingAdapter {
+            pagingAdapter.didMove(toParent: self)
+        }
+    }
+
+    private func updateVisibleLayout() {
+        guard isViewLoaded, headerViewHost.view.superview != nil else { return }
+
+        let width = view.bounds.width > 0 ? view.bounds.width : UIScreen.main.bounds.width
+        let measuredHeight = headerViewHost.measure(
+            in: CGSize(width: width, height: UIView.layoutFittingCompressedSize.height)
+        )
+        headerHeightConstraint?.constant = resolvedHeaderHeight(for: measuredHeight)
+        pagingHeightConstraint?.isActive = true
+    }
+
+    private func resolvedHeaderHeight(for measuredHeight: CGFloat) -> CGFloat {
+        switch configuration.header.heightMode {
+        case let .automatic(min, max):
+            let lowerBounded = Swift.max(min, measuredHeight)
+            guard let max else { return lowerBounded }
+            return Swift.min(max, lowerBounded)
+        case let .fixed(max, min):
+            return Swift.max(min, max)
+        case let .ranged(min, max):
+            return Swift.min(max, Swift.max(min, measuredHeight))
+        }
+    }
+
+    private func commitSelectedIndex(_ index: Int, animated: Bool) {
+        guard index != selectedIndex else { return }
+
+        selectedIndex = index
+        AnchorPagerLogger.log(.info, category: .paging, event: "setSelectedIndex.commit")
+        delegate?.pagerViewController(self, didSelectViewControllerAt: index)
+    }
+}
+
+extension AnchorPagerViewController: AnchorPagerPagingAdapterDelegate {
+    func pagingAdapter(_ adapter: AnchorPagerPagingAdapter, willSelect index: Int, animated: Bool) {}
+
+    func pagingAdapter(_ adapter: AnchorPagerPagingAdapter, didSelect index: Int, animated: Bool) {
+        guard index >= 0, index < pageCount else { return }
+        commitSelectedIndex(index, animated: animated)
+    }
+
+    func pagingAdapter(
+        _ adapter: AnchorPagerPagingAdapter,
+        didCancelSelectionAt index: Int,
+        returningTo previousIndex: Int
+    ) {}
 }
