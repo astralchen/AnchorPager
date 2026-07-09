@@ -1,6 +1,5 @@
-@MainActor
 enum AnchorPagerAssertions {
-    static var isEnabled = true
+    @TaskLocal static var isEnabled = true
 
     static func failure(
         _ message: @autoclosure () -> String,

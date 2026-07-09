@@ -18,6 +18,8 @@
 - [ ] Tabman/Pageboy 类型只出现在 internal adapter 层
 - [ ] Public API 不暴露第三方库类型
 - [ ] Public API、data source、delegate、coordinator 状态更新保持 `@MainActor`
+- [ ] 只有直接操作 UIKit 状态或维护 UI lifecycle/coordinator 状态的内部类型整体使用 `@MainActor`
+- [ ] 非 UI 基础设施不因方便整体限制主线程，必要时使用 `nonisolated`、task-local 或真实同步机制表达隔离
 - [ ] 不复制参考项目源码、public API 或命名
 - [ ] 不引入具体业务场景、内容类型、数据模型或场景命名
 - [ ] 不使用 `Task.detached` 绕过 actor 隔离
@@ -208,6 +210,7 @@
 - [x] child add/remove 日志测试
 - [x] 分页切换日志测试
 - [x] fallback host 日志测试
+- [x] `AnchorPagerAssertions` 非 MainActor 调用测试
 
 ### v0.1 验收
 

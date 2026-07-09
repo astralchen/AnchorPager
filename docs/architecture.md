@@ -7,14 +7,18 @@
 ```text
 Sources/AnchorPager/
   Public/      Public API、配置、协议、UIViewController scroll 接入扩展
-  Core/        内部断言和模块基础
+  Core/        内部断言和非 UI 基础设施
   Header/      Header UIView/UIViewController 基础承载与测量
   Children/    Child containment store 和 fallback page scroll host
   Paging/      Tabman/Pageboy internal adapter
   Logging/     AnchorPagerLogger
 ```
 
-`AnchorPagerViewController` 是唯一 public 容器入口。UIKit 状态更新、data source、delegate 和内部 coordinator 均保持 MainActor 语义。
+`AnchorPagerViewController` 是唯一 public 容器入口。UIKit 状态更新、data source、delegate 和内部 coordinator 均保持 MainActor 语义。非 UI 基础设施不因测试或调用便利整体绑定 MainActor。
+
+## Core 基础设施
+
+`AnchorPagerAssertions` 是内部断言门面，不操作 UIKit 状态，因此不绑定 MainActor。测试需要临时关闭断言时通过 `@TaskLocal` 的 `isEnabled` 覆盖当前调用上下文，避免共享可变全局状态，也避免使用 `nonisolated(unsafe)` 压制 Swift 6 并发检查。
 
 ## Public API 契约
 

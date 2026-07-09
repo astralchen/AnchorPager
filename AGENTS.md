@@ -139,11 +139,13 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExa
 ## UIKit 与并发要求
 
 1. UIKit 类型、公开 API、data source、delegate、coordinator 状态更新保持 `@MainActor`。
-2. 不使用 `Task.detached` 绕过 actor 隔离。
-3. 不使用 `@unchecked Sendable`、`nonisolated(unsafe)`、`@preconcurrency` 粗暴压制问题，除非有明确线程安全说明并写入文档。
-4. Header 使用 UIViewController 时必须通过标准 UIKit containment 管理。
-5. AnchorPagerViewController 是 child containment 和 appearance lifecycle 的唯一管理者。
-6. page 切换、reloadData、setSelectedIndex、懒加载和卸载都不能破坏生命周期语义。
+2. 只有直接操作 UIKit 状态或维护 UI lifecycle/coordinator 状态的内部类型应整体使用 `@MainActor`；日志、断言、纯计算工具等非 UI 基础设施不得为了方便整体限制主线程。
+3. 若类型本身不需要 actor 隔离，优先移除不必要的 `@MainActor`；只有在 actor 或 global actor 内提供同步非隔离入口时才考虑 `nonisolated`，不得使用 `nonisolated(unsafe)` 粗暴绕过。
+4. 不使用 `Task.detached` 绕过 actor 隔离。
+5. 不使用 `@unchecked Sendable`、`nonisolated(unsafe)`、`@preconcurrency` 粗暴压制问题，除非有明确线程安全说明并写入文档。
+6. Header 使用 UIViewController 时必须通过标准 UIKit containment 管理。
+7. AnchorPagerViewController 是 child containment 和 appearance lifecycle 的唯一管理者。
+8. page 切换、reloadData、setSelectedIndex、懒加载和卸载都不能破坏生命周期语义。
 
 ## Git 与提交要求
 

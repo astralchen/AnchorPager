@@ -48,9 +48,9 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         pager.reloadData()
         pager.setSelectedIndex(1, animated: false)
 
-        AnchorPagerAssertions.isEnabled = false
-        defer { AnchorPagerAssertions.isEnabled = true }
-        pager.setSelectedIndex(4, animated: false)
+        AnchorPagerAssertions.$isEnabled.withValue(false) {
+            pager.setSelectedIndex(4, animated: false)
+        }
 
         XCTAssertEqual(pager.selectedIndex, 1)
         XCTAssertEqual(pager.effectiveSelectedIndex, 1)
@@ -99,9 +99,9 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         AnchorPagerLogger.sink = { events.append($0) }
         defer { AnchorPagerLogger.sink = nil }
 
-        AnchorPagerAssertions.isEnabled = false
-        defer { AnchorPagerAssertions.isEnabled = true }
-        pager.setSelectedIndex(3, animated: false)
+        AnchorPagerAssertions.$isEnabled.withValue(false) {
+            pager.setSelectedIndex(3, animated: false)
+        }
 
         XCTAssertTrue(events.contains(.init(category: .paging, level: .debug, event: "setSelectedIndex.outOfRange")))
     }

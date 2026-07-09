@@ -20,6 +20,7 @@
 - Horizontal paging 使用 Tabman + Pageboy。
 - Tabman/Pageboy 类型只出现在 adapter/internal 层，不出现在 `Sources/AnchorPager/Public/`。
 - Public API、data source、delegate、coordinator 状态更新保持 `@MainActor`。
+- 只有直接操作 UIKit 状态或维护 UI lifecycle/coordinator 状态的内部类型整体使用 `@MainActor`；日志、断言、纯计算工具等非 UI 基础设施不得为了方便整体限制主线程。
 - 不复制参考项目源码、public API 或命名。
 - 不引入具体业务场景、内容类型、数据模型或场景命名。
 - 不使用 `Task.detached` 绕过 actor 隔离。

@@ -482,17 +482,19 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExa
 ## 25. 代码质量要求
 
 1. UIKit 类型、公开 API、data source、delegate、coordinator 状态更新保持 `@MainActor`。
-2. 不使用 `Task.detached` 绕过 actor 隔离。
-3. 不使用 `@unchecked Sendable`、`nonisolated(unsafe)`、`@preconcurrency` 压制问题，除非有明确线程安全说明。
-4. public/open API 使用简洁 DocC 注释。
-5. 第三方库类型不泄漏到 AnchorPager public API。
-6. 核心框架不能包含具体应用场景专属类型或命名。
-7. 优先小步实现，每个重要行为都有对应测试。
-8. 每个实现任务完成时必须同步提交测试，不能把测试推迟到后续任务统一补。
-9. 触达用户可见 UI、UIKit 生命周期、手势、滚动、分页或系统交互的任务必须包含必要 UI 测试。
-10. 任务验收说明必须列出实际运行过的测试命令和结果。
-11. 日志必须通过统一内部门面输出，避免零散调用 `print` 或直接散落 `Logger`。
-12. 日志必须以状态变化和异常定位为主，不得在滚动热路径持续输出高频噪声。
+2. 只有直接操作 UIKit 状态或维护 UI lifecycle/coordinator 状态的内部类型应整体使用 `@MainActor`；日志、断言、纯计算工具等非 UI 基础设施不得为了方便整体限制主线程。
+3. 若类型本身不需要 actor 隔离，优先移除不必要的 `@MainActor`；只有在 actor 或 global actor 内提供同步非隔离入口时才考虑 `nonisolated`。
+4. 不使用 `Task.detached` 绕过 actor 隔离。
+5. 不使用 `@unchecked Sendable`、`nonisolated(unsafe)`、`@preconcurrency` 压制问题，除非有明确线程安全说明。
+6. public/open API 使用简洁 DocC 注释。
+7. 第三方库类型不泄漏到 AnchorPager public API。
+8. 核心框架不能包含具体应用场景专属类型或命名。
+9. 优先小步实现，每个重要行为都有对应测试。
+10. 每个实现任务完成时必须同步提交测试，不能把测试推迟到后续任务统一补。
+11. 触达用户可见 UI、UIKit 生命周期、手势、滚动、分页或系统交互的任务必须包含必要 UI 测试。
+12. 任务验收说明必须列出实际运行过的测试命令和结果。
+13. 日志必须通过统一内部门面输出，避免零散调用 `print` 或直接散落 `Logger`。
+14. 日志必须以状态变化和异常定位为主，不得在滚动热路径持续输出高频噪声。
 
 ## 26. 一句话目标
 
