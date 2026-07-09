@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 建立 AnchorPager v0.1 的可编译 UIKit/Swift Package 基础，交付 Public API skeleton、日志门面、Header/Child/Scroll 基础能力和 Tabman/Pageboy internal adapter 边界。
+**Goal:** 建立 AnchorPager v0.1 的可编译 UIKit/Swift Package 基础，交付 Public API skeleton、日志门面、Header/Scroll/fallback 基础能力和 Tabman/Pageboy internal adapter 边界。
 
-**Current Status:** v0.1 可视分页核心路径已完成。当前已创建可构建的 `AnchorPagerExample` 示例工程，并通过单元测试和 UI test 验证 Header、分段栏、页面内容、分段栏点击切页、横向滑动切页、public API 程序化切页、fallback page scroll host 和关键日志事件。纵向嵌套滚动协调、managed inset ownership、完整 child cache window 和 appearance lifecycle 转发按后续版本推进。
+**Current Status:** v0.1 可视分页核心路径已完成。当前已创建可构建的 `AnchorPagerExample` 示例工程，并通过单元测试和 UI test 验证 Header、分段栏、页面内容、分段栏点击切页、横向滑动切页、public API 程序化切页、fallback page scroll host 和关键日志事件。本轮稳定化已补齐程序化 selection 确认后提交、cancel 不提前提交、Header 重复安装幂等和基础 layout context 回调。横向 page 的实际 containment 由 Tabman/Pageboy adapter 执行；纵向嵌套滚动协调、managed inset ownership、完整 page cache window 和 Tabman 驱动的 appearance lifecycle 语义按后续版本推进。
 
-**Architecture:** `AnchorPagerViewController` 是唯一 public 容器入口；Public API 不暴露 Tabman/Pageboy 类型。Header、Children、Paging、Logging 按目录分层，v0.1 只实现可测试的基础承载和分页选择状态，不实现完整纵向滚动协调、overscroll owner 或尺寸变化状态机。
+**Architecture:** `AnchorPagerViewController` 是唯一 public 容器入口；Public API 不暴露 Tabman/Pageboy 类型。Tabman/Pageboy adapter 执行横向 page containment，AnchorPager 维护 page identity、selection 和 reload 对外语义。Header、Children、Paging、Logging 按目录分层，v0.1 只实现可测试的基础承载和分页选择状态，不实现完整纵向滚动协调、overscroll owner 或尺寸变化状态机。
 
 **Tech Stack:** Swift 6、iOS 14+、UIKit、Swift Package Manager、Tabman `from: "4.0.1"`、Pageboy `from: "5.0.2"`、XCTest。
 
@@ -18,6 +18,7 @@
 - UI stack 为 UIKit。
 - Package manager 为 Swift Package Manager。
 - Horizontal paging 使用 Tabman + Pageboy。
+- 横向 page 的实际 UIKit containment 由 Tabman/Pageboy adapter 执行，AnchorPager 不对同一 page view controller 重复 `addChild`。
 - Tabman/Pageboy 类型只出现在 adapter/internal 层，不出现在 `Sources/AnchorPager/Public/`。
 - Public API、data source、delegate、coordinator 状态更新保持 `@MainActor`。
 - 只有直接操作 UIKit 状态或维护 UI lifecycle/coordinator 状态的内部类型整体使用 `@MainActor`；日志、断言、纯计算工具等非 UI 基础设施不得为了方便整体限制主线程。
@@ -125,7 +126,7 @@
 - [x] Step 3: 实现 Child store 和 fallback host。
 - [x] Step 4: 运行 Child 测试，预期通过。
 
-说明：本任务完成的是独立 `AnchorPagerChildViewControllerStore` 和 `AnchorPagerPageScrollHostViewController`。`AnchorPagerViewController.reloadData()` 接入 child store 清理旧 child 属于完整主容器装配，仍保留在 `docs/task-list.md` 的未完成项中。
+说明：本任务完成的是独立 `AnchorPagerChildViewControllerStore` 和 `AnchorPagerPageScrollHostViewController`。横向 page 的实际 containment 由 Tabman/Pageboy adapter 执行；后续 v0.4 应将该 store 重定位或替换为 page state store，不能把同一个 page view controller 再次交给主容器 `addChild`。
 
 ### Task 6: Scroll View Discovery
 
@@ -152,7 +153,7 @@
 
 **Interfaces:**
 - Consumes: Tabman/Pageboy inside `Sources/AnchorPager/Paging/`
-- Produces: internal adapter that accepts titles and child view controllers
+- Produces: internal adapter that accepts titles and child view controllers, and lets Tabman/Pageboy execute horizontal page containment
 - Produces: source-level public surface test ensuring Public API has no `Tabman`/`Pageboy`
 
 - [x] Step 1: 先写 public surface source scan 测试，确认 `Sources/AnchorPager/Public/` 不包含 `Tabman` 或 `Pageboy`。
@@ -236,6 +237,42 @@
 - [x] Step 5: 实现 adapter 回调异常日志和 reloadData stale fallback host 清理。
 - [x] Step 6: 更新 README、architecture 和 task-list 反映 v0.1 当前状态。
 
+### Task 12: v0.1 架构审查后稳定化收尾
+
+**Files:**
+- Modify: `Sources/AnchorPager/Public/AnchorPagerViewController.swift`
+- Modify: `Sources/AnchorPager/Header/AnchorPagerHeaderViewHost.swift`
+- Modify: `Sources/AnchorPager/Paging/AnchorPagerPagingAdapter.swift`
+- Modify: `Tests/AnchorPagerTests/AnchorPagerViewControllerTests.swift`
+- Modify: `Tests/AnchorPagerTests/AnchorPagerHeaderViewHostTests.swift`
+- Modify: `Tests/AnchorPagerTests/AnchorPagerPagingAdapterTests.swift`
+- Modify: `README.md`
+- Modify: `docs/architecture.md`
+- Modify: `docs/task-list.md`
+
+**Interfaces:**
+- Consumes: `AnchorPagerPagingAdapter` 的 Pageboy/Tabman selection callback
+- Produces: 程序化选择事务，只有 Pageboy/Tabman 确认后才提交 public `selectedIndex` 和 delegate 通知
+- Produces: Header host 幂等安装，重复安装同一个 UIView 或 UIViewController 不触发 remove/re-add containment
+- Produces: v0.1 基础 `AnchorPagerLayoutContext` 回调，记录当前 Header frame 和 content frame
+- Produces: 明确 v0.1 对未落地配置项、reload 非空闲策略和 scroll discovery 预加载行为的文档边界
+
+- [x] Step 1: 先写选择事务测试，覆盖程序化切页请求不提前提交、didSelect 后提交、didCancel 不通知 delegate。
+- [x] Step 2: 先写 adapter 测试，覆盖 `setSelectedIndex` 返回值、completion/cancel 日志、乱序回调和第二次请求被拒绝时保留首次 pending selection。
+- [x] Step 3: 先写 Header host 幂等安装测试，覆盖同一 header view/controller 重复安装不移除重加。
+- [x] Step 4: 先写基础布局回调测试，覆盖 `reloadHeaderLayout` 会重新测量并发送 layout context。
+- [x] Step 5: 实现选择事务、adapter completion/cancel 处理、Header 幂等安装和 layout context 回调。
+- [x] Step 6: 对本任务改动做代码自审，重点检查 Tabman/Pageboy 职责边界、UIKit containment/lifecycle、并发隔离、日志和测试覆盖。
+- [x] Step 7: 更新 README、architecture、task-list，说明 v0.1 已修复项和仍归属后续版本的架构边界。
+- [x] Step 8: 运行 `git diff --check`、SwiftPM resolve、可用的包测试和示例工程 build/UI test，并记录结果。
+
+**Self-review record:**
+- selection 事务：public `selectedIndex` 只由 adapter 终态回调提交；cancel 不通知 delegate；被拒绝的新请求不会清空已接受的上一笔 pending selection。
+- Tabman/Pageboy 边界：第三方类型仍只出现在 `Sources/AnchorPager/Paging/` 和测试中，Public API 未暴露 Tabman/Pageboy。
+- UIKit containment：Header 同内容重复安装 no-op；横向 page containment 仍由 adapter 执行，主容器不重复 `addChild` page。
+- 并发隔离：未新增 `Task.detached`、`@unchecked Sendable`、`nonisolated(unsafe)` 或 `@preconcurrency`。
+- 测试与文档：新增选择事务、Header 幂等和 layout context 测试；README、architecture、task-list 和本计划已同步更新。
+
 ## Verification Record
 
 - `git diff --check`：通过。
@@ -246,3 +283,9 @@
 - `xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcodebuild -only-testing:AnchorPagerTests/AnchorPagerChildViewControllerStoreTests/testFallbackPageScrollHostKeepsPlainChildVisibleWithinViewport -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testReloadDataWrapsChildWithoutScrollViewInFallbackHost -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testReloadDataKeepsScrollViewChildUnwrapped test`：通过。
 - `xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/example-xcodebuild-v01-ui -parallel-testing-enabled NO -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testLaunchArgumentSelectsPageThroughPublicAPI -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testHorizontalSwipeSelectsNextPageContent test`：通过。
 - `xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcodebuild -only-testing:AnchorPagerTests/AnchorPagerPagingAdapterTests/testAdapterLogsMissingDuplicateAndOutOfOrderPageboyCallbacks -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testReloadDataRemovesStaleFallbackChildAndWritesChildrenLog test`：通过。
+- `swift test --sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk --triple arm64-apple-ios14.0-simulator --filter 'AnchorPager(ViewController|PagingAdapter|HeaderViewHost)Tests'`：源码和测试目标编译通过，随后 SwiftPM 尝试在 macOS 宿主加载 iOS-simulator XCTest bundle，因平台不兼容失败；该命令不能作为运行型测试结果。
+- `swift build --build-tests --sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk --triple arm64-apple-ios14.0-simulator`：通过，确认 AnchorPager 和新增 iOS Simulator 测试目标可编译。
+- `xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'generic/platform=iOS Simulator' -derivedDataPath .build/example-xcodebuild-v01-stabilization build`：通过。
+- `xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/example-xcodebuild-v01-stabilization-ui -parallel-testing-enabled NO test`：通过，1 个示例工程单测和 5 个 UI test 通过。
+- `git diff --check`：Task 12 收尾后通过。
+- `swift package resolve`：沙盒内因 SwiftPM/clang 用户缓存权限失败，提升权限后通过。

@@ -19,6 +19,10 @@ final class AnchorPagerHeaderViewHost {
     ) {
         self.parentViewController = parentViewController
         installHostViewIfNeeded(in: hostParentView ?? parentViewController.view)
+        guard !isDisplaying(content) else {
+            AnchorPagerLogger.log(.debug, category: .header, event: "header.install.noop")
+            return
+        }
         removeContent(keepHostView: true)
 
         switch content {
@@ -71,6 +75,18 @@ final class AnchorPagerHeaderViewHost {
             headerView.topAnchor.constraint(equalTo: view.topAnchor),
             headerView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
+    }
+
+    private func isDisplaying(_ content: AnchorPagerHeaderContent) -> Bool {
+        switch content {
+        case let .view(headerView):
+            return currentView === headerView && currentViewController == nil && headerView.superview === view
+        case let .viewController(headerViewController):
+            return currentViewController === headerViewController
+                && currentView === headerViewController.view
+                && headerViewController.parent === parentViewController
+                && headerViewController.view.superview === view
+        }
     }
 
     private func removeContent(keepHostView: Bool) {

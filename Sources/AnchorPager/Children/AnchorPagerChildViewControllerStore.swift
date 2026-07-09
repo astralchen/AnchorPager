@@ -1,5 +1,6 @@
 import UIKit
 
+/// 独立 child containment 工具。横向 page 的实际 containment 由 Tabman/Pageboy adapter 执行，不能对同一个 page view controller 重复使用本类型接管。
 @MainActor
 final class AnchorPagerChildViewControllerStore {
     let view = UIView()

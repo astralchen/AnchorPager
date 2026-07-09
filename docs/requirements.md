@@ -33,16 +33,19 @@ AnchorPager 是一个全新的独立 UIKit 容器框架，用于实现可变 Hea
 1. Public API 命名参考 UIKit，避免过度自造术语。
 2. 第三方库类型不得泄漏到 AnchorPager public API。
 3. Tabman 和 Pageboy 只允许出现在 adapter/internal 层。
-4. Tabman 和 Pageboy 负责横向分页、页面切换事件、分段栏和 indicator 渲染。
-5. AnchorPager 负责 Header 布局、吸顶、纵向滚动协调、child scroll inset、顶部 overscroll 事件处理、状态栏点击顶滚和 UIKit containment。
-6. 必须禁用或绕开 Tabman 自动 child inset，避免与 AnchorPager 的 Header/分段栏预留空间管理冲突。
-7. 内部状态机词如 pin anchor、owner、handoff 不得暴露到 public API。
-8. 必须锁定 Tabman/Pageboy 的最低可用版本，并在 `docs/architecture.md` 记录验证过的版本。
-9. 如果 Tabman/Pageboy API 限制影响设计，优先调整 internal adapter，不扩大 public API。
-10. 新增功能、修改重要逻辑或修复问题前，必须先梳理影响范围，再开始实现。
-11. 影响范围至少覆盖 public API、内部分层、UIKit containment、child lifecycle、scroll discovery、inset ownership、paging adapter、gesture/overscroll、日志、测试、示例工程和文档。
-12. 设计必须兼顾后续版本扩展，不得为了当前单点修复破坏既有架构边界、状态语义或未来版本路线。
-13. 如果变更可能影响 public API、跨模块契约、第三方 adapter 边界、线程/actor 隔离、生命周期或用户可见行为，必须先更新设计说明或计划文档，再实现。
+4. Tabman 和 Pageboy 负责横向分页、页面切换事件、分段栏、indicator 渲染，以及横向 page 的实际 UIKit containment 执行。
+5. AnchorPager 负责 Header 布局、吸顶、纵向滚动协调、child scroll inset、顶部 overscroll 事件处理、状态栏点击顶滚、page lifecycle 策略和对外状态语义。
+6. AnchorPager 不得对已经交给 Tabman/Pageboy adapter 执行横向分页的同一个 page view controller 再次 `addChild`，避免双重 containment。
+7. 必须禁用或绕开 Tabman 自动 child inset，避免与 AnchorPager 的 Header/分段栏预留空间管理冲突。
+8. 内部状态机词如 pin anchor、owner、handoff 不得暴露到 public API。
+9. 必须锁定 Tabman/Pageboy 的最低可用版本，并在 `docs/architecture.md` 记录验证过的版本。
+10. 如果 Tabman/Pageboy API 限制影响设计，优先调整 internal adapter，不扩大 public API。
+11. 新增功能、修改重要逻辑或修复问题前，必须先梳理影响范围，再开始实现。
+12. 影响范围至少覆盖 public API、内部分层、UIKit containment、child lifecycle、scroll discovery、inset ownership、paging adapter、gesture/overscroll、日志、测试、示例工程和文档。
+13. 设计必须兼顾后续版本扩展，不得为了当前单点修复破坏既有架构边界、状态语义或未来版本路线。
+14. 如果变更可能影响 public API、跨模块契约、第三方 adapter 边界、线程/actor 隔离、生命周期或用户可见行为，必须先更新设计说明或计划文档，再实现。
+15. 审查或实现过程中如果发现现有实现的真实职责与文档、计划或架构假设不一致，尤其是第三方库职责、UIKit containment、appearance lifecycle、selection commit/cancel、scroll/inset ownership 等边界问题，必须及时提醒用户，并同步更新对应文档。
+16. 每完成一个实现任务或重要修复后，必须做代码自审并记录结论；自审至少覆盖架构边界、public API、第三方 adapter 泄漏、UIKit containment/lifecycle、并发隔离、日志、测试、示例工程和文档。
 
 ## 5. Public API 要求
 
@@ -236,16 +239,17 @@ extension UIViewController {
 
 ## 9. Child 生命周期与缓存要求
 
-1. AnchorPagerViewController 是 child containment 和 appearance lifecycle 的唯一管理者。
-2. child 首次加载必须执行 addChild、添加 view、didMove(toParent:)。
-3. child 卸载必须执行 willMove(toParent: nil)、移除 view、removeFromParent。
-4. 横向分页切换、懒加载、卸载、reloadData、setSelectedIndex 都不能破坏生命周期语义。
-5. page 切换必须正确转发 viewWillAppear、viewDidAppear、viewWillDisappear、viewDidDisappear。
-6. 必须定义 child view controller 缓存窗口，默认至少保留 current page，可选择保留相邻 page。
-7. 卸载 child 前必须保存 scroll offset、managed inset 状态和 appearance 状态。
-8. reloadData 必须清理旧 child、旧 offset snapshot 和旧 Tabman/Pageboy 状态。
-9. Tabman/Pageboy 事件必须通过 adapter 收敛后再驱动 child lifecycle。
-10. 测试必须覆盖生命周期事件顺序和 reloadData 后旧 child 可释放。
+1. AnchorPagerViewController 是 child lifecycle 策略、page identity、reload 清理和对外状态语义的唯一管理者。
+2. 横向 page 的实际 UIKit containment 由内部 Tabman/Pageboy adapter 执行；AnchorPager 不得对同一个 page view controller 重复执行 `addChild`。
+3. Header view controller、fallback page scroll host 和其他 AnchorPager 自有 wrapper 必须通过标准 UIKit containment 管理。
+4. fallback host 首次承载普通 child 时必须执行 `addChild`、添加 view、`didMove(toParent:)`；清理时必须执行 `willMove(toParent: nil)`、移除 view、`removeFromParent`。
+5. 横向分页切换、懒加载、卸载、reloadData、setSelectedIndex 都不能破坏生命周期语义。
+6. page 切换必须正确收敛 Tabman/Pageboy 的 appearance 和 selection 回调，不能让取消或回弹提前提交 public 状态。
+7. 必须定义 page view controller 缓存窗口和 page identity 策略，默认至少保留 current page，可选择保留相邻 page。
+8. 卸载或替换 page 前必须保存 scroll offset、managed inset 状态和必要 appearance 状态。
+9. reloadData 必须清理旧 page state、旧 fallback host content、旧 offset snapshot 和旧 Tabman/Pageboy 状态。
+10. Tabman/Pageboy 事件必须通过 adapter 标准化后再驱动 AnchorPager 的 public selection、scroll/inset 和 lifecycle 策略。
+11. 测试必须覆盖 Tabman 驱动下的生命周期语义、selection cancel、reloadData 后旧 child 可释放，以及 fallback host containment 顺序。
 
 ## 10. API Contract 要求
 
@@ -318,8 +322,8 @@ extension UIViewController {
 ## 16. Resource Lifecycle 要求
 
 1. KVO、Notification、gesture delegate、display link、Task、closure callback 必须在 child 卸载或 deinit 时释放。
-2. 不允许 child store、adapter、coordinator 之间形成 retain cycle。
-3. reloadData 后旧 child 应可释放。
+2. 不允许 page state store、adapter、coordinator 之间形成 retain cycle。
+3. reloadData 后旧 page state、fallback host 和不再使用的 child 应可释放。
 4. deinit 时必须清理内部 observer、gesture 关系和 pending transition。
 
 ## 17. 日志与可观测性要求
@@ -348,7 +352,7 @@ extension UIViewController {
 2. `AnchorPagerLayoutEngine`
 3. `AnchorPagerHeaderViewHost`
 4. `AnchorPagerHeaderCoordinator`
-5. `AnchorPagerChildViewControllerStore`
+5. `AnchorPagerPageStateStore`
 6. `AnchorPagerPageCoordinator`
 7. `AnchorPagerScrollCoordinator`
 8. `AnchorPagerOverscrollCoordinator`
@@ -405,7 +409,7 @@ README.md
 6. 实现 UIViewController anchorPagerScrollView extension、associated object 显式设置、默认嵌套查找和测试。
 7. 实现 AnchorPagerLayoutEngine 和单元测试。
 8. 实现 Header 管理、Header controller containment 和 Header 动态 frame 更新。
-9. 实现 child store、child containment、缓存窗口和 lifecycle 转发。
+9. 实现 page state store、fallback containment、缓存窗口和 Tabman 驱动的 lifecycle 语义转发。
 10. 封装 Tabman/Pageboy adapter。
 11. 实现纵向嵌套滚动协调。
 12. 实现顶部 overscroll event handling。
@@ -446,8 +450,8 @@ README.md
 23. 关闭默认查找后使用内部 page scroll host 测试
 24. 无候选 UIScrollView 时使用内部 page scroll host 测试
 25. 不跨 child view controller 边界查找测试
-26. child add/remove containment 单测
-27. child appearance lifecycle 顺序测试
+26. fallback host child add/remove containment 单测
+27. Tabman 驱动的 child appearance lifecycle 顺序测试
 28. top overscroll owner 互斥单测
 29. top overscroll handling mode 单测
 30. Header 展开/折叠阈值附近抖动测试
@@ -497,8 +501,9 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExa
 10. 每个实现任务完成时必须同步提交测试，不能把测试推迟到后续任务统一补。
 11. 触达用户可见 UI、UIKit 生命周期、手势、滚动、分页或系统交互的任务必须包含必要 UI 测试。
 12. 任务验收说明必须列出实际运行过的测试命令和结果。
-13. 日志必须通过统一内部门面输出，避免零散调用 `print` 或直接散落 `Logger`。
-14. 日志必须以状态变化和异常定位为主，不得在滚动热路径持续输出高频噪声。
+13. 每个实现任务完成时必须做代码自审并记录结论；没有自审记录的任务不得标记完成。
+14. 日志必须通过统一内部门面输出，避免零散调用 `print` 或直接散落 `Logger`。
+15. 日志必须以状态变化和异常定位为主，不得在滚动热路径持续输出高频噪声。
 
 ## 26. 一句话目标
 

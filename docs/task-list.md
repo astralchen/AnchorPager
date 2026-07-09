@@ -16,6 +16,7 @@
 - [ ] 使用 Swift Package Manager
 - [ ] 横向分页使用 Tabman + Pageboy
 - [ ] Tabman/Pageboy 类型只出现在 internal adapter 层
+- [ ] 横向 page 的实际 UIKit containment 由 Tabman/Pageboy adapter 执行，AnchorPager 不对同一 page view controller 重复 `addChild`
 - [ ] Public API 不暴露第三方库类型
 - [ ] Public API、data source、delegate、coordinator 状态更新保持 `@MainActor`
 - [ ] 只有直接操作 UIKit 状态或维护 UI lifecycle/coordinator 状态的内部类型整体使用 `@MainActor`
@@ -24,6 +25,7 @@
 - [ ] 不引入具体业务场景、内容类型、数据模型或场景命名
 - [ ] 新增功能、修改重要逻辑或修复问题前先梳理影响范围
 - [ ] 变更影响评估覆盖 public API、内部分层、UIKit containment、child lifecycle、scroll discovery、inset ownership、paging adapter、gesture/overscroll、日志、测试、示例工程和文档
+- [ ] 发现实现真实职责与文档、计划或架构假设不一致时，及时提醒用户并同步更新对应文档
 - [ ] 设计兼顾后续版本扩展，不为当前单点修复破坏架构边界、状态语义或未来版本路线
 - [ ] 影响跨模块契约、线程/actor 隔离、生命周期或用户可见行为的变更先更新设计说明或计划文档
 - [ ] 不使用 `Task.detached` 绕过 actor 隔离
@@ -33,6 +35,7 @@
 - [ ] 触达用户可见 UI、UIKit 生命周期、手势、滚动、分页或系统交互的任务包含必要 UI 测试
 - [ ] 无法稳定使用 UI 测试覆盖的 UI 行为写明原因，并提供替代自动化验证
 - [ ] 每个任务验收记录实际运行过的测试命令和结果
+- [ ] 每完成一个实现任务或重要修复后先做代码自审，并记录自审结论
 - [ ] 必要事件通过统一内部日志门面记录
 - [ ] 日志使用 `os.Logger`，不在框架库中散落 `print`
 - [ ] 高频滚动路径不逐帧输出普通日志
@@ -123,6 +126,8 @@
 - [x] 为 Header view 承载加入 header 日志
 - [x] 为 Header viewController add/remove 加入 header 和 lifecycle 日志
 - [x] 为 Header 基础测量结果加入 layout 日志
+- [x] 重复安装同一个 Header view 时保持幂等，不触发 remove/re-add
+- [x] 重复安装同一个 Header viewController 时保持幂等，不重复 UIKit containment
 
 ### Tabman/Pageboy Adapter
 
@@ -136,10 +141,22 @@
 - [x] 支持横向滑动切页
 - [x] 支持 `setSelectedIndex(_:animated:)` 驱动切页
 - [x] 收敛 Tabman/Pageboy page change 事件
+- [x] 可见状态下 `setSelectedIndex` 只在 adapter 确认完成后提交 public `selectedIndex`
+- [x] 分页取消或回弹不通知 public selection delegate
+- [x] adapter 拒绝新程序化请求时保留已接受的上一笔 pending selection
 - [x] 禁用或绕开 Tabman 自动 child inset
 - [x] 确保横向 paging scroll view 不暴露到 public API
 - [x] 为分页开始、完成、取消加入 paging 日志
 - [x] 为 Tabman/Pageboy 回调缺失、重复或乱序加入 paging 日志
+
+### v0.1 稳定化收尾
+
+- [x] `reloadHeaderLayout()` 执行基础 Header 重新测量
+- [x] `reloadHeaderLayout()` 发送基础 `AnchorPagerLayoutContext`
+- [x] 文档说明 v0.1 不对忙碌状态下被拒绝的程序化切页做请求排队
+- [x] 文档说明 v0.1 `reloadData()` 仍会提前加载 child view 以执行 scroll discovery
+- [x] 文档说明 `topOverscrollHandlingMode`、`header.topBehavior`、`paging.keepsAdjacentPagesLoaded` 等后续版本配置项当前只保留 skeleton/default
+- [x] 本轮稳定化改动已完成代码自审，重点检查 selection 事务、Tabman/Pageboy 边界、Header containment 幂等、并发隔离、日志和测试覆盖
 
 ### Child 基础管理
 
@@ -154,6 +171,8 @@
 - [x] Debug 下 setSelectedIndex 越界触发 assertionFailure
 - [x] 为 child add/remove 加入 children 日志
 - [x] 为 reloadData 清理旧 child 加入 children 日志
+
+说明：v0.1 的 `AnchorPagerChildViewControllerStore` 是独立基础 containment 工具；横向 page 的实际 containment 由 Tabman/Pageboy adapter 执行。后续 v0.4 应将该工具重定位或替换为 page state store，不能对同一 page view controller 形成双重 containment。
 
 ### Scroll View Discovery
 
@@ -199,6 +218,8 @@
 - [x] reloadData 后 selectedIndex clamp 测试
 - [x] Header UIView 基础承载测试
 - [x] Header UIViewController containment 测试
+- [x] Header UIView 重复安装幂等测试
+- [x] Header UIViewController 重复安装不重复 containment 测试
 - [x] 显式 `anchorPagerScrollView` 优先测试
 - [x] 默认 scroll view lookup 测试
 - [x] 多个 UIScrollView 选择顺序测试
@@ -213,6 +234,10 @@
 - [x] Header 承载日志测试
 - [x] child add/remove 日志测试
 - [x] 分页切换日志测试
+- [x] 程序化切页确认后提交测试
+- [x] 程序化切页取消不通知 delegate 测试
+- [x] adapter 拒绝第二次切页时保留首次 pending selection 测试
+- [x] `reloadHeaderLayout()` 基础 layout context 回调测试
 - [x] fallback host 日志测试
 - [x] `AnchorPagerAssertions` 非 MainActor 调用测试
 - [x] 示例工程基础启动 UI test
@@ -225,6 +250,7 @@
 
 - [x] `swift package resolve` 通过
 - [x] Package 单测通过
+- [x] iOS Simulator 测试目标编译通过
 - [x] 示例工程可构建
 - [x] 示例工程可显示 Header、分段栏和多个页面
 - [x] 点击、横滑、API 三种切页方式可用
@@ -277,13 +303,15 @@
 
 ## v0.4：Child 生命周期与缓存版
 
+- [ ] 实现 page state store
+- [ ] 重定位或替换 `AnchorPagerChildViewControllerStore`，避免与 Tabman/Pageboy 双重 containment
 - [ ] 实现 child cache window
 - [ ] 默认至少保留 current page
 - [ ] 支持配置是否保留相邻 page
 - [ ] 卸载 child 前保存 scroll offset snapshot
 - [ ] 卸载 child 前保存 managed inset 状态
 - [ ] 卸载 child 前保存 appearance 状态
-- [ ] reloadData 清理旧 child
+- [ ] reloadData 清理旧 page state 和旧 fallback host content
 - [ ] reloadData 清理旧 offset snapshot
 - [ ] reloadData 清理旧 Tabman/Pageboy 状态
 - [ ] dataSource 返回负数 page count 时固定策略
@@ -291,7 +319,7 @@
 - [ ] 为 cache window 更新加入 children 日志
 - [ ] 为 offset snapshot 保存和恢复加入 children 日志
 - [ ] 为重复 viewController 降级加入 children 日志
-- [ ] 测试 child appearance lifecycle 顺序
+- [ ] 测试 Tabman 驱动的 child appearance lifecycle 顺序
 - [ ] 测试 child cache window
 - [ ] 测试 unload offset snapshot
 - [ ] 测试 reloadData 后旧 child 可释放

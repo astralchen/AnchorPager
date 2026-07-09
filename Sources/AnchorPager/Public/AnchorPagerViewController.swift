@@ -32,6 +32,7 @@ open class AnchorPagerViewController: UIViewController {
     private var currentTitles: [String] = []
     private var currentViewControllers: [UIViewController] = []
     private var fallbackPageHosts: [ObjectIdentifier: AnchorPagerPageScrollHostViewController] = [:]
+    private var lastLayoutContext: AnchorPagerLayoutContext?
     private var pageCount = 0
 
     /// 创建 AnchorPager 容器。
@@ -115,10 +116,17 @@ open class AnchorPagerViewController: UIViewController {
             return
         }
 
-        self.selectedIndex = selectedIndex
-        AnchorPagerLogger.log(.info, category: .paging, event: "setSelectedIndex.commit")
-        delegate?.pagerViewController(self, didSelectViewControllerAt: selectedIndex)
-        pagingAdapter.setSelectedIndex(selectedIndex, animated: animated)
+        guard selectedIndex != self.selectedIndex else { return }
+
+        if !isViewLoaded || pagingAdapter.parent == nil {
+            commitSelectedIndex(selectedIndex, animated: animated)
+            return
+        }
+
+        let didAcceptRequest = pagingAdapter.setSelectedIndex(selectedIndex, animated: animated)
+        if !didAcceptRequest {
+            AnchorPagerLogger.log(.debug, category: .paging, event: "setSelectedIndex.rejected")
+        }
     }
 
     /// 重新测量并布局 Header。
@@ -126,6 +134,8 @@ open class AnchorPagerViewController: UIViewController {
         offsetAdjustment: AnchorPagerHeaderOffsetAdjustment = .preserveVisualPosition
     ) {
         AnchorPagerLogger.log(.info, category: .layout, event: "reloadHeaderLayout")
+        updateVisibleLayout(forceNotify: true)
+        view.setNeedsLayout()
     }
 
     private func installVerticalScrollViewIfNeeded() {
@@ -208,15 +218,28 @@ open class AnchorPagerViewController: UIViewController {
         }
     }
 
-    private func updateVisibleLayout() {
+    private func updateVisibleLayout(forceNotify: Bool = false) {
         guard isViewLoaded, headerViewHost.view.superview != nil else { return }
 
         let width = view.bounds.width > 0 ? view.bounds.width : UIScreen.main.bounds.width
         let measuredHeight = headerViewHost.measure(
             in: CGSize(width: width, height: UIView.layoutFittingCompressedSize.height)
         )
-        headerHeightConstraint?.constant = resolvedHeaderHeight(for: measuredHeight)
+        let headerHeight = resolvedHeaderHeight(for: measuredHeight)
+        headerHeightConstraint?.constant = headerHeight
         pagingHeightConstraint?.isActive = true
+
+        let contentHeight = Swift.max(0, view.bounds.height - headerHeight)
+        let context = AnchorPagerLayoutContext(
+            selectedIndex: effectiveSelectedIndex,
+            headerFrame: CGRect(x: 0, y: 0, width: width, height: headerHeight),
+            barFrame: CGRect(x: 0, y: headerHeight, width: width, height: configuration.bar.height),
+            contentFrame: CGRect(x: 0, y: headerHeight, width: width, height: contentHeight)
+        )
+        if forceNotify || context != lastLayoutContext {
+            lastLayoutContext = context
+            delegate?.pagerViewController(self, didUpdateLayout: context)
+        }
     }
 
     private func resolvedHeaderHeight(for measuredHeight: CGFloat) -> CGFloat {
@@ -292,5 +315,8 @@ extension AnchorPagerViewController: AnchorPagerPagingAdapterDelegate {
         _ adapter: AnchorPagerPagingAdapter,
         didCancelSelectionAt index: Int,
         returningTo previousIndex: Int
-    ) {}
+    ) {
+        guard previousIndex >= 0, previousIndex < pageCount else { return }
+        AnchorPagerLogger.log(.debug, category: .paging, event: "setSelectedIndex.cancel")
+    }
 }

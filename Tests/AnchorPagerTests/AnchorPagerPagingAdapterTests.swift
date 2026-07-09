@@ -55,6 +55,70 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
     }
 
     @MainActor
+    func testSetSelectedIndexReturnsRequestStatusAndWaitsForTerminalCallback() {
+        let adapter = AnchorPagerPagingAdapter()
+        let delegate = RecordingPagingDelegate()
+        adapter.eventDelegate = delegate
+        adapter.loadViewIfNeeded()
+        adapter.reload(
+            titles: ["First", "Second"],
+            viewControllers: [UIViewController(), UIViewController()],
+            selectedIndex: 0
+        )
+
+        let didAcceptRequest = adapter.setSelectedIndex(1, animated: true)
+
+        XCTAssertTrue(didAcceptRequest)
+        XCTAssertFalse(delegate.events.contains(.didSelect(1, true)))
+
+        adapter.pageboyViewController(adapter, didScrollToPageAt: 1, direction: .forward, animated: true)
+
+        XCTAssertTrue(delegate.events.contains(.didSelect(1, true)))
+    }
+
+    @MainActor
+    func testSetSelectedIndexOutOfRangeReturnsFalseAndWritesLog() {
+        let adapter = AnchorPagerPagingAdapter()
+        adapter.reload(
+            titles: ["First"],
+            viewControllers: [UIViewController()],
+            selectedIndex: 0
+        )
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+
+        let didAcceptRequest = adapter.setSelectedIndex(4, animated: false)
+
+        XCTAssertFalse(didAcceptRequest)
+        XCTAssertTrue(events.contains(.init(category: .paging, level: .debug, event: "paging.setSelectedIndex.outOfRange")))
+    }
+
+    @MainActor
+    func testRejectedSecondSelectionKeepsFirstPendingSelection() {
+        let adapter = AnchorPagerPagingAdapter()
+        let delegate = RecordingPagingDelegate()
+        adapter.eventDelegate = delegate
+        adapter.loadViewIfNeeded()
+        adapter.reload(
+            titles: ["First", "Second", "Third"],
+            viewControllers: [UIViewController(), UIViewController(), UIViewController()],
+            selectedIndex: 0
+        )
+
+        let didAcceptFirstRequest = adapter.setSelectedIndex(1, animated: true)
+        let didAcceptSecondRequest = adapter.setSelectedIndex(2, animated: true)
+
+        XCTAssertTrue(didAcceptFirstRequest)
+        XCTAssertFalse(didAcceptSecondRequest)
+
+        adapter.pageboyViewController(adapter, didScrollToPageAt: 1, direction: .forward, animated: true)
+
+        XCTAssertTrue(delegate.events.contains(.didSelect(1, true)))
+        XCTAssertFalse(delegate.events.contains(.didSelect(2, true)))
+    }
+
+    @MainActor
     func testAdapterLogsMissingDuplicateAndOutOfOrderPageboyCallbacks() {
         let adapter = AnchorPagerPagingAdapter()
         adapter.reload(

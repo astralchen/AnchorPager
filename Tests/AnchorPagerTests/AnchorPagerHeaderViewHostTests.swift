@@ -36,6 +36,42 @@ final class AnchorPagerHeaderViewHostTests: XCTestCase {
     }
 
     @MainActor
+    func testReinstallingSameHeaderViewIsNoOp() {
+        let parent = UIViewController()
+        parent.loadViewIfNeeded()
+        let headerView = CountingHeaderView()
+        let host = AnchorPagerHeaderViewHost()
+
+        host.install(.view(headerView), in: parent)
+        host.install(.view(headerView), in: parent)
+
+        XCTAssertTrue(headerView.superview === host.view)
+        XCTAssertEqual(headerView.removeFromSuperviewCallCount, 0)
+        XCTAssertEqual(host.view.subviews.filter { $0 === headerView }.count, 1)
+    }
+
+    @MainActor
+    func testReinstallingSameHeaderViewControllerDoesNotRemoveAndReaddContainment() {
+        let parent = UIViewController()
+        parent.loadViewIfNeeded()
+        let headerController = UIViewController()
+        let host = AnchorPagerHeaderViewHost()
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+
+        host.install(.viewController(headerController), in: parent)
+        events.removeAll()
+        host.install(.viewController(headerController), in: parent)
+
+        XCTAssertTrue(headerController.parent === parent)
+        XCTAssertTrue(headerController.view.superview === host.view)
+        XCTAssertFalse(events.contains(.init(category: .header, level: .info, event: "header.controller.remove")))
+        XCTAssertFalse(events.contains(.init(category: .lifecycle, level: .info, event: "header.controller.removeFromParent")))
+        XCTAssertEqual(events.filter { $0.event == "header.controller.add" }.count, 0)
+    }
+
+    @MainActor
     func testMeasuresHeaderViewFromAutoLayoutFittingSize() {
         let parent = UIViewController()
         parent.loadViewIfNeeded()
@@ -101,5 +137,14 @@ private final class FixedFittingView: UIView {
         verticalFittingPriority: UILayoutPriority
     ) -> CGSize {
         CGSize(width: targetSize.width, height: measuredHeight)
+    }
+}
+
+private final class CountingHeaderView: UIView {
+    private(set) var removeFromSuperviewCallCount = 0
+
+    override func removeFromSuperview() {
+        removeFromSuperviewCallCount += 1
+        super.removeFromSuperview()
     }
 }

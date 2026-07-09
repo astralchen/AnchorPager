@@ -1,6 +1,6 @@
 # AnchorPager
 
-AnchorPager 是一个 UIKit 容器框架，用于组合可变 Header、吸顶分段栏、多页面横向分页和 child scroll view 接入。当前仓库处于 v0.1 可视分页核心阶段，已建立 Swift Package、Public API skeleton、日志门面、Header/Child 基础承载、scroll view discovery、Tabman/Pageboy internal adapter 边界，并已把 Header、分段栏和页面内容串入主容器的基础可视路径。
+AnchorPager 是一个 UIKit 容器框架，用于组合可变 Header、吸顶分段栏、多页面横向分页和 child scroll view 接入。当前仓库处于 v0.1 可视分页核心阶段，已建立 Swift Package、Public API skeleton、日志门面、Header/fallback 基础承载、scroll view discovery、Tabman/Pageboy internal adapter 边界，并已把 Header、分段栏和页面内容串入主容器的基础可视路径。
 
 ## 安装
 
@@ -93,6 +93,10 @@ func headerContent(in pagerViewController: AnchorPagerViewController) -> AnchorP
 
 Header 使用 `UIViewController` 时，AnchorPager 内部通过标准 UIKit containment 承载。
 
+横向页面的实际分页和 page view controller containment 由内部 Tabman/Pageboy adapter 执行。AnchorPager 维护 public API、selection、reload、scroll discovery、fallback host 和后续 inset/scroll 策略，不要求接入方直接使用 Tabman 或 Pageboy 类型。
+
+可见状态下调用 `setSelectedIndex(_:animated:)` 时，AnchorPager 会等内部分页 adapter 确认完成后再更新 `selectedIndex` 并通知 delegate；取消或回弹不会提前提交。若分页 adapter 正在处理上一笔切页而拒绝新请求，v0.1 不做请求排队，当前 public 选择状态保持不变。
+
 ## 显式 Scroll View
 
 ```swift
@@ -120,7 +124,7 @@ final class PlainPageViewController: UIViewController {
 }
 ```
 
-无候选 `UIScrollView` 时，AnchorPager 会使用内部 fallback scroll host 承载普通 child。fallback host 会让普通 child 至少覆盖页面 viewport，因此无 scroll view 页面也能在示例工程和分页切换中正常显示。
+无候选 `UIScrollView` 时，AnchorPager 会先使用内部 fallback scroll host 包装普通 child，再交给横向分页 adapter。fallback host 会让普通 child 至少覆盖页面 viewport，因此无 scroll view 页面也能在示例工程和分页切换中正常显示。
 
 ## 示例工程
 
@@ -145,4 +149,4 @@ log stream --predicate 'subsystem == "com.anchorpager.AnchorPager"'
 
 ## 当前限制
 
-v0.1 当前已交付基础 Header/分段栏/页面内容显示路径，并通过示例 UI test 验证点击、横滑和 public API 三种切页方式。完整纵向嵌套滚动协调、managed inset ownership、顶部 overscroll owner、状态栏点击顶滚和尺寸变化恢复仍在后续版本。Tabman/Pageboy 仅出现在 internal adapter 层，Public API 不暴露第三方类型。
+v0.1 当前已交付基础 Header/分段栏/页面内容显示路径、确认后提交的程序化切页、Header 重复安装幂等处理和基础 layout context 回调，并通过示例 UI test 验证点击、横滑和 public API 三种切页方式。完整纵向嵌套滚动协调、managed inset ownership、顶部 overscroll owner、状态栏点击顶滚、尺寸变化恢复、page cache window、Header offsetAdjustment 完整语义和 Tabman 驱动的 appearance lifecycle 语义仍在后续版本。Tabman/Pageboy 仅出现在 internal adapter 层，Public API 不暴露第三方类型。

@@ -1,3 +1,4 @@
+import Pageboy
 import UIKit
 import XCTest
 @testable import AnchorPager
@@ -38,6 +39,68 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         XCTAssertEqual(pager.selectedIndex, 2)
         XCTAssertEqual(pager.effectiveSelectedIndex, 2)
         XCTAssertEqual(delegate.selectedIndexes, [2])
+    }
+
+    @MainActor
+    func testVisibleSetSelectedIndexWaitsForAdapterConfirmationBeforeCommitting() throws {
+        let pager = AnchorPagerViewController()
+        let dataSource = StubDataSource(
+            count: 3,
+            viewControllers: [
+                ScrollChildViewController(),
+                ScrollChildViewController(),
+                ScrollChildViewController()
+            ]
+        )
+        let delegate = StubDelegate()
+        pager.dataSource = dataSource
+        pager.delegate = delegate
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+
+        pager.setSelectedIndex(2, animated: true)
+
+        XCTAssertEqual(pager.selectedIndex, 0)
+        XCTAssertEqual(pager.effectiveSelectedIndex, 0)
+        XCTAssertEqual(delegate.selectedIndexes, [])
+
+        let adapter = try XCTUnwrap(installedAdapter(in: pager))
+        adapter.pageboyViewController(
+            adapter,
+            didScrollToPageAt: 2,
+            direction: .forward,
+            animated: true
+        )
+
+        XCTAssertEqual(pager.selectedIndex, 2)
+        XCTAssertEqual(pager.effectiveSelectedIndex, 2)
+        XCTAssertEqual(delegate.selectedIndexes, [2])
+    }
+
+    @MainActor
+    func testVisibleSetSelectedIndexCancelDoesNotNotifyDelegate() throws {
+        let pager = AnchorPagerViewController()
+        let dataSource = StubDataSource(
+            count: 2,
+            viewControllers: [
+                ScrollChildViewController(),
+                ScrollChildViewController()
+            ]
+        )
+        let delegate = StubDelegate()
+        pager.dataSource = dataSource
+        pager.delegate = delegate
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+
+        pager.setSelectedIndex(1, animated: true)
+
+        let adapter = try XCTUnwrap(installedAdapter(in: pager))
+        adapter.pageboyViewController(adapter, didCancelScrollToPageAt: 1, returnToPageAt: 0)
+
+        XCTAssertEqual(pager.selectedIndex, 0)
+        XCTAssertEqual(pager.effectiveSelectedIndex, 0)
+        XCTAssertEqual(delegate.selectedIndexes, [])
     }
 
     @MainActor
@@ -101,6 +164,32 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 2)
         XCTAssertTrue(adapter.viewController(for: adapter, at: 0) === first)
         XCTAssertTrue(adapter.viewController(for: adapter, at: 1) === second)
+    }
+
+    @MainActor
+    func testReloadHeaderLayoutSendsLayoutContext() throws {
+        let pager = AnchorPagerViewController()
+        pager.view.frame = CGRect(x: 0, y: 0, width: 320, height: 640)
+        let headerView = FixedFittingView(height: 72)
+        let dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [ScrollChildViewController()],
+            headerContent: .view(headerView)
+        )
+        let delegate = StubDelegate()
+        pager.dataSource = dataSource
+        pager.delegate = delegate
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+
+        delegate.layoutContexts.removeAll()
+        pager.reloadHeaderLayout()
+        pager.view.layoutIfNeeded()
+
+        let context = try XCTUnwrap(delegate.layoutContexts.last)
+        XCTAssertEqual(context.selectedIndex, 0)
+        XCTAssertEqual(context.headerFrame.height, 72)
+        XCTAssertGreaterThan(context.contentFrame.height, 0)
     }
 
     @MainActor
@@ -230,6 +319,11 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         XCTAssertEqual(configuration.bar.height, 48)
         XCTAssertEqual(configuration.topOverscrollHandlingMode, .none)
     }
+
+    @MainActor
+    private func installedAdapter(in pager: AnchorPagerViewController) -> AnchorPagerPagingAdapter? {
+        pager.children.compactMap { $0 as? AnchorPagerPagingAdapter }.first
+    }
 }
 
 @MainActor
@@ -277,6 +371,8 @@ private final class StubDataSource: AnchorPagerViewControllerDataSource {
 @MainActor
 private final class StubDelegate: AnchorPagerViewControllerDelegate {
     var selectedIndexes: [Int] = []
+    var collapseProgresses: [CGFloat] = []
+    var layoutContexts: [AnchorPagerLayoutContext] = []
 
     func pagerViewController(
         _ pagerViewController: AnchorPagerViewController,
@@ -288,12 +384,16 @@ private final class StubDelegate: AnchorPagerViewControllerDelegate {
     func pagerViewController(
         _ pagerViewController: AnchorPagerViewController,
         didUpdateHeaderCollapseProgress progress: CGFloat
-    ) {}
+    ) {
+        collapseProgresses.append(progress)
+    }
 
     func pagerViewController(
         _ pagerViewController: AnchorPagerViewController,
         didUpdateLayout context: AnchorPagerLayoutContext
-    ) {}
+    ) {
+        layoutContexts.append(context)
+    }
 }
 
 @MainActor
@@ -315,5 +415,26 @@ private final class ScrollChildViewController: UIViewController {
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
         anchorPagerScrollView = scrollView
+    }
+}
+
+private final class FixedFittingView: UIView {
+    private let measuredHeight: CGFloat
+
+    init(height: CGFloat) {
+        self.measuredHeight = height
+        super.init(frame: .zero)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func systemLayoutSizeFitting(
+        _ targetSize: CGSize,
+        withHorizontalFittingPriority horizontalFittingPriority: UILayoutPriority,
+        verticalFittingPriority: UILayoutPriority
+    ) -> CGSize {
+        CGSize(width: targetSize.width, height: measuredHeight)
     }
 }
