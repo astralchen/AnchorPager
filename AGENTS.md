@@ -146,7 +146,8 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExa
 3. 不要使用破坏性命令，例如 `git reset --hard`、`git checkout --` 或未确认的删除操作。
 4. 每个提交保持主题单一。
 5. 文档、测试、实现可以分开提交；同一个实现任务的测试必须与实现一起提交或紧随同任务提交。
-6. 提交前至少运行 `git diff --check`。
+6. Git 提交描述必须使用中文，包含提交标题和需要时的提交正文。
+7. 提交前至少运行 `git diff --check`。
 
 ## 文档要求
 
