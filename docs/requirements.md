@@ -318,7 +318,27 @@ extension UIViewController {
 3. reloadData 后旧 child 应可释放。
 4. deinit 时必须清理内部 observer、gesture 关系和 pending transition。
 
-## 17. 建议内部模块
+## 17. 日志与可观测性要求
+
+1. 必须在必要事件位置加入日志，方便后续调试、开发和问题修复。
+2. 框架内部优先使用 `os.Logger`，不得在生产路径散落 `print`。
+3. 必须提供内部日志门面，例如 `AnchorPagerLogger`，统一管理 subsystem、category、level 和消息格式。
+4. 日志 subsystem 建议为 `com.anchorpager.AnchorPager`。
+5. 日志 category 至少覆盖 lifecycle、layout、header、paging、children、scroll、inset、overscroll、gesture、accessibility、resource。
+6. 必须记录关键生命周期事件：init、deinit、reloadData begin/end、child add/remove、header controller add/remove。
+7. 必须记录关键布局事件：Header 测量结果、Header frame 变化、bar frame 变化、safe area 变化、bounds 变化、managed inset 变化。
+8. 必须记录关键分页事件：setSelectedIndex 请求、越界 no-op、分页开始、分页完成、分页取消、selectedIndex commit。
+9. 必须记录关键滚动协调事件：Header 完全展开、Header 完全折叠、child top boundary、scroll owner 切换、guarded contentOffset update 被触发或跳过。
+10. 必须记录顶部 overscroll 事件：mode、owner 进入、owner 退出、owner cancel、阈值判定结果。
+11. 必须记录手势和交互状态机事件：state begin、state update 中的重要边界、state finish、state cancel、非法或重复 transition 被忽略。
+12. 必须记录状态栏点击顶滚 owner 变化。
+13. 必须记录异常和降级策略：重复 viewController、无 scroll view fallback host、Header 测量异常、Tabman/Pageboy 回调缺失或乱序。
+14. 高频滚动路径不得逐帧打印普通日志，只能记录状态变化、阈值跨越、owner 切换、异常或显式调试开关下的采样日志。
+15. 日志不得输出业务数据、用户内容、完整 view 层级或可能包含隐私的数据。
+16. 日志必须可测试。实现时应通过内部可注入 log sink 或等价机制验证关键事件确实发出，不依赖人工查看控制台。
+17. README 和 `docs/architecture.md` 必须说明日志策略、category、如何过滤日志以及性能注意事项。
+
+## 18. 建议内部模块
 
 1. `AnchorPagerRootView`
 2. `AnchorPagerLayoutEngine`
@@ -330,8 +350,9 @@ extension UIViewController {
 8. `AnchorPagerOverscrollCoordinator`
 9. `AnchorPagerGestureCoordinator`
 10. `AnchorPagerTabBarAdapter`
+11. `AnchorPagerLogger`
 
-## 18. 工程结构要求
+## 19. 工程结构要求
 
 ```text
 Package.swift
@@ -350,7 +371,7 @@ docs/architecture.md
 README.md
 ```
 
-## 19. 默认行为
+## 20. 默认行为
 
 1. Header 默认使用 automatic height，最小高度为 0，不设置固定最大高度。
 2. Header 默认 topBehavior 为 insideSafeArea。
@@ -362,35 +383,37 @@ README.md
 8. 支持状态栏点击滚到顶部，保证 window 内只有一个 scrollsToTop 响应者。
 9. 可以嵌入普通 UIKit 容器层级。
 
-## 20. Documentation 要求
+## 21. Documentation 要求
 
 1. `docs/architecture.md` 必须包含 public API 契约、状态机、safe area 策略、scroll view discovery 策略、inset ownership、child lifecycle、gesture priority 和 known limitations。
 2. `README.md` 必须包含最小接入示例、Header UIView 示例、Header UIViewController 示例、显式 anchorPagerScrollView 示例、无 UIScrollView child 示例。
 3. 文档必须说明 Tabman/Pageboy 的适配边界，以及第三方类型不会出现在 public API。
 4. 文档必须说明默认 scroll view lookup 的确定性规则和关闭方式。
+5. 文档必须说明内部日志策略、日志 category、推荐过滤方式和性能注意事项。
 
-## 21. 开发顺序
+## 22. 开发顺序
 
 1. 创建全新 Swift Package：AnchorPager。
 2. 配置 iOS 14+ 和 Tabman 依赖。
-3. 编写 `docs/architecture.md`，定义架构、API、生命周期规则、Header 安全区域规则、Header 动态 frame 规则、child scroll view 解析规则、inset ownership、top overscroll event 规则、状态栏点击顶滚规则、手势临界点规则、旋转适配规则、参考项目和非目标。
+3. 编写 `docs/architecture.md`，定义架构、API、生命周期规则、Header 安全区域规则、Header 动态 frame 规则、child scroll view 解析规则、inset ownership、top overscroll event 规则、状态栏点击顶滚规则、手势临界点规则、旋转适配规则、日志策略、参考项目和非目标。
 4. 实现 public API skeleton。
-5. 实现 UIViewController anchorPagerScrollView extension、associated object 显式设置、默认嵌套查找和测试。
-6. 实现 AnchorPagerLayoutEngine 和单元测试。
-7. 实现 Header 管理、Header controller containment 和 Header 动态 frame 更新。
-8. 实现 child store、child containment、缓存窗口和 lifecycle 转发。
-9. 封装 Tabman/Pageboy adapter。
-10. 实现纵向嵌套滚动协调。
-11. 实现顶部 overscroll event handling。
-12. 实现手势仲裁和交互状态机。
-13. 实现状态栏点击顶滚 owner 管理。
-14. 实现屏幕旋转、bounds 变化和 safe area 变化后的布局恢复。
-15. 创建示例工程，覆盖基础分页、不同 contentSize、Header 安全区域模式、Header 动态高度、顶部 overscroll、屏幕旋转。
-16. 补充 Swift Testing 和必要 UI tests。
-17. 补 README 和架构文档。
-18. 运行验证并修复 Swift 6 并发警告。
+5. 实现内部日志门面和关键事件日志测试。
+6. 实现 UIViewController anchorPagerScrollView extension、associated object 显式设置、默认嵌套查找和测试。
+7. 实现 AnchorPagerLayoutEngine 和单元测试。
+8. 实现 Header 管理、Header controller containment 和 Header 动态 frame 更新。
+9. 实现 child store、child containment、缓存窗口和 lifecycle 转发。
+10. 封装 Tabman/Pageboy adapter。
+11. 实现纵向嵌套滚动协调。
+12. 实现顶部 overscroll event handling。
+13. 实现手势仲裁和交互状态机。
+14. 实现状态栏点击顶滚 owner 管理。
+15. 实现屏幕旋转、bounds 变化和 safe area 变化后的布局恢复。
+16. 创建示例工程，覆盖基础分页、不同 contentSize、Header 安全区域模式、Header 动态高度、顶部 overscroll、屏幕旋转。
+17. 补充 Swift Testing 和必要 UI tests。
+18. 补 README 和架构文档。
+19. 运行验证并修复 Swift 6 并发警告。
 
-## 22. 测试要求
+## 23. 测试要求
 
 每完成一个实现任务都必须有对应测试。任务不能只以代码完成作为完成标准，必须同时提供可重复运行的测试或验证命令。涉及 UIKit 可见行为、用户交互、分页、滚动、手势、状态栏点击、旋转、safe area、Dynamic Type、Reduce Motion、RTL 或示例工程行为的任务，必须补充必要 UI 测试；如果某个任务无法通过 UI 测试稳定覆盖，必须在对应任务说明中写明原因，并提供替代的自动化验证。
 
@@ -441,8 +464,13 @@ README.md
 45. safe area change 后 Header、分段栏、child inset 保持一致性测试
 46. Example build 验证
 47. 至少一个 UI test 覆盖 Header 展开优先于顶部 overscroll handling
+48. 日志门面单测
+49. 关键生命周期日志测试
+50. 关键布局日志测试
+51. 关键分页日志测试
+52. 高频滚动路径不逐帧输出普通日志测试
 
-## 23. 验证命令
+## 24. 验证命令
 
 ```bash
 git diff --check
@@ -451,7 +479,7 @@ xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=<availa
 xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'generic/platform=iOS Simulator' build
 ```
 
-## 24. 代码质量要求
+## 25. 代码质量要求
 
 1. UIKit 类型、公开 API、data source、delegate、coordinator 状态更新保持 `@MainActor`。
 2. 不使用 `Task.detached` 绕过 actor 隔离。
@@ -463,7 +491,9 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExa
 8. 每个实现任务完成时必须同步提交测试，不能把测试推迟到后续任务统一补。
 9. 触达用户可见 UI、UIKit 生命周期、手势、滚动、分页或系统交互的任务必须包含必要 UI 测试。
 10. 任务验收说明必须列出实际运行过的测试命令和结果。
+11. 日志必须通过统一内部门面输出，避免零散调用 `print` 或直接散落 `Logger`。
+12. 日志必须以状态变化和异常定位为主，不得在滚动热路径持续输出高频噪声。
 
-## 25. 一句话目标
+## 26. 一句话目标
 
 AnchorPager 是一个 UIKit nested paging container，提供 automatic dynamic header sizing、safe-area-aware layout、deterministic scroll-view discovery、inset ownership、top overscroll event handling、gesture edge-case handling、status-bar scroll-to-top ownership、rotation-resilient layout、complete child view controller lifecycle 和 Tabman-backed horizontal paging。
