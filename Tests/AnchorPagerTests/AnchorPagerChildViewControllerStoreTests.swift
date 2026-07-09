@@ -65,6 +65,27 @@ final class AnchorPagerChildViewControllerStoreTests: XCTestCase {
     }
 
     @MainActor
+    func testFallbackPageScrollHostKeepsPlainChildVisibleWithinViewport() {
+        let child = UIViewController()
+        let label = UILabel()
+        label.text = "Plain"
+        label.translatesAutoresizingMaskIntoConstraints = false
+        child.loadViewIfNeeded()
+        child.view.addSubview(label)
+        NSLayoutConstraint.activate([
+            label.centerXAnchor.constraint(equalTo: child.view.centerXAnchor),
+            label.centerYAnchor.constraint(equalTo: child.view.centerYAnchor)
+        ])
+        let host = AnchorPagerPageScrollHostViewController(contentViewController: child)
+        host.view.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
+
+        host.loadViewIfNeeded()
+        host.view.layoutIfNeeded()
+
+        XCTAssertGreaterThanOrEqual(child.view.frame.height, host.scrollView.frameLayoutGuide.layoutFrame.height)
+    }
+
+    @MainActor
     func testChildStoreAndFallbackHostWriteLogs() {
         let parent = UIViewController()
         parent.loadViewIfNeeded()

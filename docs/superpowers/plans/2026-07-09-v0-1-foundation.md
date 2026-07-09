@@ -4,7 +4,7 @@
 
 **Goal:** 建立 AnchorPager v0.1 的可编译 UIKit/Swift Package 基础，交付 Public API skeleton、日志门面、Header/Child/Scroll 基础能力和 Tabman/Pageboy internal adapter 边界。
 
-**Current Status:** 已完成 v0.1 foundation 范围并提交到 `codex/v0-1-foundation`，并已创建可构建的 `AnchorPagerExample` 示例工程与基础启动 UI test。当前已继续按 v0.1 节奏把 Header、Tabman/Pageboy adapter 和页面内容串入 `AnchorPagerViewController` 的基础可视路径；分段栏点击切页、横向滑动切页、完整 child store/fallback host 接入和纵向滚动协调仍按后续 v0.1 子任务推进。
+**Current Status:** v0.1 可视分页核心路径已完成。当前已创建可构建的 `AnchorPagerExample` 示例工程，并通过单元测试和 UI test 验证 Header、分段栏、页面内容、分段栏点击切页、横向滑动切页、public API 程序化切页、fallback page scroll host 和关键日志事件。纵向嵌套滚动协调、managed inset ownership、完整 child cache window 和 appearance lifecycle 转发按后续版本推进。
 
 **Architecture:** `AnchorPagerViewController` 是唯一 public 容器入口；Public API 不暴露 Tabman/Pageboy 类型。Header、Children、Paging、Logging 按目录分层，v0.1 只实现可测试的基础承载和分页选择状态，不实现完整纵向滚动协调、overscroll owner 或尺寸变化状态机。
 
@@ -207,12 +207,42 @@
 - [x] Step 3: 将 Header host 和 `AnchorPagerPagingAdapter` 串入 `AnchorPagerViewController`，并保持 Tabman/Pageboy 类型不进入 public API。
 - [x] Step 4: 运行新增单测和 UI test，确认基础可视路径通过。
 
+### Task 11: v0.1 收尾验证与 fallback 可见性修复
+
+**Files:**
+- Modify: `Sources/AnchorPager/Public/AnchorPagerViewController.swift`
+- Modify: `Sources/AnchorPager/Children/AnchorPagerPageScrollHostViewController.swift`
+- Modify: `Sources/AnchorPager/Paging/AnchorPagerPagingAdapter.swift`
+- Modify: `Tests/AnchorPagerTests/AnchorPagerViewControllerTests.swift`
+- Modify: `Tests/AnchorPagerTests/AnchorPagerChildViewControllerStoreTests.swift`
+- Modify: `Tests/AnchorPagerTests/AnchorPagerPagingAdapterTests.swift`
+- Modify: `Examples/AnchorPagerExample/AnchorPagerExample/ExamplePagerViewController.swift`
+- Modify: `Examples/AnchorPagerExample/AnchorPagerExampleUITests/AnchorPagerExampleUITests.swift`
+- Modify: `README.md`
+- Modify: `docs/architecture.md`
+- Modify: `docs/task-list.md`
+
+**Interfaces:**
+- Consumes: `AnchorPagerPageScrollHostViewController`、`AnchorPagerPagingAdapter`
+- Produces: 无 UIScrollView child 在 fallback host 中可见
+- Produces: 示例工程点击、横滑、public API 三种切页方式 UI 验收
+- Produces: Tabman/Pageboy 回调缺失、重复或乱序日志
+- Produces: reloadData 清理旧 fallback child 和 children 日志
+
+- [x] Step 1: 先写 fallback host viewport 高度、主容器 fallback 包装、示例点击/横滑/API 切页 UI test。
+- [x] Step 2: 观察新增测试失败，确认普通 child 在 fallback host 中高度为 0，public API 切页后“无滚动页”不可见。
+- [x] Step 3: 实现主容器 fallback host 接入和 fallback content 最小 viewport 高度约束。
+- [x] Step 4: 先写 Pageboy 回调异常日志和 reloadData 旧 fallback child 清理测试，并观察失败。
+- [x] Step 5: 实现 adapter 回调异常日志和 reloadData stale fallback host 清理。
+- [x] Step 6: 更新 README、architecture 和 task-list 反映 v0.1 当前状态。
+
 ## Verification Record
 
 - `git diff --check`：通过。
-- `swift package resolve`：通过，解析到 Tabman `4.0.1`、Pageboy `5.0.2`。
-- `xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcodebuild test`：通过，38 个测试、0 失败。
+- `swift package resolve`：通过，解析到 Tabman `4.0.1`、Pageboy `5.0.2`。沙盒内首次运行因 SwiftPM/clang 用户缓存目录权限失败，提升权限后通过。
+- `xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcodebuild test`：通过，43 个测试、0 失败。
 - `xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'generic/platform=iOS Simulator' -derivedDataPath .build/example-xcodebuild build`：通过。
-- `xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/example-xcodebuild test`：通过，1 个示例工程单测和 2 个 UI test 通过。
-- `xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcodebuild -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testReloadDataInstallsVisibleHeaderAndPagingAdapter test`：通过。
-- `xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/example-xcodebuild -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testLaunchShowsHeaderTabBarAndSelectedPageContent test`：通过。
+- `xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/example-xcodebuild-v01-ui -parallel-testing-enabled NO test`：通过，1 个示例工程单测和 5 个 UI test 通过。
+- `xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcodebuild -only-testing:AnchorPagerTests/AnchorPagerChildViewControllerStoreTests/testFallbackPageScrollHostKeepsPlainChildVisibleWithinViewport -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testReloadDataWrapsChildWithoutScrollViewInFallbackHost -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testReloadDataKeepsScrollViewChildUnwrapped test`：通过。
+- `xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/example-xcodebuild-v01-ui -parallel-testing-enabled NO -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testLaunchArgumentSelectsPageThroughPublicAPI -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testHorizontalSwipeSelectsNextPageContent test`：通过。
+- `xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcodebuild -only-testing:AnchorPagerTests/AnchorPagerPagingAdapterTests/testAdapterLogsMissingDuplicateAndOutOfOrderPageboyCallbacks -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testReloadDataRemovesStaleFallbackChildAndWritesChildrenLog test`：通过。

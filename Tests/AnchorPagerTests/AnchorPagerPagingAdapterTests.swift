@@ -54,6 +54,28 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
         XCTAssertEqual(delegate.events, [.willSelect(1, true), .didSelect(1, true), .didCancel(1, 0)])
     }
 
+    @MainActor
+    func testAdapterLogsMissingDuplicateAndOutOfOrderPageboyCallbacks() {
+        let adapter = AnchorPagerPagingAdapter()
+        adapter.reload(
+            titles: ["First", "Second"],
+            viewControllers: [UIViewController(), UIViewController()],
+            selectedIndex: 0
+        )
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+
+        adapter.pageboyViewController(adapter, didScrollToPageAt: 1, direction: .forward, animated: true)
+        adapter.pageboyViewController(adapter, willScrollToPageAt: 1, direction: .forward, animated: true)
+        adapter.pageboyViewController(adapter, willScrollToPageAt: 1, direction: .forward, animated: true)
+        adapter.pageboyViewController(adapter, didCancelScrollToPageAt: 0, returnToPageAt: 1)
+
+        XCTAssertTrue(events.contains(.init(category: .paging, level: .debug, event: "paging.callback.missingWillSelect")))
+        XCTAssertTrue(events.contains(.init(category: .paging, level: .debug, event: "paging.callback.duplicateWillSelect")))
+        XCTAssertTrue(events.contains(.init(category: .paging, level: .debug, event: "paging.callback.outOfOrder")))
+    }
+
     func testPublicSourcesDoNotReferenceTabmanOrPageboy() throws {
         let publicDirectory = try packageRoot()
             .appendingPathComponent("Sources")

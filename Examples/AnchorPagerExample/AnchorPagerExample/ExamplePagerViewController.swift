@@ -33,7 +33,17 @@ final class ExamplePagerViewController: UIViewController {
         pagerViewController.didMove(toParent: self)
 
         pagerViewController.reloadData()
-        pagerViewController.setSelectedIndex(1, animated: false)
+        pagerViewController.setSelectedIndex(initialSelectedIndex(), animated: false)
+    }
+
+    private func initialSelectedIndex() -> Int {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let argumentIndex = arguments.firstIndex(of: "--anchorPagerInitialIndex"),
+              arguments.indices.contains(argumentIndex + 1),
+              let requestedIndex = Int(arguments[argumentIndex + 1]) else {
+            return 1
+        }
+        return min(max(0, requestedIndex), pages.count - 1)
     }
 }
 

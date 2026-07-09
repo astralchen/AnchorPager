@@ -31,6 +31,7 @@ open class AnchorPagerViewController: UIViewController {
     private var currentHeaderContent: AnchorPagerHeaderContent?
     private var currentTitles: [String] = []
     private var currentViewControllers: [UIViewController] = []
+    private var fallbackPageHosts: [ObjectIdentifier: AnchorPagerPageScrollHostViewController] = [:]
     private var pageCount = 0
 
     /// 创建 AnchorPager 容器。
@@ -88,11 +89,19 @@ open class AnchorPagerViewController: UIViewController {
         currentTitles = (0..<pageCount).map { index in
             dataSource?.pagerViewController(self, titleForViewControllerAt: index) ?? ""
         }
+        var activeFallbackHostIdentifiers = Set<ObjectIdentifier>()
         currentViewControllers = (0..<pageCount).map { index in
-            dataSource?.pagerViewController(self, viewControllerAt: index) ?? UIViewController()
+            pageViewController(
+                for: dataSource?.pagerViewController(self, viewControllerAt: index) ?? UIViewController(),
+                activeFallbackHostIdentifiers: &activeFallbackHostIdentifiers
+            )
         }
+        let staleFallbackHosts = removeStaleFallbackPageHosts(
+            keeping: activeFallbackHostIdentifiers
+        )
 
         reloadVisibleContentIfNeeded()
+        staleFallbackHosts.forEach { $0.removeContentForReloadData() }
         AnchorPagerLogger.log(.info, category: .lifecycle, event: "reloadData.end")
     }
 
@@ -229,6 +238,45 @@ open class AnchorPagerViewController: UIViewController {
         selectedIndex = index
         AnchorPagerLogger.log(.info, category: .paging, event: "setSelectedIndex.commit")
         delegate?.pagerViewController(self, didSelectViewControllerAt: index)
+    }
+
+    private func pageViewController(
+        for childViewController: UIViewController,
+        activeFallbackHostIdentifiers: inout Set<ObjectIdentifier>
+    ) -> UIViewController {
+        if childViewController is AnchorPagerPageScrollHostViewController {
+            return childViewController
+        }
+
+        childViewController.loadViewIfNeeded()
+        if childViewController.anchorPagerScrollView != nil {
+            return childViewController
+        }
+
+        let childIdentifier = ObjectIdentifier(childViewController)
+        activeFallbackHostIdentifiers.insert(childIdentifier)
+
+        if let existingHost = fallbackPageHosts[childIdentifier] {
+            return existingHost
+        }
+
+        let fallbackHost = AnchorPagerPageScrollHostViewController(
+            contentViewController: childViewController
+        )
+        fallbackPageHosts[childIdentifier] = fallbackHost
+        return fallbackHost
+    }
+
+    private func removeStaleFallbackPageHosts(
+        keeping activeFallbackHostIdentifiers: Set<ObjectIdentifier>
+    ) -> [AnchorPagerPageScrollHostViewController] {
+        let staleIdentifiers = fallbackPageHosts.keys.filter {
+            !activeFallbackHostIdentifiers.contains($0)
+        }
+
+        return staleIdentifiers.compactMap { identifier in
+            fallbackPageHosts.removeValue(forKey: identifier)
+        }
     }
 }
 

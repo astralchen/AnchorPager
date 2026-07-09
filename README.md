@@ -120,11 +120,11 @@ final class PlainPageViewController: UIViewController {
 }
 ```
 
-v0.1 foundation 已提供内部 fallback scroll host 类型；完整自动接入会在后续页面装配流程中继续收敛。
+无候选 `UIScrollView` 时，AnchorPager 会使用内部 fallback scroll host 承载普通 child。fallback host 会让普通 child 至少覆盖页面 viewport，因此无 scroll view 页面也能在示例工程和分页切换中正常显示。
 
 ## 示例工程
 
-仓库包含 `Examples/AnchorPagerExample.xcodeproj`，用于验证示例 App 能接入本地 `AnchorPager` package、启动基础 UIKit 宿主并通过 public API 提供 Header、分段栏、显式 scroll view child 和无 scroll view child。当前示例工程可构建，并已有基础启动 UI test 与 Header/分段栏/页面内容可视 UI test。
+仓库包含 `Examples/AnchorPagerExample.xcodeproj`，用于验证示例 App 能接入本地 `AnchorPager` package、启动基础 UIKit 宿主并通过 public API 提供 Header、分段栏、显式 scroll view child 和无 scroll view child。当前示例工程可构建，并已有基础启动、Header/分段栏/页面内容可视、分段栏点击切页、横向滑动切页和 public API 切页 UI test。
 
 ```bash
 xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'generic/platform=iOS Simulator' build
@@ -145,4 +145,4 @@ log stream --predicate 'subsystem == "com.anchorpager.AnchorPager"'
 
 ## 当前限制
 
-v0.1 当前已交付基础 Header/分段栏/页面内容显示路径；分段栏点击切页和横向滑动切页仍需继续补齐示例 UI 验收。完整纵向嵌套滚动协调、managed inset ownership、顶部 overscroll owner、状态栏点击顶滚和尺寸变化恢复仍在后续版本。Tabman/Pageboy 仅出现在 internal adapter 层，Public API 不暴露第三方类型。
+v0.1 当前已交付基础 Header/分段栏/页面内容显示路径，并通过示例 UI test 验证点击、横滑和 public API 三种切页方式。完整纵向嵌套滚动协调、managed inset ownership、顶部 overscroll owner、状态栏点击顶滚和尺寸变化恢复仍在后续版本。Tabman/Pageboy 仅出现在 internal adapter 层，Public API 不暴露第三方类型。

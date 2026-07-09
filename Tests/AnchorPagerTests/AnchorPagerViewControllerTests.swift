@@ -76,8 +76,8 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         let pager = AnchorPagerViewController()
         let headerView = UIView()
         headerView.heightAnchor.constraint(equalToConstant: 96).isActive = true
-        let first = UIViewController()
-        let second = UIViewController()
+        let first = ScrollChildViewController()
+        let second = ScrollChildViewController()
         let dataSource = StubDataSource(
             count: 2,
             titles: ["First", "Second"],
@@ -101,6 +101,89 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 2)
         XCTAssertTrue(adapter.viewController(for: adapter, at: 0) === first)
         XCTAssertTrue(adapter.viewController(for: adapter, at: 1) === second)
+    }
+
+    @MainActor
+    func testReloadDataWrapsChildWithoutScrollViewInFallbackHost() {
+        let pager = AnchorPagerViewController()
+        let plainChild = UIViewController()
+        let dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [plainChild]
+        )
+        pager.dataSource = dataSource
+        pager.loadViewIfNeeded()
+
+        pager.reloadData()
+
+        guard let adapter = pager.children.compactMap({ $0 as? AnchorPagerPagingAdapter }).first else {
+            XCTFail("reloadData 应安装分页 adapter。")
+            return
+        }
+
+        let page = adapter.viewController(for: adapter, at: 0)
+        let fallbackHost = page as? AnchorPagerPageScrollHostViewController
+        XCTAssertNotNil(fallbackHost, "无 UIScrollView child 应由内部 fallback scroll host 承载。")
+
+        fallbackHost?.loadViewIfNeeded()
+        XCTAssertTrue(plainChild.parent === fallbackHost)
+    }
+
+    @MainActor
+    func testReloadDataKeepsScrollViewChildUnwrapped() {
+        let pager = AnchorPagerViewController()
+        let scrollChild = ScrollChildViewController()
+        let dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [scrollChild]
+        )
+        pager.dataSource = dataSource
+        pager.loadViewIfNeeded()
+
+        pager.reloadData()
+
+        guard let adapter = pager.children.compactMap({ $0 as? AnchorPagerPagingAdapter }).first else {
+            XCTFail("reloadData 应安装分页 adapter。")
+            return
+        }
+
+        XCTAssertTrue(adapter.viewController(for: adapter, at: 0) === scrollChild)
+    }
+
+    @MainActor
+    func testReloadDataRemovesStaleFallbackChildAndWritesChildrenLog() {
+        let pager = AnchorPagerViewController()
+        let stalePlainChild = UIViewController()
+        let replacementPlainChild = UIViewController()
+        let dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [stalePlainChild]
+        )
+        pager.dataSource = dataSource
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+
+        guard let adapter = pager.children.compactMap({ $0 as? AnchorPagerPagingAdapter }).first,
+              let staleFallbackHost = adapter.viewController(
+                for: adapter,
+                at: 0
+              ) as? AnchorPagerPageScrollHostViewController else {
+            XCTFail("无 UIScrollView child 应由内部 fallback scroll host 承载。")
+            return
+        }
+        staleFallbackHost.loadViewIfNeeded()
+        XCTAssertTrue(stalePlainChild.parent === staleFallbackHost)
+
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+
+        dataSource.viewControllers = [replacementPlainChild]
+        pager.reloadData()
+
+        XCTAssertNil(stalePlainChild.parent)
+        XCTAssertNil(stalePlainChild.view.superview)
+        XCTAssertTrue(events.contains(.init(category: .children, level: .info, event: "reloadData.child.remove")))
     }
 
     @MainActor
@@ -211,4 +294,26 @@ private final class StubDelegate: AnchorPagerViewControllerDelegate {
         _ pagerViewController: AnchorPagerViewController,
         didUpdateLayout context: AnchorPagerLayoutContext
     ) {}
+}
+
+@MainActor
+private final class ScrollChildViewController: UIViewController {
+    let scrollView = UIScrollView()
+
+    override func loadView() {
+        view = UIView()
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(scrollView)
+        NSLayoutConstraint.activate([
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.topAnchor.constraint(equalTo: view.topAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+        anchorPagerScrollView = scrollView
+    }
 }

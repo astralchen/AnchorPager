@@ -76,7 +76,7 @@ Public API source scan 测试会检查 `Sources/AnchorPager/Public/` 不包含 `
 - Header host：承载 `.view` 或 `.viewController` Header
 - `AnchorPagerPagingAdapter`：内部 Tabman/Pageboy adapter，负责分段栏和横向分页内容
 
-主容器只持有内部 adapter，不向 Public API 暴露 Tabman/Pageboy 类型。当前装配提供基础可视路径和 `setSelectedIndex(_:animated:)` 到 adapter 的转发；完整 child cache window、scroll inset ownership、点击/横滑切页 UI 验收和纵向嵌套滚动协调仍继续按 v0.1/v0.3 节奏推进。
+主容器只持有内部 adapter，不向 Public API 暴露 Tabman/Pageboy 类型。当前装配提供基础可视路径，并已通过 UI test 验证分段栏点击、横向滑动和 public API 程序化切页。完整 child cache window、scroll inset ownership 和纵向嵌套滚动协调将在后续版本推进。
 
 ## Child Lifecycle
 
@@ -85,7 +85,7 @@ Public API source scan 测试会检查 `Sources/AnchorPager/Public/` 不包含 `
 - 安装时调用 `addChild`、添加 child view、`didMove(toParent:)`
 - 清理时调用 `willMove(toParent: nil)`、移除 view、`removeFromParent()`
 
-`AnchorPagerPageScrollHostViewController` 为无 scroll view child 提供内部 fallback scroll host。完整 cache window、appearance lifecycle 转发、offset snapshot 和 reloadData 与 adapter 状态同步将在后续版本实现。
+`AnchorPagerPageScrollHostViewController` 为无 scroll view child 提供内部 fallback scroll host。fallback host 会把普通 child view 约束到 scroll view content layout guide，并保证内容高度至少覆盖可视 viewport，避免无固有高度的普通 child 在示例工程中不可见。`AnchorPagerViewController.reloadData()` 会清理不再使用的旧 fallback host content，并记录 `children` 日志。完整 cache window、appearance lifecycle 转发和 offset snapshot 将在后续版本实现。
 
 ## Scroll Discovery
 
@@ -117,9 +117,8 @@ category 覆盖：
 
 ## Known Limitations
 
-当前 v0.1 尚未完成：
+当前 v0.1 已完成可视分页核心路径，仍不包含后续版本能力：
 
-- 示例工程已验证基础 Header、分段栏和当前页面内容可见；分段栏点击切页和横向滑动切页仍需补充 UI 验收
 - Header 折叠/展开布局引擎
 - managed inset ownership
 - 完整 child cache window 和 appearance lifecycle 转发

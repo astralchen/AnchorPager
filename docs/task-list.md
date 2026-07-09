@@ -135,7 +135,7 @@
 - [x] 禁用或绕开 Tabman 自动 child inset
 - [x] 确保横向 paging scroll view 不暴露到 public API
 - [x] 为分页开始、完成、取消加入 paging 日志
-- [ ] 为 Tabman/Pageboy 回调缺失、重复或乱序加入 paging 日志
+- [x] 为 Tabman/Pageboy 回调缺失、重复或乱序加入 paging 日志
 
 ### Child 基础管理
 
@@ -143,13 +143,13 @@
 - [x] 首次加载 child 时执行 `addChild`
 - [x] 首次加载 child 时添加 child view
 - [x] 首次加载 child 时执行 `didMove(toParent:)`
-- [ ] reloadData 时清理旧 child
+- [x] reloadData 时清理旧 child
 - [x] 空页时 `selectedIndex` 对外保持 0
 - [x] 空页时 `effectiveSelectedIndex` 为 nil
 - [x] setSelectedIndex 越界时 no-op
 - [x] Debug 下 setSelectedIndex 越界触发 assertionFailure
 - [x] 为 child add/remove 加入 children 日志
-- [ ] 为 reloadData 清理旧 child 加入 children 日志
+- [x] 为 reloadData 清理旧 child 加入 children 日志
 
 ### Scroll View Discovery
 
@@ -164,10 +164,10 @@
 - [x] 默认查找忽略 `isUserInteractionEnabled == false` 的 UIScrollView
 - [x] 多个候选时选择第一个符合规则的 UIScrollView
 - [x] 不跨 child view controller 边界查找
-- [ ] 无候选 UIScrollView 时使用内部 page scroll host
+- [x] 无候选 UIScrollView 时使用内部 page scroll host
 - [x] 为显式 scroll view 命中加入 scroll 日志
 - [x] 为默认 lookup 命中加入 scroll 日志
-- [ ] 为 fallback page scroll host 加入 scroll 日志
+- [x] 为 fallback page scroll host 加入 scroll 日志
 
 ### 文档与示例
 
@@ -183,8 +183,8 @@
 - [x] `docs/architecture.md` 说明日志策略、category、过滤方式和性能注意事项
 - [x] README 说明如何查看和过滤 AnchorPager 日志
 - [x] 示例工程显示 Header、分段栏和多个页面
-- [ ] 示例工程支持点击分段栏切页
-- [ ] 示例工程支持横向滑动切页
+- [x] 示例工程支持点击分段栏切页
+- [x] 示例工程支持横向滑动切页
 
 ### v0.1 测试
 
@@ -213,6 +213,9 @@
 - [x] `AnchorPagerAssertions` 非 MainActor 调用测试
 - [x] 示例工程基础启动 UI test
 - [x] 示例工程 Header、分段栏和页面内容 UI test
+- [x] 示例工程分段栏点击切页 UI test
+- [x] 示例工程横向滑动切页 UI test
+- [x] 示例工程 public API 切页 UI test
 
 ### v0.1 验收
 
@@ -220,7 +223,7 @@
 - [x] Package 单测通过
 - [x] 示例工程可构建
 - [x] 示例工程可显示 Header、分段栏和多个页面
-- [ ] 点击、横滑、API 三种切页方式可用
+- [x] 点击、横滑、API 三种切页方式可用
 - [x] v0.1 关键事件日志测试通过
 - [x] `git diff --check` 通过
 

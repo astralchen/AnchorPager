@@ -20,6 +20,7 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
     private var titles: [String] = []
     private var viewControllers: [UIViewController] = []
     private var defaultSelectedIndex = 0
+    private var pendingSelectionIndex: Int?
 
     override init(nibName nibNameOrNil: String?, bundle nibBundleOrNil: Bundle?) {
         super.init(nibName: nibNameOrNil, bundle: nibBundleOrNil)
@@ -52,6 +53,7 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
         } else {
             defaultSelectedIndex = 0
         }
+        pendingSelectionIndex = nil
 
         dataSource = self
         if isViewLoaded {
@@ -110,6 +112,7 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
             animated: animated
         )
         AnchorPagerLogger.log(.info, category: .paging, event: "paging.willSelect")
+        recordWillSelectCallback(at: index)
         eventDelegate?.pagingAdapter(self, willSelect: index, animated: animated)
     }
 
@@ -126,6 +129,7 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
             animated: animated
         )
         AnchorPagerLogger.log(.info, category: .paging, event: "paging.didSelect")
+        recordTerminalSelectionCallback(at: index)
         eventDelegate?.pagingAdapter(self, didSelect: index, animated: animated)
     }
 
@@ -140,6 +144,7 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
             returnToPageAt: previousIndex
         )
         AnchorPagerLogger.log(.info, category: .paging, event: "paging.didCancel")
+        recordTerminalSelectionCallback(at: index)
         eventDelegate?.pagingAdapter(
             self,
             didCancelSelectionAt: index,
@@ -150,6 +155,31 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
     private func configure() {
         automaticallyAdjustsChildInsets = false
         dataSource = self
+    }
+
+    private func recordWillSelectCallback(at index: Int) {
+        if let pendingSelectionIndex {
+            if pendingSelectionIndex == index {
+                AnchorPagerLogger.log(.debug, category: .paging, event: "paging.callback.duplicateWillSelect")
+            } else {
+                AnchorPagerLogger.log(.debug, category: .paging, event: "paging.callback.outOfOrder")
+            }
+        }
+
+        pendingSelectionIndex = index
+    }
+
+    private func recordTerminalSelectionCallback(at index: Int) {
+        guard let pendingSelectionIndex else {
+            AnchorPagerLogger.log(.debug, category: .paging, event: "paging.callback.missingWillSelect")
+            return
+        }
+
+        if pendingSelectionIndex != index {
+            AnchorPagerLogger.log(.debug, category: .paging, event: "paging.callback.outOfOrder")
+        }
+
+        self.pendingSelectionIndex = nil
     }
 
     private func installBarIfNeeded() {

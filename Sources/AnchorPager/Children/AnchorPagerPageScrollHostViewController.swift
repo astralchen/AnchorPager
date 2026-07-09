@@ -26,6 +26,15 @@ final class AnchorPagerPageScrollHostViewController: UIViewController {
         installContentViewControllerIfNeeded()
     }
 
+    func removeContentForReloadData() {
+        guard contentViewController.parent === self else { return }
+
+        contentViewController.willMove(toParent: nil)
+        contentViewController.view.removeFromSuperview()
+        contentViewController.removeFromParent()
+        AnchorPagerLogger.log(.info, category: .children, event: "reloadData.child.remove")
+    }
+
     private func installContentViewControllerIfNeeded() {
         guard contentViewController.parent !== self else { return }
 
@@ -38,7 +47,8 @@ final class AnchorPagerPageScrollHostViewController: UIViewController {
             contentView.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
             contentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
             contentView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
-            contentView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor)
+            contentView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
+            contentView.heightAnchor.constraint(greaterThanOrEqualTo: scrollView.frameLayoutGuide.heightAnchor)
         ])
         contentViewController.didMove(toParent: self)
     }
