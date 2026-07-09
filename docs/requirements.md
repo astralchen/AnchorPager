@@ -39,6 +39,10 @@ AnchorPager 是一个全新的独立 UIKit 容器框架，用于实现可变 Hea
 7. 内部状态机词如 pin anchor、owner、handoff 不得暴露到 public API。
 8. 必须锁定 Tabman/Pageboy 的最低可用版本，并在 `docs/architecture.md` 记录验证过的版本。
 9. 如果 Tabman/Pageboy API 限制影响设计，优先调整 internal adapter，不扩大 public API。
+10. 新增功能、修改重要逻辑或修复问题前，必须先梳理影响范围，再开始实现。
+11. 影响范围至少覆盖 public API、内部分层、UIKit containment、child lifecycle、scroll discovery、inset ownership、paging adapter、gesture/overscroll、日志、测试、示例工程和文档。
+12. 设计必须兼顾后续版本扩展，不得为了当前单点修复破坏既有架构边界、状态语义或未来版本路线。
+13. 如果变更可能影响 public API、跨模块契约、第三方 adapter 边界、线程/actor 隔离、生命周期或用户可见行为，必须先更新设计说明或计划文档，再实现。
 
 ## 5. Public API 要求
 

@@ -22,6 +22,10 @@
 - [ ] 非 UI 基础设施不因方便整体限制主线程，必要时使用 `nonisolated`、task-local 或真实同步机制表达隔离
 - [ ] 不复制参考项目源码、public API 或命名
 - [ ] 不引入具体业务场景、内容类型、数据模型或场景命名
+- [ ] 新增功能、修改重要逻辑或修复问题前先梳理影响范围
+- [ ] 变更影响评估覆盖 public API、内部分层、UIKit containment、child lifecycle、scroll discovery、inset ownership、paging adapter、gesture/overscroll、日志、测试、示例工程和文档
+- [ ] 设计兼顾后续版本扩展，不为当前单点修复破坏架构边界、状态语义或未来版本路线
+- [ ] 影响跨模块契约、线程/actor 隔离、生命周期或用户可见行为的变更先更新设计说明或计划文档
 - [ ] 不使用 `Task.detached` 绕过 actor 隔离
 - [ ] 不使用 `@unchecked Sendable`、`nonisolated(unsafe)`、`@preconcurrency` 粗暴压制并发问题
 - [ ] 每个重要行为都有对应测试

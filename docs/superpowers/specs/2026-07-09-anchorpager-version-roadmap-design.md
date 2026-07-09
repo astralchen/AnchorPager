@@ -20,6 +20,8 @@ AnchorPager 是一个全新的 UIKit 容器框架，目标是提供可变 Header
 10. 必要事件必须通过统一内部日志门面记录，方便后续调试、开发和问题修复。
 11. 日志使用 `os.Logger`，避免在框架库中散落 `print`。
 12. 高频滚动路径只记录状态变化、阈值跨越、owner 切换、异常或采样日志，避免逐帧输出。
+13. 新增功能、重要逻辑变更和问题修复必须先完成影响评估，覆盖 public API、内部分层、UIKit containment、child lifecycle、scroll discovery、inset ownership、paging adapter、gesture/overscroll、日志、测试、示例工程和文档。
+14. 任何局部修复都不得破坏后续版本扩展路线；如果影响跨模块契约、线程/actor 隔离、生命周期或用户可见行为，必须先更新设计说明或计划文档，再实现。
 
 ## 依赖基线
 
