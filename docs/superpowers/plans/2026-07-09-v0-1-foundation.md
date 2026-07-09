@@ -4,7 +4,7 @@
 
 **Goal:** 建立 AnchorPager v0.1 的可编译 UIKit/Swift Package 基础，交付 Public API skeleton、日志门面、Header/Child/Scroll 基础能力和 Tabman/Pageboy internal adapter 边界。
 
-**Current Status:** 已完成 v0.1 foundation 范围并提交到 `codex/v0-1-foundation`。本计划覆盖的是基础设施、API 骨架、内部承载、scroll discovery 和 adapter 边界；完整 v0.1 可视分页验收仍需要后续把 Header、Tabman/Pageboy adapter、child store 和 fallback host 串入 `AnchorPagerViewController`，并补齐示例工程与 UI test target。
+**Current Status:** 已完成 v0.1 foundation 范围并提交到 `codex/v0-1-foundation`，并已创建可构建的 `AnchorPagerExample` 示例工程与基础启动 UI test。本计划覆盖的是基础设施、API 骨架、内部承载、scroll discovery、adapter 边界和示例工程接入；完整 v0.1 可视分页验收仍需要后续把 Header、Tabman/Pageboy adapter、child store 和 fallback host 串入 `AnchorPagerViewController`。
 
 **Architecture:** `AnchorPagerViewController` 是唯一 public 容器入口；Public API 不暴露 Tabman/Pageboy 类型。Header、Children、Paging、Logging 按目录分层，v0.1 只实现可测试的基础承载和分页选择状态，不实现完整纵向滚动协调、overscroll owner 或尺寸变化状态机。
 
@@ -188,11 +188,12 @@
 - [x] Step 1: 运行 `git diff --check`，预期通过。
 - [x] Step 2: 运行 `swift package resolve`，预期通过。
 - [x] Step 3: 运行 `xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test`，预期通过。
-- [x] Step 4: 示例工程未创建完成时，在验收说明中明确 `Examples/AnchorPagerExample.xcodeproj` 未运行原因；如果已创建则运行 build。
+- [x] Step 4: 示例工程已创建，运行 `Examples/AnchorPagerExample.xcodeproj` build 和基础启动测试。
 
 ## Verification Record
 
 - `git diff --check`：通过。
 - `swift package resolve`：通过，解析到 Tabman `4.0.1`、Pageboy `5.0.2`。
-- `xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcodebuild test`：通过，32 个测试、0 失败。
-- `xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'generic/platform=iOS Simulator' build`：未运行；`Examples/AnchorPagerExample.xcodeproj` 尚未创建，示例工程仍是后续未完成项。
+- `xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcodebuild test`：通过，37 个测试、0 失败。
+- `xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'generic/platform=iOS Simulator' -derivedDataPath .build/example-xcodebuild build`：通过。
+- `xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/example-xcodebuild test`：通过，1 个示例工程单测和 1 个基础启动 UI test 通过。

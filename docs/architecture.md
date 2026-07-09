@@ -109,7 +109,7 @@ category 覆盖：
 
 当前 v0.1 foundation 尚未完成：
 
-- 示例工程和 UI test target
+- 示例工程已创建并可构建；当前只验证 public API 接入和基础启动，完整 Header/分段栏/多页面可视装配仍未串入主容器
 - Header 折叠/展开布局引擎
 - managed inset ownership
 - 完整 child cache window 和 appearance lifecycle 转发

@@ -122,6 +122,15 @@ final class PlainPageViewController: UIViewController {
 
 v0.1 foundation 已提供内部 fallback scroll host 类型；完整自动接入会在后续页面装配流程中继续收敛。
 
+## 示例工程
+
+仓库包含 `Examples/AnchorPagerExample.xcodeproj`，用于验证示例 App 能接入本地 `AnchorPager` package、启动基础 UIKit 宿主并通过 public API 提供 Header、显式 scroll view child 和无 scroll view child。当前示例工程可构建并有基础启动 UI test；完整 Header、分段栏和多页面内容的可视装配仍等待主容器串联完成。
+
+```bash
+xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'generic/platform=iOS Simulator' build
+xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test
+```
+
 ## 日志
 
 AnchorPager 通过内部 `AnchorPagerLogger` 使用 `os.Logger` 输出关键事件，subsystem 为 `com.anchorpager.AnchorPager`。`AnchorPagerLogger.log` 可从非主线程内部路径调用；测试用 sink 会回到 MainActor 记录事件。当前 category 包括 `lifecycle`、`layout`、`header`、`paging`、`children`、`scroll`、`inset`、`overscroll`、`gesture`、`accessibility`、`resource`。
@@ -136,4 +145,4 @@ log stream --predicate 'subsystem == "com.anchorpager.AnchorPager"'
 
 ## 当前限制
 
-v0.1 foundation 尚未交付完整示例工程、完整纵向嵌套滚动协调、顶部 overscroll owner、状态栏点击顶滚和尺寸变化恢复。Tabman/Pageboy 仅出现在 internal adapter 层，Public API 不暴露第三方类型。
+v0.1 foundation 尚未交付完整 Header/分段栏/多页面可视装配、完整纵向嵌套滚动协调、顶部 overscroll owner、状态栏点击顶滚和尺寸变化恢复。Tabman/Pageboy 仅出现在 internal adapter 层，Public API 不暴露第三方类型。

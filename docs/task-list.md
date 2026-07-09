@@ -49,7 +49,7 @@
 - [x] 确认 Pageboy 解析到 `5.0.2`
 - [x] 创建 `Sources/AnchorPager/`
 - [x] 创建 `Tests/AnchorPagerTests/`
-- [ ] 创建 `Examples/AnchorPagerExample/`
+- [x] 创建 `Examples/AnchorPagerExample/`
 - [x] 创建 `README.md`
 - [x] 创建 `docs/architecture.md`
 
@@ -211,12 +211,13 @@
 - [x] 分页切换日志测试
 - [x] fallback host 日志测试
 - [x] `AnchorPagerAssertions` 非 MainActor 调用测试
+- [x] 示例工程基础启动 UI test
 
 ### v0.1 验收
 
 - [x] `swift package resolve` 通过
 - [x] Package 单测通过
-- [ ] 示例工程可构建
+- [x] 示例工程可构建
 - [ ] 示例工程可显示 Header、分段栏和多个页面
 - [ ] 点击、横滑、API 三种切页方式可用
 - [x] v0.1 关键事件日志测试通过
