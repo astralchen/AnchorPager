@@ -392,6 +392,8 @@ README.md
 
 ## 22. 测试要求
 
+每完成一个实现任务都必须有对应测试。任务不能只以代码完成作为完成标准，必须同时提供可重复运行的测试或验证命令。涉及 UIKit 可见行为、用户交互、分页、滚动、手势、状态栏点击、旋转、safe area、Dynamic Type、Reduce Motion、RTL 或示例工程行为的任务，必须补充必要 UI 测试；如果某个任务无法通过 UI 测试稳定覆盖，必须在对应任务说明中写明原因，并提供替代的自动化验证。
+
 1. LayoutEngine 单测
 2. Header automatic、fixed、ranged height 单测
 3. Header height clamp 单测
@@ -458,6 +460,9 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExa
 5. 第三方库类型不泄漏到 AnchorPager public API。
 6. 核心框架不能包含具体应用场景专属类型或命名。
 7. 优先小步实现，每个重要行为都有对应测试。
+8. 每个实现任务完成时必须同步提交测试，不能把测试推迟到后续任务统一补。
+9. 触达用户可见 UI、UIKit 生命周期、手势、滚动、分页或系统交互的任务必须包含必要 UI 测试。
+10. 任务验收说明必须列出实际运行过的测试命令和结果。
 
 ## 25. 一句话目标
 
