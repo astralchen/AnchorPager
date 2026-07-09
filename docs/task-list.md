@@ -16,10 +16,18 @@
 - [ ] 使用 Swift Package Manager
 - [ ] 横向分页使用 Tabman + Pageboy
 - [ ] Tabman/Pageboy 类型只出现在 internal adapter 层
+- [ ] 横向 page 的实际 UIKit containment 由 Tabman/Pageboy adapter 执行，AnchorPager 不对同一 page view controller 重复 `addChild`
 - [ ] Public API 不暴露第三方库类型
 - [ ] Public API、data source、delegate、coordinator 状态更新保持 `@MainActor`
+- [ ] 只有直接操作 UIKit 状态或维护 UI lifecycle/coordinator 状态的内部类型整体使用 `@MainActor`
+- [ ] 非 UI 基础设施不因方便整体限制主线程，必要时使用 `nonisolated`、task-local 或真实同步机制表达隔离
 - [ ] 不复制参考项目源码、public API 或命名
 - [ ] 不引入具体业务场景、内容类型、数据模型或场景命名
+- [ ] 新增功能、修改重要逻辑或修复问题前先梳理影响范围
+- [ ] 变更影响评估覆盖 public API、内部分层、UIKit containment、child lifecycle、scroll discovery、inset ownership、paging adapter、gesture/overscroll、日志、测试、示例工程和文档
+- [ ] 发现实现真实职责与文档、计划或架构假设不一致时，及时提醒用户并同步更新对应文档
+- [ ] 设计兼顾后续版本扩展，不为当前单点修复破坏架构边界、状态语义或未来版本路线
+- [ ] 影响跨模块契约、线程/actor 隔离、生命周期或用户可见行为的变更先更新设计说明或计划文档
 - [ ] 不使用 `Task.detached` 绕过 actor 隔离
 - [ ] 不使用 `@unchecked Sendable`、`nonisolated(unsafe)`、`@preconcurrency` 粗暴压制并发问题
 - [ ] 每个重要行为都有对应测试
@@ -27,6 +35,7 @@
 - [ ] 触达用户可见 UI、UIKit 生命周期、手势、滚动、分页或系统交互的任务包含必要 UI 测试
 - [ ] 无法稳定使用 UI 测试覆盖的 UI 行为写明原因，并提供替代自动化验证
 - [ ] 每个任务验收记录实际运行过的测试命令和结果
+- [ ] 每完成一个实现任务或重要修复后先做代码自审，并记录自审结论
 - [ ] 必要事件通过统一内部日志门面记录
 - [ ] 日志使用 `os.Logger`，不在框架库中散落 `print`
 - [ ] 高频滚动路径不逐帧输出普通日志
@@ -40,182 +49,213 @@
 
 ### 工程与依赖
 
-- [ ] 创建 `Package.swift`
-- [ ] 配置 iOS 14+ platform
-- [ ] 配置 Swift 6 language mode
-- [ ] 添加 Tabman 依赖，版本从 `4.0.1` 开始
-- [ ] 确认 Pageboy 解析到 `5.0.2`
-- [ ] 创建 `Sources/AnchorPager/`
-- [ ] 创建 `Tests/AnchorPagerTests/`
-- [ ] 创建 `Examples/AnchorPagerExample/`
-- [ ] 创建 `README.md`
-- [ ] 创建 `docs/architecture.md`
+- [x] 创建 `Package.swift`
+- [x] 配置 iOS 14+ platform
+- [x] 配置 Swift 6 language mode
+- [x] 添加 Tabman 依赖，版本从 `4.0.1` 开始
+- [x] 确认 Pageboy 解析到 `5.0.2`
+- [x] 创建 `Sources/AnchorPager/`
+- [x] 创建 `Tests/AnchorPagerTests/`
+- [x] 创建 `Examples/AnchorPagerExample/`
+- [x] 创建 `README.md`
+- [x] 创建 `docs/architecture.md`
 
 ### 日志基础设施
 
-- [ ] 创建 `Sources/AnchorPager/Logging/AnchorPagerLogger.swift`
-- [ ] 使用 `os.Logger` 作为日志底层
-- [ ] 定义 subsystem：`com.anchorpager.AnchorPager`
-- [ ] 定义 lifecycle category
-- [ ] 定义 layout category
-- [ ] 定义 header category
-- [ ] 定义 paging category
-- [ ] 定义 children category
-- [ ] 定义 scroll category
-- [ ] 定义 inset category
-- [ ] 定义 overscroll category
-- [ ] 定义 gesture category
-- [ ] 定义 accessibility category
-- [ ] 定义 resource category
-- [ ] 提供内部可注入 log sink 以便测试
-- [ ] 测试日志 category 和 level 记录
-- [ ] 测试日志不依赖人工查看控制台
+- [x] 创建 `Sources/AnchorPager/Logging/AnchorPagerLogger.swift`
+- [x] 使用 `os.Logger` 作为日志底层
+- [x] 定义 subsystem：`com.anchorpager.AnchorPager`
+- [x] 定义 lifecycle category
+- [x] 定义 layout category
+- [x] 定义 header category
+- [x] 定义 paging category
+- [x] 定义 children category
+- [x] 定义 scroll category
+- [x] 定义 inset category
+- [x] 定义 overscroll category
+- [x] 定义 gesture category
+- [x] 定义 accessibility category
+- [x] 定义 resource category
+- [x] 提供内部可注入 log sink 以便测试
+- [x] `AnchorPagerLogger.log` 支持非主线程调用
+- [x] 测试非主线程日志会将 sink 事件投递回 MainActor
+- [x] 测试日志 category 和 level 记录
+- [x] 测试日志不依赖人工查看控制台
 
 ### Public API Skeleton
 
-- [ ] 创建 `Sources/AnchorPager/Public/AnchorPagerViewController.swift`
-- [ ] 实现 `AnchorPagerViewController`
-- [ ] 暴露 `dataSource`
-- [ ] 暴露 `delegate`
-- [ ] 暴露 `configuration`
-- [ ] 暴露只读 `selectedIndex`
-- [ ] 暴露只读 `effectiveSelectedIndex`
-- [ ] 暴露 `verticalScrollView`
-- [ ] 实现 `init(configuration:)`
-- [ ] 实现 `reloadData()`
-- [ ] 实现 `setSelectedIndex(_:animated:)`
-- [ ] 实现 `reloadHeaderLayout(offsetAdjustment:)`
-- [ ] 为 init 和 deinit 加入 lifecycle 日志
-- [ ] 为 reloadData begin/end 加入 lifecycle 日志
-- [ ] 为 setSelectedIndex 请求、越界 no-op 和 commit 加入 paging 日志
-- [ ] 创建 `AnchorPagerViewControllerDataSource`
-- [ ] 创建 `AnchorPagerViewControllerDelegate`
-- [ ] 创建 `AnchorPagerHeaderContent`
-- [ ] 创建 `AnchorPagerConfiguration`
-- [ ] 创建 `AnchorPagerHeaderConfiguration`
-- [ ] 创建 `AnchorPagerBarConfiguration`
-- [ ] 创建 `AnchorPagerPagingConfiguration`
-- [ ] 创建 `AnchorPagerHeaderHeightMode`
-- [ ] 创建 `AnchorPagerHeaderTopBehavior`
-- [ ] 创建 `AnchorPagerHeaderOffsetAdjustment`
-- [ ] 创建 `AnchorPagerTopOverscrollHandlingMode`
-- [ ] 创建 `AnchorPagerLayoutContext`
-- [ ] 为 public/open API 添加简洁 DocC 注释
+- [x] 创建 `Sources/AnchorPager/Public/AnchorPagerViewController.swift`
+- [x] 实现 `AnchorPagerViewController`
+- [x] 暴露 `dataSource`
+- [x] 暴露 `delegate`
+- [x] 暴露 `configuration`
+- [x] 暴露只读 `selectedIndex`
+- [x] 暴露只读 `effectiveSelectedIndex`
+- [x] 暴露 `verticalScrollView`
+- [x] 实现 `init(configuration:)`
+- [x] 实现 `reloadData()`
+- [x] 实现 `setSelectedIndex(_:animated:)`
+- [x] 实现 `reloadHeaderLayout(offsetAdjustment:)`
+- [x] 为 init 和 deinit 加入 lifecycle 日志
+- [x] 为 reloadData begin/end 加入 lifecycle 日志
+- [x] 为 setSelectedIndex 请求、越界 no-op 和 commit 加入 paging 日志
+- [x] 创建 `AnchorPagerViewControllerDataSource`
+- [x] 创建 `AnchorPagerViewControllerDelegate`
+- [x] 创建 `AnchorPagerHeaderContent`
+- [x] 创建 `AnchorPagerConfiguration`
+- [x] 创建 `AnchorPagerHeaderConfiguration`
+- [x] 创建 `AnchorPagerBarConfiguration`
+- [x] 创建 `AnchorPagerPagingConfiguration`
+- [x] 创建 `AnchorPagerHeaderHeightMode`
+- [x] 创建 `AnchorPagerHeaderTopBehavior`
+- [x] 创建 `AnchorPagerHeaderOffsetAdjustment`
+- [x] 创建 `AnchorPagerTopOverscrollHandlingMode`
+- [x] 创建 `AnchorPagerLayoutContext`
+- [x] 为 public/open API 添加简洁 DocC 注释
 
 ### Header 基础承载
 
-- [ ] 创建 `Sources/AnchorPager/Header/AnchorPagerHeaderViewHost.swift`
-- [ ] 支持 `AnchorPagerHeaderContent.view`
-- [ ] 支持 `AnchorPagerHeaderContent.viewController`
-- [ ] Header viewController 使用标准 `addChild`、添加 view、`didMove(toParent:)`
-- [ ] Header viewController 移除时使用 `willMove(toParent: nil)`、移除 view、`removeFromParent`
-- [ ] 提供基础 Header 高度测量
-- [ ] 默认 Header height mode 为 automatic，min 为 0，max 为 nil
-- [ ] 默认 Header top behavior 为 insideSafeArea
-- [ ] 为 Header view 承载加入 header 日志
-- [ ] 为 Header viewController add/remove 加入 header 和 lifecycle 日志
-- [ ] 为 Header 基础测量结果加入 layout 日志
+- [x] 创建 `Sources/AnchorPager/Header/AnchorPagerHeaderViewHost.swift`
+- [x] 支持 `AnchorPagerHeaderContent.view`
+- [x] 支持 `AnchorPagerHeaderContent.viewController`
+- [x] Header viewController 使用标准 `addChild`、添加 view、`didMove(toParent:)`
+- [x] Header viewController 移除时使用 `willMove(toParent: nil)`、移除 view、`removeFromParent`
+- [x] 提供基础 Header 高度测量
+- [x] 默认 Header height mode 为 automatic，min 为 0，max 为 nil
+- [x] 默认 Header top behavior 为 insideSafeArea
+- [x] 为 Header view 承载加入 header 日志
+- [x] 为 Header viewController add/remove 加入 header 和 lifecycle 日志
+- [x] 为 Header 基础测量结果加入 layout 日志
+- [x] 重复安装同一个 Header view 时保持幂等，不触发 remove/re-add
+- [x] 重复安装同一个 Header viewController 时保持幂等，不重复 UIKit containment
 
 ### Tabman/Pageboy Adapter
 
-- [ ] 创建 `Sources/AnchorPager/Paging/AnchorPagerPagingAdapter.swift`
-- [ ] 创建 `Sources/AnchorPager/Paging/AnchorPagerTabBarAdapter.swift`
-- [ ] 在 adapter 内部接入 Tabman
-- [ ] 在 adapter 内部接入 Pageboy
-- [ ] 支持标题数据传入分段栏
-- [ ] 支持 child view controller 数据传入分页容器
-- [ ] 支持分段栏点击切页
-- [ ] 支持横向滑动切页
-- [ ] 支持 `setSelectedIndex(_:animated:)` 驱动切页
-- [ ] 收敛 Tabman/Pageboy page change 事件
-- [ ] 禁用或绕开 Tabman 自动 child inset
-- [ ] 确保横向 paging scroll view 不暴露到 public API
-- [ ] 为分页开始、完成、取消加入 paging 日志
-- [ ] 为 Tabman/Pageboy 回调缺失、重复或乱序加入 paging 日志
+- [x] 创建 `Sources/AnchorPager/Paging/AnchorPagerPagingAdapter.swift`
+- [x] 创建 `Sources/AnchorPager/Paging/AnchorPagerTabBarAdapter.swift`
+- [x] 在 adapter 内部接入 Tabman
+- [x] 在 adapter 内部接入 Pageboy
+- [x] 支持标题数据传入分段栏
+- [x] 支持 child view controller 数据传入分页容器
+- [x] 支持分段栏点击切页
+- [x] 支持横向滑动切页
+- [x] 支持 `setSelectedIndex(_:animated:)` 驱动切页
+- [x] 收敛 Tabman/Pageboy page change 事件
+- [x] 可见状态下 `setSelectedIndex` 只在 adapter 确认完成后提交 public `selectedIndex`
+- [x] 分页取消或回弹不通知 public selection delegate
+- [x] adapter 拒绝新程序化请求时保留已接受的上一笔 pending selection
+- [x] 禁用或绕开 Tabman 自动 child inset
+- [x] 确保横向 paging scroll view 不暴露到 public API
+- [x] 为分页开始、完成、取消加入 paging 日志
+- [x] 为 Tabman/Pageboy 回调缺失、重复或乱序加入 paging 日志
+
+### v0.1 稳定化收尾
+
+- [x] `reloadHeaderLayout()` 执行基础 Header 重新测量
+- [x] `reloadHeaderLayout()` 发送基础 `AnchorPagerLayoutContext`
+- [x] 文档说明 v0.1 不对忙碌状态下被拒绝的程序化切页做请求排队
+- [x] 文档说明 v0.1 `reloadData()` 仍会提前加载 child view 以执行 scroll discovery
+- [x] 文档说明 `topOverscrollHandlingMode`、`header.topBehavior`、`paging.keepsAdjacentPagesLoaded` 等后续版本配置项当前只保留 skeleton/default
+- [x] 本轮稳定化改动已完成代码自审，重点检查 selection 事务、Tabman/Pageboy 边界、Header containment 幂等、并发隔离、日志和测试覆盖
 
 ### Child 基础管理
 
-- [ ] 创建 `Sources/AnchorPager/Children/AnchorPagerChildViewControllerStore.swift`
-- [ ] 首次加载 child 时执行 `addChild`
-- [ ] 首次加载 child 时添加 child view
-- [ ] 首次加载 child 时执行 `didMove(toParent:)`
-- [ ] reloadData 时清理旧 child
-- [ ] 空页时 `selectedIndex` 对外保持 0
-- [ ] 空页时 `effectiveSelectedIndex` 为 nil
-- [ ] setSelectedIndex 越界时 no-op
-- [ ] Debug 下 setSelectedIndex 越界触发 assertionFailure
-- [ ] 为 child add/remove 加入 children 日志
-- [ ] 为 reloadData 清理旧 child 加入 children 日志
+- [x] 创建 `Sources/AnchorPager/Children/AnchorPagerChildViewControllerStore.swift`
+- [x] 首次加载 child 时执行 `addChild`
+- [x] 首次加载 child 时添加 child view
+- [x] 首次加载 child 时执行 `didMove(toParent:)`
+- [x] reloadData 时清理旧 child
+- [x] 空页时 `selectedIndex` 对外保持 0
+- [x] 空页时 `effectiveSelectedIndex` 为 nil
+- [x] setSelectedIndex 越界时 no-op
+- [x] Debug 下 setSelectedIndex 越界触发 assertionFailure
+- [x] 为 child add/remove 加入 children 日志
+- [x] 为 reloadData 清理旧 child 加入 children 日志
+
+说明：v0.1 的 `AnchorPagerChildViewControllerStore` 是独立基础 containment 工具；横向 page 的实际 containment 由 Tabman/Pageboy adapter 执行。后续 v0.4 应将该工具重定位或替换为 page state store，不能对同一 page view controller 形成双重 containment。
 
 ### Scroll View Discovery
 
-- [ ] 创建 `Sources/AnchorPager/Public/UIViewController+AnchorPager.swift`
-- [ ] 使用 associated object 存储显式 `anchorPagerScrollView`
-- [ ] 使用 associated object 存储 `anchorPagerUsesDefaultScrollViewLookup`
-- [ ] 默认启用 `anchorPagerUsesDefaultScrollViewLookup`
-- [ ] 实现只读计算属性 `anchorPagerDefaultScrollView`
-- [ ] 默认查找使用确定性深度优先策略
-- [ ] 默认查找忽略 hidden UIScrollView
-- [ ] 默认查找忽略 alpha 接近 0 的 UIScrollView
-- [ ] 默认查找忽略 `isUserInteractionEnabled == false` 的 UIScrollView
-- [ ] 多个候选时选择第一个符合规则的 UIScrollView
-- [ ] 不跨 child view controller 边界查找
-- [ ] 无候选 UIScrollView 时使用内部 page scroll host
-- [ ] 为显式 scroll view 命中加入 scroll 日志
-- [ ] 为默认 lookup 命中加入 scroll 日志
-- [ ] 为 fallback page scroll host 加入 scroll 日志
+- [x] 创建 `Sources/AnchorPager/Public/UIViewController+AnchorPager.swift`
+- [x] 使用 associated object 存储显式 `anchorPagerScrollView`
+- [x] 使用 associated object 存储 `anchorPagerUsesDefaultScrollViewLookup`
+- [x] 默认启用 `anchorPagerUsesDefaultScrollViewLookup`
+- [x] 实现只读计算属性 `anchorPagerDefaultScrollView`
+- [x] 默认查找使用确定性深度优先策略
+- [x] 默认查找忽略 hidden UIScrollView
+- [x] 默认查找忽略 alpha 接近 0 的 UIScrollView
+- [x] 默认查找忽略 `isUserInteractionEnabled == false` 的 UIScrollView
+- [x] 多个候选时选择第一个符合规则的 UIScrollView
+- [x] 不跨 child view controller 边界查找
+- [x] 无候选 UIScrollView 时使用内部 page scroll host
+- [x] 为显式 scroll view 命中加入 scroll 日志
+- [x] 为默认 lookup 命中加入 scroll 日志
+- [x] 为 fallback page scroll host 加入 scroll 日志
 
 ### 文档与示例
 
-- [ ] README 写入最小接入示例
-- [ ] README 写入 Header UIView 示例
-- [ ] README 写入 Header UIViewController 示例
-- [ ] README 写入显式 `anchorPagerScrollView` 示例
-- [ ] README 写入无 UIScrollView child 示例
-- [ ] `docs/architecture.md` 说明 public API 契约
-- [ ] `docs/architecture.md` 说明 Tabman/Pageboy adapter 边界
-- [ ] `docs/architecture.md` 说明默认 scroll view lookup 规则
-- [ ] `docs/architecture.md` 记录 Tabman/Pageboy 验证版本
-- [ ] `docs/architecture.md` 说明日志策略、category、过滤方式和性能注意事项
-- [ ] README 说明如何查看和过滤 AnchorPager 日志
-- [ ] 示例工程显示 Header、分段栏和多个页面
-- [ ] 示例工程支持点击分段栏切页
-- [ ] 示例工程支持横向滑动切页
+- [x] README 写入最小接入示例
+- [x] README 写入 Header UIView 示例
+- [x] README 写入 Header UIViewController 示例
+- [x] README 写入显式 `anchorPagerScrollView` 示例
+- [x] README 写入无 UIScrollView child 示例
+- [x] `docs/architecture.md` 说明 public API 契约
+- [x] `docs/architecture.md` 说明 Tabman/Pageboy adapter 边界
+- [x] `docs/architecture.md` 说明默认 scroll view lookup 规则
+- [x] `docs/architecture.md` 记录 Tabman/Pageboy 验证版本
+- [x] `docs/architecture.md` 说明日志策略、category、过滤方式和性能注意事项
+- [x] README 说明如何查看和过滤 AnchorPager 日志
+- [x] 示例工程显示 Header、分段栏和多个页面
+- [x] 示例工程支持点击分段栏切页
+- [x] 示例工程支持横向滑动切页
 
 ### v0.1 测试
 
-- [ ] Public API 编译测试
-- [ ] selectedIndex 空页测试
-- [ ] effectiveSelectedIndex 空页测试
-- [ ] setSelectedIndex 越界 no-op 测试
-- [ ] reloadData 后 selectedIndex clamp 测试
-- [ ] Header UIView 基础承载测试
-- [ ] Header UIViewController containment 测试
-- [ ] 显式 `anchorPagerScrollView` 优先测试
-- [ ] 默认 scroll view lookup 测试
-- [ ] 多个 UIScrollView 选择顺序测试
-- [ ] hidden、alpha、userInteractionEnabled 过滤测试
-- [ ] 关闭默认查找测试
-- [ ] 无 UIScrollView child fallback host 测试
-- [ ] 不跨 child view controller 边界查找测试
-- [ ] 基础 child add/remove containment 测试
-- [ ] Tabman/Pageboy 类型不泄漏 public API 检查
-- [ ] 日志门面单测
-- [ ] reloadData 日志测试
-- [ ] Header 承载日志测试
-- [ ] child add/remove 日志测试
-- [ ] 分页切换日志测试
-- [ ] fallback host 日志测试
+- [x] Public API 编译测试
+- [x] selectedIndex 空页测试
+- [x] effectiveSelectedIndex 空页测试
+- [x] setSelectedIndex 越界 no-op 测试
+- [x] reloadData 后 selectedIndex clamp 测试
+- [x] Header UIView 基础承载测试
+- [x] Header UIViewController containment 测试
+- [x] Header UIView 重复安装幂等测试
+- [x] Header UIViewController 重复安装不重复 containment 测试
+- [x] 显式 `anchorPagerScrollView` 优先测试
+- [x] 默认 scroll view lookup 测试
+- [x] 多个 UIScrollView 选择顺序测试
+- [x] hidden、alpha、userInteractionEnabled 过滤测试
+- [x] 关闭默认查找测试
+- [x] 无 UIScrollView child fallback host 测试
+- [x] 不跨 child view controller 边界查找测试
+- [x] 基础 child add/remove containment 测试
+- [x] Tabman/Pageboy 类型不泄漏 public API 检查
+- [x] 日志门面单测
+- [x] reloadData 日志测试
+- [x] Header 承载日志测试
+- [x] child add/remove 日志测试
+- [x] 分页切换日志测试
+- [x] 程序化切页确认后提交测试
+- [x] 程序化切页取消不通知 delegate 测试
+- [x] adapter 拒绝第二次切页时保留首次 pending selection 测试
+- [x] `reloadHeaderLayout()` 基础 layout context 回调测试
+- [x] fallback host 日志测试
+- [x] `AnchorPagerAssertions` 非 MainActor 调用测试
+- [x] 示例工程基础启动 UI test
+- [x] 示例工程 Header、分段栏和页面内容 UI test
+- [x] 示例工程分段栏点击切页 UI test
+- [x] 示例工程横向滑动切页 UI test
+- [x] 示例工程 public API 切页 UI test
 
 ### v0.1 验收
 
-- [ ] `swift package resolve` 通过
-- [ ] Package 单测通过
-- [ ] 示例工程可构建
-- [ ] 示例工程可显示 Header、分段栏和多个页面
-- [ ] 点击、横滑、API 三种切页方式可用
-- [ ] v0.1 关键事件日志测试通过
-- [ ] `git diff --check` 通过
+- [x] `swift package resolve` 通过
+- [x] Package 单测通过
+- [x] iOS Simulator 测试目标编译通过
+- [x] 示例工程可构建
+- [x] 示例工程可显示 Header、分段栏和多个页面
+- [x] 点击、横滑、API 三种切页方式可用
+- [x] v0.1 关键事件日志测试通过
+- [x] `git diff --check` 通过
 
 ## v0.2：Header 与布局稳定版
 
@@ -263,13 +303,15 @@
 
 ## v0.4：Child 生命周期与缓存版
 
+- [ ] 实现 page state store
+- [ ] 重定位或替换 `AnchorPagerChildViewControllerStore`，避免与 Tabman/Pageboy 双重 containment
 - [ ] 实现 child cache window
 - [ ] 默认至少保留 current page
 - [ ] 支持配置是否保留相邻 page
 - [ ] 卸载 child 前保存 scroll offset snapshot
 - [ ] 卸载 child 前保存 managed inset 状态
 - [ ] 卸载 child 前保存 appearance 状态
-- [ ] reloadData 清理旧 child
+- [ ] reloadData 清理旧 page state 和旧 fallback host content
 - [ ] reloadData 清理旧 offset snapshot
 - [ ] reloadData 清理旧 Tabman/Pageboy 状态
 - [ ] dataSource 返回负数 page count 时固定策略
@@ -277,7 +319,7 @@
 - [ ] 为 cache window 更新加入 children 日志
 - [ ] 为 offset snapshot 保存和恢复加入 children 日志
 - [ ] 为重复 viewController 降级加入 children 日志
-- [ ] 测试 child appearance lifecycle 顺序
+- [ ] 测试 Tabman 驱动的 child appearance lifecycle 顺序
 - [ ] 测试 child cache window
 - [ ] 测试 unload offset snapshot
 - [ ] 测试 reloadData 后旧 child 可释放
