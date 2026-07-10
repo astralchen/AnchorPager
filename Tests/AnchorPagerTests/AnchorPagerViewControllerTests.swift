@@ -345,7 +345,8 @@ final class AnchorPagerViewControllerTests: XCTestCase {
 
         let context = try XCTUnwrap(delegate.layoutContexts.last)
         XCTAssertEqual(context.headerFrame.minY, 0)
-        XCTAssertEqual(context.barFrame.minY, 24)
+        XCTAssertEqual(context.headerFrame.height, 24)
+        XCTAssertEqual(context.barFrame.minY, context.headerFrame.maxY)
     }
 
     @MainActor
@@ -443,6 +444,42 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         let actualHeaderFrame = headerHostView.convert(headerHostView.bounds, to: pager.view)
 
         XCTAssertEqual(pager.verticalScrollView.contentInsetAdjustmentBehavior, .never)
+        XCTAssertEqual(actualHeaderFrame.minY, context.headerFrame.minY, accuracy: 0.5)
+        XCTAssertEqual(actualHeaderFrame.height, context.headerFrame.height, accuracy: 0.5)
+    }
+
+    @MainActor
+    func testHeaderActualFrameMatchesLayoutContextWhenContentOffsetIsPreserved() throws {
+        var configuration = AnchorPagerConfiguration.default
+        configuration.header.heightMode = .fixed(max: 120, min: 0)
+        configuration.header.topBehavior = .insideSafeArea
+        let pager = AnchorPagerViewController(configuration: configuration)
+        let headerView = FixedFittingView(height: 120)
+        let delegate = StubDelegate()
+        let dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [ScrollChildViewController()],
+            headerContent: .view(headerView)
+        )
+        pager.dataSource = dataSource
+        pager.delegate = delegate
+        let navigationController = UINavigationController(rootViewController: pager)
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = navigationController
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+
+        pager.reloadData()
+        window.layoutIfNeeded()
+        delegate.layoutContexts.removeAll()
+        pager.verticalScrollView.contentOffset = CGPoint(x: 0, y: 48)
+        pager.reloadHeaderLayout(offsetAdjustment: .preserveVisualPosition)
+        window.layoutIfNeeded()
+
+        let context = try XCTUnwrap(delegate.layoutContexts.last)
+        let headerHostView = try XCTUnwrap(headerView.superview)
+        let actualHeaderFrame = headerHostView.convert(headerHostView.bounds, to: pager.view)
+
         XCTAssertEqual(actualHeaderFrame.minY, context.headerFrame.minY, accuracy: 0.5)
         XCTAssertEqual(actualHeaderFrame.height, context.headerFrame.height, accuracy: 0.5)
     }
@@ -580,11 +617,12 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         let plainChild = UIViewController()
         plainChild.view.backgroundColor = .systemBlue
         let delegate = StubDelegate()
-        pager.dataSource = StubDataSource(
+        let dataSource = StubDataSource(
             count: 1,
             viewControllers: [plainChild],
             headerContent: .view(FixedFittingView(height: 80))
         )
+        pager.dataSource = dataSource
         pager.delegate = delegate
         let tabBarController = UITabBarController()
         tabBarController.viewControllers = [pager]

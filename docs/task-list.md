@@ -266,6 +266,7 @@
 - [x] 实现 ranged height clamp
 - [x] 实现 insideSafeArea 布局
 - [x] 实现 extendsUnderTopSafeArea 布局
+- [x] `extendsUnderTopSafeArea` 下 Header 可视 frame 至少覆盖本地顶部遮挡，并保持 `barFrame.minY == headerFrame.maxY`
 - [x] 实现 Header runtime frame 变化
 - [x] 实现 `reloadHeaderLayout(.preserveVisualPosition)`
 - [x] 实现 `reloadHeaderLayout(.preserveCollapseProgress)`
@@ -276,6 +277,7 @@
 - [x] 横向分页区域默认延伸到容器 `bounds` 底部，底部遮挡只进入 managed inset target
 - [x] 禁用 AnchorPager 自有主容器 `verticalScrollView` 自动 content inset，避免 Header 顶部遮挡重复叠加
 - [x] 禁用无滚动页 fallback scroll host 自动 content inset，避免 plain child 底部停在安全区域上方
+- [x] 示例工程导航栏支持切换 `AnchorPagerHeaderTopBehavior`、显示当前配置，并使用 `.preserveVisualPosition` 刷新布局
 - [x] 为 Header 测量结果加入 layout 日志
 - [x] 为 Header frame 变化加入 layout 日志
 - [x] 为 bar frame 变化加入 layout 日志
@@ -288,6 +290,7 @@
 - [x] 测试 navigation controller 下 Header 实际 frame 与 layout context 对齐
 - [x] 测试 tab bar 和 toolbar 底部遮挡
 - [x] 测试无滚动页 fallback host 底部延伸到 content frame 底部
+- [x] 测试示例工程 `AnchorPagerHeaderTopBehavior` 菜单显示、切换和 `extendsUnderTopSafeArea` 顶部遮挡覆盖
 - [x] 测试 additionalSafeAreaInsets
 
 ## v0.3：Scroll Discovery 与 Inset Ownership 版
@@ -533,6 +536,9 @@
 - [x] v0.2 Task 6：文档、任务状态与版本验收已完成，验证记录见 `docs/superpowers/plans/2026-07-09-v0-2-header-layout.md`
 - [x] v0.2 follow-up：主容器自动 content inset 已禁用，修复 navigation bar 下 Header 与 layout context 顶部位置不一致的问题；验证记录见 `docs/superpowers/plans/2026-07-09-v0-2-header-layout.md`
 - [x] v0.2 follow-up：内部 fallback scroll host 自动 content inset 已禁用，修复无滚动页底部没有延伸到 content frame 底部的问题；验证记录见 `docs/superpowers/plans/2026-07-09-v0-2-header-layout.md`
+- [x] v0.2 follow-up：示例工程已新增 `AnchorPagerHeaderTopBehavior` 菜单，可显示并切换当前 Header 顶部行为配置，且切换时使用 `.preserveVisualPosition` 刷新布局；验证记录见 `docs/superpowers/plans/2026-07-09-v0-2-header-layout.md`
+- [x] v0.2 follow-up：Header host 约束写入 scroll content 坐标前会补偿当前 `contentOffset.y`，修复菜单切换保留滚动位置后同一 `AnchorPagerHeaderTopBehavior` 实际 Header frame 与 layout context 不一致的问题；验证记录见 `docs/superpowers/plans/2026-07-09-v0-2-header-layout.md`
+- [x] v0.2 follow-up：`extendsUnderTopSafeArea` 下 Header 可视 frame 高度至少覆盖本地顶部遮挡，修复当前 Header 内容高度小于顶部遮挡时 Header 与分段栏之间出现空隙的问题；验证记录见 `docs/superpowers/plans/2026-07-09-v0-2-header-layout.md`
 - [x] v0.2 Header 与布局稳定版已完成；后续从 v0.3 Scroll Discovery 与 Inset Ownership 版继续
 - [x] 实现时遵循测试先行
 - [x] 每个任务完成后运行对应测试

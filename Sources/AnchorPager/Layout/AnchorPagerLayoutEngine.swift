@@ -54,17 +54,20 @@ struct AnchorPagerLayoutEngine {
         let collapseProgress = collapsibleDistance > 0
             ? collapseOffset / collapsibleDistance
             : 0
-        let currentHeaderHeight = Swift.max(
+        let rawHeaderHeight = Swift.max(
             resolvedHeaderHeight.collapsed,
             resolvedHeaderHeight.expanded - collapseOffset
         )
         let topPinY = bounds.minY + topObstructionHeight
         let headerY: CGFloat
+        let currentHeaderHeight: CGFloat
         switch input.headerTopBehavior {
         case .insideSafeArea:
             headerY = topPinY
+            currentHeaderHeight = rawHeaderHeight
         case .extendsUnderTopSafeArea:
             headerY = bounds.minY
+            currentHeaderHeight = Swift.max(rawHeaderHeight, topObstructionHeight)
         }
 
         let headerFrame = CGRect(

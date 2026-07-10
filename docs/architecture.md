@@ -102,9 +102,9 @@ Header host 只负责 Header 内容和 containment。它可以接收内部 top o
 
 AnchorPager 自有主容器 `verticalScrollView` 的 `contentInsetAdjustmentBehavior` 固定为 `.never`。safe area、navigation bar、tab bar 和 toolbar 遮挡已经被转换为 LayoutEngine 的本地 obstruction；如果继续使用 UIKit 自动 content inset，Header 实际 frame 会比 `AnchorPagerLayoutContext.headerFrame` 多叠一层 top inset。这个约束只属于主容器，不代表 v0.3 的 child managed inset 写入已完成。
 
-`insideSafeArea` 会让 Header 从顶部 obstruction 下方开始。`extendsUnderTopSafeArea` 会让 Header 从 bounds 顶部开始，但 bar frame 的吸顶基线仍不高于顶部 obstruction。paging adapter 的 top spacing 和高度跟随 engine 输出，使实际分段栏/页面区域与 layout context 保持一致。content frame 默认延伸到容器 `bounds.maxY`，在全屏容器中即物理屏幕最底部；bottom obstruction 不裁剪横向区域，只进入 `managedInsetTarget.bottom`，供 v0.3 的 child inset ownership 使用。
+`insideSafeArea` 会让 Header frame 从顶部 obstruction 下方开始。`extendsUnderTopSafeArea` 会让 Header frame 从 bounds 顶部开始；当当前 Header 内容高度小于顶部 obstruction 时，LayoutEngine 会将 Header 可视 frame 高度提升到顶部 obstruction 高度，并保持 `barFrame.minY == headerFrame.maxY`。`AnchorPagerLayoutContext.headerFrame.height` 表示布局后的可视 frame 高度，可能大于 `AnchorPagerHeaderHeightMode` 解析出的当前 Header 内容高度。paging adapter 的 top spacing 和高度跟随 engine 输出，使实际分段栏/页面区域与 layout context 保持一致。content frame 默认延伸到容器 `bounds.maxY`，在全屏容器中即物理屏幕最底部；bottom obstruction 不裁剪横向区域，只进入 `managedInsetTarget.bottom`，供 v0.3 的 child inset ownership 使用。
 
-v0.2 只计算 managed inset target 并记录日志，不写入接入方 child scroll view 的 managed content inset；完整 inset ownership 在 v0.3 实现。AnchorPager 自有主容器和内部 fallback scroll host 会禁用 UIKit 自动 content inset，避免系统 inset 与 LayoutEngine 的本地遮挡计算重复作用。
+v0.2 只计算 managed inset target 并记录日志，不写入外部 child scroll view 的 managed content inset；完整 inset ownership 在 v0.3 实现。AnchorPager 自有主容器和内部 fallback scroll host 会禁用 UIKit 自动 content inset，避免系统 inset 与 LayoutEngine 的本地遮挡计算重复作用。
 
 ## 主容器可视装配
 
@@ -117,6 +117,8 @@ v0.2 只计算 managed inset target 并记录日志，不写入接入方 child s
 主容器只持有内部 adapter，不向 Public API 暴露 Tabman/Pageboy 类型。当前装配提供基础可视路径，并已通过 UI test 验证分段栏点击、横向滑动和 public API 程序化切页。完整 page state store、scroll inset ownership 和纵向嵌套滚动协调将在后续版本推进。
 
 v0.2 会在基础布局更新和 `reloadHeaderLayout()` 时发送 `AnchorPagerLayoutContext`。当前 context 覆盖有效 selectedIndex、Header frame、bar frame 和内容 frame，用于调试和接入验证。
+
+`AnchorPagerLayoutContext` 中的 frame 使用 `AnchorPagerViewController.view` 的本地可见坐标，不是 `verticalScrollView` content 坐标。`AnchorPagerViewController` 将 Header host 写入 scroll content 约束时，会用当前 `verticalScrollView.contentOffset.y` 把可见 Y 坐标转换为 content Y 坐标，确保 `.preserveVisualPosition` 保留非零 offset 后，实际可见 Header frame 仍与 layout context 对齐。
 
 `reloadHeaderLayout(offsetAdjustment:)` 会重新测量 Header，并按策略迁移 `verticalScrollView.contentOffset.y`：
 

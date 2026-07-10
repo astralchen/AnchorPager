@@ -3,6 +3,7 @@ import UIKit
 
 final class ExamplePagerViewController: UIViewController {
     private let pagerViewController = AnchorPagerViewController()
+    private var headerTopBehaviorItem: UIBarButtonItem?
     private let pages: [UIViewController] = [
         ExampleScrollPageViewController(title: "无内容页", rows: 0),
         ExampleScrollPageViewController(title: "短页", rows: 6),
@@ -27,13 +28,73 @@ final class ExamplePagerViewController: UIViewController {
             action: #selector(pushAnchorPagerExample)
         )
         pushItem.accessibilityLabel = "打开 AnchorPager"
-        navigationItem.rightBarButtonItem = pushItem
+
+        let headerTopBehaviorItem = makeHeaderTopBehaviorItem()
+        self.headerTopBehaviorItem = headerTopBehaviorItem
+        navigationItem.rightBarButtonItems = [pushItem, headerTopBehaviorItem]
     }
 
     @objc private func pushAnchorPagerExample() {
         let viewController = ExamplePagerViewController()
         viewController.hidesBottomBarWhenPushed = true
         navigationController?.pushViewController(viewController, animated: true)
+    }
+
+    private func makeHeaderTopBehaviorItem() -> UIBarButtonItem {
+        let item = UIBarButtonItem(
+            title: title(for: pagerViewController.configuration.header.topBehavior),
+            image: nil,
+            primaryAction: nil,
+            menu: makeHeaderTopBehaviorMenu()
+        )
+        item.accessibilityLabel = "Header 顶部行为"
+        item.accessibilityValue = title(for: pagerViewController.configuration.header.topBehavior)
+        return item
+    }
+
+    private func makeHeaderTopBehaviorMenu() -> UIMenu {
+        let current = pagerViewController.configuration.header.topBehavior
+        return UIMenu(
+            title: "Header 顶部行为",
+            children: [
+                UIAction(
+                    title: title(for: .insideSafeArea),
+                    state: current == .insideSafeArea ? .on : .off
+                ) { [weak self] _ in
+                    self?.setHeaderTopBehavior(.insideSafeArea)
+                },
+                UIAction(
+                    title: title(for: .extendsUnderTopSafeArea),
+                    state: current == .extendsUnderTopSafeArea ? .on : .off
+                ) { [weak self] _ in
+                    self?.setHeaderTopBehavior(.extendsUnderTopSafeArea)
+                }
+            ]
+        )
+    }
+
+    private func setHeaderTopBehavior(_ behavior: AnchorPagerHeaderTopBehavior) {
+        guard pagerViewController.configuration.header.topBehavior != behavior else { return }
+
+        pagerViewController.configuration.header.topBehavior = behavior
+        pagerViewController.reloadHeaderLayout(offsetAdjustment: .preserveVisualPosition)
+        updateHeaderTopBehaviorItem()
+    }
+
+    private func updateHeaderTopBehaviorItem() {
+        let currentTitle = title(for: pagerViewController.configuration.header.topBehavior)
+        headerTopBehaviorItem?.title = currentTitle
+        headerTopBehaviorItem?.accessibilityValue = currentTitle
+        headerTopBehaviorItem?.menu = makeHeaderTopBehaviorMenu()
+    }
+
+    private func title(for behavior: AnchorPagerHeaderTopBehavior) -> String {
+        switch behavior {
+        case .insideSafeArea:
+            "安全区内"
+        case .extendsUnderTopSafeArea:
+            "延伸到顶部"
+        }
     }
 
     private func installPager() {

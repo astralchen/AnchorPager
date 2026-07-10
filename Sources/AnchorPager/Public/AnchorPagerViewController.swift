@@ -278,7 +278,9 @@ open class AnchorPagerViewController: UIViewController {
         }
 
         headerHeightConstraint?.constant = layoutOutput.headerFrame.height
-        headerViewHost.setTopOffset(layoutOutput.headerFrame.minY)
+        headerViewHost.setTopOffset(
+            scrollContentCoordinateY(forVisibleY: layoutOutput.headerFrame.minY)
+        )
         pagingTopConstraint?.constant = Swift.max(
             0,
             layoutOutput.barFrame.minY - layoutOutput.headerFrame.maxY
@@ -320,6 +322,10 @@ open class AnchorPagerViewController: UIViewController {
                 contentOffsetY: contentOffsetY
             )
         )
+    }
+
+    private func scrollContentCoordinateY(forVisibleY visibleY: CGFloat) -> CGFloat {
+        visibleY + verticalScrollView.contentOffset.y
     }
 
     private struct LayoutEnvironment {

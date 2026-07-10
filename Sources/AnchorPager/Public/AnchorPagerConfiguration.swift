@@ -94,10 +94,16 @@ public enum AnchorPagerHeaderHeightMode: Sendable, Equatable {
 
 /// Header 顶部绘制行为。
 public enum AnchorPagerHeaderTopBehavior: Sendable, Equatable {
-    /// Header 从安全区域内开始显示。
+    /// Header 从本地顶部遮挡下方开始布局。
     case insideSafeArea
 
-    /// Header 可以绘制到顶部安全区域下方。
+    /// Header 从容器 bounds 顶部开始布局。
+    ///
+    /// 当当前 Header 内容高度小于本地顶部遮挡高度时，AnchorPager 会将
+    /// `headerFrame.height` 提升到顶部遮挡高度，并保持
+    /// `barFrame.minY == headerFrame.maxY`。因此
+    /// `AnchorPagerLayoutContext.headerFrame.height` 表示布局后的可视 frame 高度，
+    /// 可能大于 `AnchorPagerHeaderHeightMode` 解析出的当前 Header 内容高度。
     case extendsUnderTopSafeArea
 }
 

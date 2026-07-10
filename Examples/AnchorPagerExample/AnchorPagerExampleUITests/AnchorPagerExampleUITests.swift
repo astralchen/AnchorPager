@@ -27,6 +27,24 @@ final class AnchorPagerExampleUITests: XCTestCase {
     }
 
     @MainActor
+    func testHeaderTopBehaviorMenuSwitchesVisibleConfiguration() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        let behaviorButton = app.navigationBars["AnchorPager"].buttons["Header 顶部行为"]
+        XCTAssertTrue(behaviorButton.waitForExistence(timeout: 3))
+        XCTAssertEqual(behaviorButton.value as? String, "安全区内")
+
+        behaviorButton.tap()
+
+        let extendedAction = app.buttons["延伸到顶部"]
+        XCTAssertTrue(extendedAction.waitForExistence(timeout: 3))
+        extendedAction.tap()
+
+        XCTAssertEqual(behaviorButton.value as? String, "延伸到顶部")
+    }
+
+    @MainActor
     func testLaunchShowsHeaderTabBarAndSelectedPageContent() throws {
         let app = XCUIApplication()
         app.launch()

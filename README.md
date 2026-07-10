@@ -93,7 +93,7 @@ func headerContent(in pagerViewController: AnchorPagerViewController) -> AnchorP
 
 Header 使用 `UIViewController` 时，AnchorPager 内部通过标准 UIKit containment 承载。
 
-横向页面的实际分页和 page view controller containment 由内部 Tabman/Pageboy adapter 执行。AnchorPager 维护 public API、selection、reload、scroll discovery、fallback host 和后续 inset/scroll 策略，不要求接入方直接使用 Tabman 或 Pageboy 类型。
+横向页面的实际分页和 page view controller containment 由内部 Tabman/Pageboy adapter 执行。AnchorPager 维护 public API、selection、reload、scroll discovery、fallback host 和后续 inset/scroll 策略，应用代码不需要直接使用 Tabman 或 Pageboy 类型。
 
 可见状态下调用 `setSelectedIndex(_:animated:)` 时，AnchorPager 会等内部分页 adapter 确认完成后再更新 `selectedIndex` 并通知 delegate；取消或回弹不会提前提交。若分页 adapter 正在处理上一笔切页而拒绝新请求，v0.1 不做请求排队，当前 public 选择状态保持不变。
 
@@ -115,9 +115,9 @@ let pager = AnchorPagerViewController(configuration: configuration)
 - `.fixed(max:min:)`：使用 `max` 作为展开高度，`min` 作为折叠高度。
 - `.ranged(min:max:)`：使用 Header 测量高度，并限制在 min/max 范围内。
 
-`AnchorPagerHeaderTopBehavior.insideSafeArea` 会让 Header 从本地顶部 safe area 或系统栏遮挡下方开始；`.extendsUnderTopSafeArea` 会让 Header 从容器 bounds 顶部开始，但分段栏吸顶基线仍不高于顶部遮挡。
+`AnchorPagerHeaderTopBehavior.insideSafeArea` 下，Header frame 从本地顶部 safe area 或系统栏遮挡下方开始。`.extendsUnderTopSafeArea` 下，Header frame 从容器 bounds 顶部开始；当当前 Header 内容高度小于本地顶部遮挡高度时，AnchorPager 会将 `headerFrame.height` 提升到顶部遮挡高度，并保持 `barFrame.minY == headerFrame.maxY`。因此 `AnchorPagerLayoutContext.headerFrame.height` 表示布局后的可视 frame 高度，可能大于 `AnchorPagerHeaderHeightMode` 解析出的当前 Header 内容高度。例如当前 Header 内容高度为 `108`、本地顶部遮挡高度为 `116` 时，`headerFrame.height == 116`。
 
-AnchorPager 自有的主容器 `verticalScrollView` 会关闭 UIKit 自动 content inset 调整，避免 navigation bar、safe area 等顶部遮挡被系统和 AnchorPager 布局引擎重复叠加。接入方不应重新打开这个主容器的 `contentInsetAdjustmentBehavior`。
+AnchorPager 自有的主容器 `verticalScrollView` 会关闭 UIKit 自动 content inset 调整，避免 navigation bar、safe area 等顶部遮挡被系统和 AnchorPager 布局引擎重复叠加。该主容器的 `contentInsetAdjustmentBehavior` 应保持 `.never`。
 
 横向分页 adapter 的区域默认延伸到容器 `bounds` 底部，也就是在全屏容器中延伸到物理屏幕最底部。bottom safe area、tab bar 和 toolbar 仍会被转换为 managed inset target；v0.2 只计算和记录该目标值，不用它裁剪横向区域，也不写入 child scroll view。
 
@@ -134,7 +134,9 @@ pager.reloadHeaderLayout(offsetAdjustment: .preserveVisualPosition)
 - `.resetToExpanded`：回到展开位置。
 - `.resetToCollapsed`：移动到当前折叠上限。
 
-v0.2 会计算 Header、分段栏、内容 frame 和容器级 managed inset 目标值，并接管 AnchorPager 自有主容器与内部 fallback scroll host 的自动 inset 策略；尚不写入接入方 child scroll view 的 managed content inset。完整 child inset ownership 属于 v0.3。
+v0.2 会计算 Header、分段栏、内容 frame 和容器级 managed inset 目标值，并接管 AnchorPager 自有主容器与内部 fallback scroll host 的自动 inset 策略；尚不写入外部 child scroll view 的 managed content inset。完整 child inset ownership 属于 v0.3。
+
+`AnchorPagerLayoutContext` 回调中的 `headerFrame`、`barFrame` 和 `contentFrame` 使用 pager view 的本地可见坐标。运行时切换 Header 顶部行为并使用 `.preserveVisualPosition` 时，即使主容器保留了非零 `contentOffset.y`，实际可见 Header frame 也会与 context 对齐。
 
 ## 显式 Scroll View
 
@@ -167,7 +169,7 @@ final class PlainPageViewController: UIViewController {
 
 ## 示例工程
 
-仓库包含 `Examples/AnchorPagerExample.xcodeproj`，用于验证示例 App 能接入本地 `AnchorPager` package、以 `UITabBarController` 作为 window root、首屏直接显示 AnchorPager 示例页，并可通过导航按钮 push 另一个 AnchorPager 示例页来验证 `hidesBottomBarWhenPushed` 隐藏 tab bar。示例页通过 public API 提供 Header、分段栏、显式 scroll view child 和无 scroll view child。当前示例工程可构建，并已有基础启动、root tab bar、导航按钮 push 后隐藏 tab bar、Header/分段栏/页面内容可视、分段栏点击切页、横向滑动切页和 public API 切页 UI test。
+仓库包含 `Examples/AnchorPagerExample.xcodeproj`，用于验证示例 App 能接入本地 `AnchorPager` package、以 `UITabBarController` 作为 window root、首屏直接显示 AnchorPager 示例页，并可通过导航按钮 push 另一个 AnchorPager 示例页来验证 `hidesBottomBarWhenPushed` 隐藏 tab bar。示例页通过 public API 提供 Header、分段栏、显式 scroll view child 和无 scroll view child；导航栏菜单可切换 `AnchorPagerHeaderTopBehavior`，并在按钮标题和辅助访问值中显示当前配置。当前示例工程可构建，并已有基础启动、root tab bar、导航按钮 push 后隐藏 tab bar、Header top behavior 菜单切换、Header/分段栏/页面内容可视、分段栏点击切页、横向滑动切页和 public API 切页 UI test。
 
 ```bash
 xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'generic/platform=iOS Simulator' build

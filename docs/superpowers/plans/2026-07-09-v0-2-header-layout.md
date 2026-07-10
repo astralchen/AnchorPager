@@ -246,6 +246,45 @@
 - [x] Step 4: 运行可用的编译、示例 UI tests 和 `git diff --check`。
 - [x] Step 5: 完成自审并记录验收命令。
 
+## Follow-up: 示例 Header 顶部行为菜单
+
+**Problem:** v0.2 已提供 `AnchorPagerHeaderTopBehavior` 的 public 配置，但示例工程只能通过代码固定默认值，运行时无法快速切换 `.insideSafeArea` 与 `.extendsUnderTopSafeArea`，也不直观看到当前配置。调试导航栏安全区、Header 顶部位置和 push 隐藏 tab bar 场景时，需要一个不扩大框架 API 的示例入口。
+
+**Impact:** 不新增 public API，不改变 AnchorPager 框架实现、Tabman/Pageboy adapter 边界、Header containment、page containment、scroll discovery 或 inset ownership。影响范围只限示例工程导航项、示例单元测试、示例 UI test 和文档。菜单选择后只更新示例中 `pagerViewController.configuration.header.topBehavior`，并调用 `reloadHeaderLayout(offsetAdjustment: .preserveVisualPosition)` 触发现有布局契约，避免切换配置时重置 Header 折叠状态。
+
+- [x] Step 1: 写失败测试，断言示例导航栏存在 Header 顶部行为菜单，按钮标题显示默认配置，菜单 action 状态标记当前配置。
+- [x] Step 2: 在 `ExamplePagerViewController` 导航栏右侧新增菜单按钮，保留 push 图标按钮在最右侧。
+- [x] Step 3: 选择菜单项时更新 `AnchorPagerHeaderTopBehavior`、使用 `.preserveVisualPosition` 刷新布局，并同步按钮标题、accessibility value 和菜单选中态。
+- [x] Step 4: 新增示例 UI test，覆盖打开菜单、选择“延伸到顶部”和当前配置显示更新。
+- [x] Step 5: 更新 README、task-list 和本计划。
+- [x] Step 6: 运行示例测试和 `git diff --check`。
+- [x] Step 7: 完成自审并记录验收命令。
+
+## Follow-up: Header 可见坐标到 content 坐标转换
+
+**Problem:** 示例菜单最初使用 `.resetToExpanded` 时会把 `verticalScrollView.contentOffset.y` 归零，掩盖了 Header host 约束应用层的坐标问题。切换为 `.preserveVisualPosition` 后，非零 `contentOffset.y` 会继续保留；如果直接把 `AnchorPagerLayoutContext.headerFrame.minY` 写入 scroll content 内的 Header top 约束，实际可见 Header 会再被 scroll view 上移，导致同一个 `AnchorPagerHeaderTopBehavior` 在切换前后实际 frame 不一致。
+
+**Impact:** 不新增 public API，不改变 LayoutEngine 输出语义，不改变 Header view/controller containment，不改变 Tabman/Pageboy adapter 边界，不写入 child scroll view managed inset。影响范围只限 `AnchorPagerViewController` 将可见坐标应用到 `verticalScrollView` content 约束时的内部转换，以及相关核心测试、示例测试和文档。`.preserveVisualPosition` 继续保留用户当前视觉位置，不回退为强制展开。
+
+- [x] Step 1: 写失败测试，设置非零 `verticalScrollView.contentOffset.y` 后调用 `.preserveVisualPosition`，断言实际可见 Header frame 与 `AnchorPagerLayoutContext.headerFrame` 对齐。
+- [x] Step 2: 在应用 Header host top 约束时，将 layout context 的可见 Y 坐标加上当前 `contentOffset.y`，转换为 scroll content 坐标。
+- [x] Step 3: 修正既有 UITabBarController 集成测试对 weak data source 的强引用，避免测试数据源提前释放导致 fallback host 未创建。
+- [x] Step 4: 运行核心测试、示例工程测试和 `git diff --check`。
+- [x] Step 5: 更新 README、architecture、task-list 和本计划。
+
+## Follow-up: extendsUnderTopSafeArea 顶部遮挡覆盖
+
+**Problem:** `.extendsUnderTopSafeArea` 下 Header frame 从容器 bounds 顶部开始。如果当前 Header 内容高度小于本地顶部遮挡高度，旧实现会把 `barFrame.minY` 提升到顶部遮挡下缘，但 `headerFrame.maxY` 仍停在 Header 内容高度，导致 Header 与 bar/paging 区域之间出现空隙。
+
+**Impact:** 不新增 public API，不改变 Header view/controller containment，不改变 Tabman/Pageboy adapter 边界，不改变 scroll discovery 或 child managed inset ownership。影响范围只限 `AnchorPagerLayoutEngine` 中 `.extendsUnderTopSafeArea` 的可视 Header frame 高度计算、`AnchorPagerLayoutContext.headerFrame.height` 的文档语义、相关核心测试和文档。`resolvedHeaderHeight`、collapse offset/progress 和 managed inset target 继续按 Header 内容高度计算。
+
+- [x] Step 1: 写失败测试，断言 `.extendsUnderTopSafeArea` 下当前 Header 内容高度小于顶部遮挡时，`headerFrame.height` 提升到顶部遮挡高度，且 `barFrame.minY == headerFrame.maxY`。
+- [x] Step 2: 写控制器集成测试，断言 `AnchorPagerLayoutContext` 报告扩展后的可视 Header frame。
+- [x] Step 3: 将 `.extendsUnderTopSafeArea` 下的可视 Header 高度改为 `max(rawHeaderHeight, topObstructionHeight)`。
+- [x] Step 4: 用 SDK 语气更新 DocC、README、architecture、task-list 和本计划，说明 `headerFrame.height` 是布局后的可视 frame 高度。
+- [x] Step 5: 运行核心测试、示例工程测试和 `git diff --check`。
+- [x] Step 6: 完成自审并记录验收命令。
+
 ## UI Test 替代验证说明
 
 v0.2 的 navigation bar、tab bar、toolbar、additionalSafeAreaInsets 几何行为需要精确断言 Header/bar/content frame。XCUITest 对系统 bar 精确 frame 暴露不稳定，且不同模拟器和系统版本可能产生像素级差异。本计划使用同进程 UIKit 集成测试创建 `UINavigationController`、`UITabBarController` 和 toolbar 场景，直接断言 `AnchorPagerLayoutContext` 的本地坐标结果；示例工程 UI test 继续作为可见路径回归，不作为几何精度断言来源。
@@ -261,6 +300,9 @@ v0.2 的 navigation bar、tab bar、toolbar、additionalSafeAreaInsets 几何行
 - Follow-up：主容器 `verticalScrollView.contentInsetAdjustmentBehavior = .never` 只改变 AnchorPager 自有滚动视图的 inset ownership，不新增 public API，不改变 Header view/controller containment，不改变 Tabman/Pageboy adapter 边界，也不写入 child scroll view managed inset。新增导航控制器集成测试直接断言 Header host frame 与 `AnchorPagerLayoutContext.headerFrame` 对齐，覆盖用户可见的导航栏下额外空白回归。示例 UI test 同步到当前四页示例页表，只修正测试期望，不回退示例工程已有改动。
 - Follow-up：横向 content frame 底部现在固定到 `bounds.maxY`，bottom safe area、tab bar 和 toolbar 不再裁剪 paging adapter。bottom obstruction 仍通过 `managedInsetTarget.bottom` 保留给后续 child inset ownership。改动不新增 public API，不改变 Header view/controller containment，不改变 Tabman/Pageboy adapter 边界，也不提前写入 child scroll view inset。测试覆盖纯计算、additional bottom safe area、tab bar、toolbar、完整框架测试和示例 UI 路径。
 - Follow-up：内部 fallback scroll host 现在禁用 UIKit 自动 content inset，避免无滚动页 plain child 在 tab bar/safe area 下被系统 inset 抬高底部。改动不新增 public API，不改变 Tabman/Pageboy adapter 边界，不改变 Header containment，也不写入接入方 child scroll view managed inset。新增测试覆盖 fallback host 的 inset 策略和 UITabBarController 场景下 plain child bottom 与 layout context contentFrame bottom 对齐。
+- Follow-up：示例工程新增 Header 顶部行为菜单，只通过 public `configuration.header.topBehavior` 和 `reloadHeaderLayout(offsetAdjustment:)` 驱动现有布局，不新增框架 public API，不改变 AnchorPager containment、Tabman/Pageboy adapter、scroll discovery 或 inset ownership。导航右侧保留 push 图标作为最右按钮，菜单按钮显示当前配置并同步 accessibility value；菜单切换使用 `.preserveVisualPosition`，避免把当前折叠位置强制重置为展开状态。示例单测覆盖菜单结构、选中态和 `.extendsUnderTopSafeArea` 顶部遮挡覆盖，UI test 覆盖真实菜单切换路径。
+- Follow-up：`AnchorPagerLayoutContext` 保持使用 pager view 本地可见坐标，`AnchorPagerViewController` 在把 Header host top 约束写入 `verticalScrollView` content 时补偿当前 `contentOffset.y`，避免 `.preserveVisualPosition` 暴露的可见坐标/content 坐标混用。改动不新增 public API，不改变 LayoutEngine 输出、Header containment、Tabman/Pageboy adapter、scroll discovery 或 inset ownership。新增核心测试覆盖非零 contentOffset 下实际 Header frame 与 layout context 对齐；示例菜单继续使用 `.preserveVisualPosition`，保留修复高度跳变的行为。
+- Follow-up：`.extendsUnderTopSafeArea` 下 Header 可视 frame 高度至少覆盖本地顶部遮挡，保持 `barFrame.minY == headerFrame.maxY`。改动不新增 public API，不改变 Header containment、Tabman/Pageboy adapter、scroll discovery 或 child managed inset ownership。`resolvedHeaderHeight`、collapse offset/progress 和 managed inset target 仍按 Header 内容高度计算；`AnchorPagerLayoutContext.headerFrame.height` 文档化为布局后的可视 frame 高度。
 
 ## Verification Record
 
@@ -306,4 +348,27 @@ v0.2 的 navigation bar、tab bar、toolbar、additionalSafeAreaInsets 几何行
 - Follow-up GREEN：XcodeBuildMCP `build_sim` 使用 `Examples/AnchorPagerExample.xcodeproj` 的 `AnchorPager` scheme 编译通过。
 - Follow-up GREEN：XcodeBuildMCP `build_sim` 使用 `AnchorPagerExample` scheme 编译通过。
 - Follow-up GREEN：XcodeBuildMCP `test_sim` 使用 `AnchorPagerExample` scheme、`-parallel-testing-enabled NO -enableCodeCoverage NO` 通过，7 个 UI tests、0 失败。
+- Follow-up：`git diff --check` 通过。
+- Follow-up RED：XcodeBuildMCP `test_sim` 使用 `AnchorPagerExample` scheme、`-enableCodeCoverage NO -only-testing:AnchorPagerExampleTests` 失败，核心失败为示例导航栏还没有 `Header 顶部行为` 菜单，符合测试先行预期。
+- Follow-up GREEN：XcodeBuildMCP `test_sim` 使用 `AnchorPagerExample` scheme、`-enableCodeCoverage NO -parallel-testing-enabled NO` 通过，9 个测试、0 失败，其中包含新增菜单 UI test。
+- Follow-up：`git diff --check` 通过。
+- Follow-up RED：XcodeBuildMCP `test_sim` 使用 `AnchorPagerExample` scheme、`-enableCodeCoverage NO -only-testing:AnchorPagerExampleTests` 失败，核心失败为 `headerTopBehaviorMenuPreservesCurrentHeaderFrameHeight()` 中切换菜单后 Header 高度变化 `80pt`，定位到示例菜单使用 `.resetToExpanded` 强制展开 Header。
+- Follow-up GREEN：XcodeBuildMCP `test_sim` 使用 `AnchorPagerExample` scheme、`-enableCodeCoverage NO -only-testing:AnchorPagerExampleTests` 通过，3 个测试、0 失败。
+- Follow-up GREEN：XcodeBuildMCP `test_sim` 使用 `AnchorPagerExample` scheme、`-enableCodeCoverage NO -parallel-testing-enabled NO` 通过，10 个测试、0 失败。
+- Follow-up：`git diff --check` 通过。
+- Follow-up RED：`xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcodebuild-header-offset-coordinate -enableCodeCoverage NO -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testHeaderActualFrameMatchesLayoutContextWhenContentOffsetIsPreserved test` 提升权限后失败，核心失败为实际 Header `minY == 68`，但 `AnchorPagerLayoutContext.headerFrame.minY == 116`，差值正好等于保留的 `contentOffset.y == 48`。
+- Follow-up GREEN：同一命令提升权限后通过，新增单测 1 个、0 失败。
+- Follow-up：`xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcodebuild-header-offset-coordinate -enableCodeCoverage NO test` 提升权限后通过，75 个测试、0 失败。中途发现 `testFallbackPageHostExtendsPlainChildToContentFrameBottomInTabBarController` 未强引用 weak data source，导致测试数据源提前释放，已修正后重跑通过。
+- Follow-up：`xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcodebuild-header-offset-coordinate-example -enableCodeCoverage NO -parallel-testing-enabled NO test` 提升权限后通过，示例 UI tests 7 个、示例单元测试 3 个，0 失败。
+- Follow-up：`swift package resolve` 沙盒内因 SwiftPM/clang 用户缓存权限失败；提升权限后通过。
+- Follow-up：`git diff --check` 通过。
+- Follow-up RED：新增 `.extendsUnderTopSafeArea` 顶部遮挡覆盖测试后，`xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcodebuild-header-top-coverage-red -enableCodeCoverage NO -only-testing:AnchorPagerTests/AnchorPagerLayoutEngineTests/testExtendsUnderTopSafeAreaCoversTopObstructionWhenHeaderIsShorter -only-testing:AnchorPagerTests/AnchorPagerLayoutEngineTests/testExtendsUnderTopSafeAreaMaintainsTopObstructionCoverageWhileCollapsed -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testExtendsUnderTopSafeAreaKeepsHeaderAtBoundsTopAndPinsBar test` 提升权限后失败，失败测试为新增的 LayoutEngine 顶部覆盖测试和控制器集成测试，符合修复前预期。
+- Follow-up GREEN：同一命令提升权限后通过。
+- Follow-up GREEN：`xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcodebuild-header-top-coverage-final -enableCodeCoverage NO test` 提升权限后通过。
+- Follow-up：`xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'generic/platform=iOS Simulator' -derivedDataPath .build/xcodebuild-header-top-coverage-example-build build` 提升权限后通过。首次 build 命令误带 `-enableCodeCoverage`，Xcode 返回该参数只支持 testing，已去掉参数重跑。
+- Follow-up RED：`xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcodebuild-header-top-coverage-example-unit -enableCodeCoverage NO -only-testing:AnchorPagerExampleTests test` 提升权限后失败，核心失败为示例旧测试仍断言菜单切换后 Header frame 高度不变。按方案 1 新语义改为断言 `.extendsUnderTopSafeArea` 顶部遮挡覆盖和 `barFrame.minY == headerFrame.maxY`。
+- Follow-up GREEN：`xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcodebuild-header-top-coverage-example-unit-single -enableCodeCoverage NO -only-testing:AnchorPagerExampleTests/AnchorPagerExampleTests/headerTopBehaviorMenuAppliesExtendsUnderTopSafeAreaCoverage test` 提升权限后通过。
+- Follow-up GREEN：`xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcodebuild-header-top-coverage-example-unit-final -enableCodeCoverage NO -only-testing:AnchorPagerExampleTests test` 提升权限后通过，示例单元测试 3 个、0 失败。
+- Follow-up GREEN：`xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcodebuild-header-top-coverage-example-ui-menu -enableCodeCoverage NO -parallel-testing-enabled NO -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testHeaderTopBehaviorMenuSwitchesVisibleConfiguration test` 提升权限后通过。
+- Follow-up：`swift package resolve` 提升权限后通过。
 - Follow-up：`git diff --check` 通过。

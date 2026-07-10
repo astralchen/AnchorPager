@@ -75,6 +75,41 @@ final class AnchorPagerLayoutEngineTests: XCTestCase {
         XCTAssertEqual(output.barFrame.minY, output.headerFrame.maxY)
     }
 
+    func testExtendsUnderTopSafeAreaCoversTopObstructionWhenHeaderIsShorter() {
+        let output = AnchorPagerLayoutEngine().layout(
+            for: input(
+                measuredHeaderHeight: 108,
+                headerHeightMode: .fixed(max: 108, min: 0),
+                headerTopBehavior: .extendsUnderTopSafeArea,
+                topObstructionHeight: 116
+            )
+        )
+
+        XCTAssertEqual(output.resolvedHeaderHeight.expanded, 108)
+        XCTAssertEqual(output.headerFrame.minY, 0)
+        XCTAssertEqual(output.headerFrame.height, 116)
+        XCTAssertEqual(output.barFrame.minY, output.headerFrame.maxY)
+        XCTAssertEqual(output.contentFrame.maxY, 640)
+    }
+
+    func testExtendsUnderTopSafeAreaMaintainsTopObstructionCoverageWhileCollapsed() {
+        let output = AnchorPagerLayoutEngine().layout(
+            for: input(
+                measuredHeaderHeight: 160,
+                headerHeightMode: .fixed(max: 160, min: 0),
+                headerTopBehavior: .extendsUnderTopSafeArea,
+                topObstructionHeight: 116,
+                contentOffsetY: 80
+            )
+        )
+
+        XCTAssertEqual(output.collapseOffset, 80)
+        XCTAssertEqual(output.collapseProgress, 0.5)
+        XCTAssertEqual(output.headerFrame.minY, 0)
+        XCTAssertEqual(output.headerFrame.height, 116)
+        XCTAssertEqual(output.barFrame.minY, output.headerFrame.maxY)
+    }
+
     func testBottomObstructionDoesNotClipContentFrameAndPreservesManagedInsetTarget() {
         let output = AnchorPagerLayoutEngine().layout(
             for: input(
