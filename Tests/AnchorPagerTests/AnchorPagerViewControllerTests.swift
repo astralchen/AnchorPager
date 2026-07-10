@@ -345,7 +345,7 @@ final class AnchorPagerViewControllerTests: XCTestCase {
 
         let context = try XCTUnwrap(delegate.layoutContexts.last)
         XCTAssertEqual(context.headerFrame.minY, 0)
-        XCTAssertEqual(context.headerFrame.height, 24)
+        XCTAssertEqual(context.headerFrame.height, 34)
         XCTAssertEqual(context.barFrame.minY, context.headerFrame.maxY)
     }
 
@@ -559,6 +559,101 @@ final class AnchorPagerViewControllerTests: XCTestCase {
 
         XCTAssertEqual(finalFrame.minY, initialFrame.minY, accuracy: 0.5)
         XCTAssertEqual(finalFrame.minY, context.headerFrame.minY, accuracy: 0.5)
+    }
+
+    @MainActor
+    func testAutomaticHeaderHeightStaysStableAcrossTopBehaviorSwitchAndBounceSettlement() throws {
+        let pager = AnchorPagerViewController()
+        let headerView = SafeAreaSensitiveHeaderView(contentHeight: 80)
+        let delegate = StubDelegate()
+        let dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [ScrollChildViewController()],
+            headerContent: .view(headerView)
+        )
+        pager.dataSource = dataSource
+        pager.delegate = delegate
+        let navigationController = UINavigationController(rootViewController: pager)
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = navigationController
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+
+        pager.reloadData()
+        window.layoutIfNeeded()
+        pager.reloadHeaderLayout(offsetAdjustment: .resetToExpanded)
+        window.layoutIfNeeded()
+        let initialContext = try XCTUnwrap(delegate.layoutContexts.last)
+
+        pager.configuration.header.topBehavior = .extendsUnderTopSafeArea
+        pager.reloadHeaderLayout(offsetAdjustment: .preserveVisualPosition)
+        window.layoutIfNeeded()
+        let extendedContext = try XCTUnwrap(delegate.layoutContexts.last)
+
+        XCTAssertEqual(extendedContext.barFrame.minY, initialContext.barFrame.minY, accuracy: 0.5)
+
+        pager.configuration.header.topBehavior = .insideSafeArea
+        pager.reloadHeaderLayout(offsetAdjustment: .preserveVisualPosition)
+        window.layoutIfNeeded()
+        pager.verticalScrollView.contentOffset = CGPoint(x: 0, y: -24)
+        pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
+        pager.verticalScrollView.contentOffset = .zero
+        pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
+        pager.reloadHeaderLayout(offsetAdjustment: .preserveVisualPosition)
+        window.layoutIfNeeded()
+        let finalContext = try XCTUnwrap(delegate.layoutContexts.last)
+
+        XCTAssertEqual(finalContext.headerFrame.height, initialContext.headerFrame.height, accuracy: 0.5)
+        XCTAssertEqual(finalContext.barFrame.minY, initialContext.barFrame.minY, accuracy: 0.5)
+    }
+
+    @MainActor
+    func testNegativeContainerOffsetTranslatesViewportAndLayoutContextWithoutChangingRange() throws {
+        var configuration = AnchorPagerConfiguration.default
+        configuration.header.heightMode = .fixed(max: 120, min: 0)
+        let pager = AnchorPagerViewController(configuration: configuration)
+        let headerView = FixedFittingView(height: 120)
+        let delegate = StubDelegate()
+        let dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [ScrollChildViewController()],
+            headerContent: .view(headerView)
+        )
+        pager.dataSource = dataSource
+        pager.delegate = delegate
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = pager
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+
+        pager.reloadData()
+        window.layoutIfNeeded()
+        pager.reloadHeaderLayout(offsetAdjustment: .resetToExpanded)
+        window.layoutIfNeeded()
+        let headerHostView = try XCTUnwrap(headerView.superview)
+        let initialFrame = headerHostView.convert(headerHostView.bounds, to: pager.view)
+        let initialContentSize = pager.verticalScrollView.contentSize
+
+        pager.verticalScrollView.contentOffset = CGPoint(x: 0, y: -24)
+        pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
+        window.layoutIfNeeded()
+        let bouncedFrame = headerHostView.convert(headerHostView.bounds, to: pager.view)
+        let bouncedContext = try XCTUnwrap(delegate.layoutContexts.last)
+
+        XCTAssertEqual(bouncedFrame.minY, initialFrame.minY + 24, accuracy: 0.5)
+        XCTAssertEqual(bouncedContext.headerFrame.minY, bouncedFrame.minY, accuracy: 0.5)
+        XCTAssertEqual(pager.verticalScrollView.contentSize, initialContentSize)
+        XCTAssertTrue(delegate.collapseProgresses.isEmpty)
+
+        pager.verticalScrollView.contentOffset = .zero
+        pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
+        window.layoutIfNeeded()
+        let restoredFrame = headerHostView.convert(headerHostView.bounds, to: pager.view)
+        let restoredContext = try XCTUnwrap(delegate.layoutContexts.last)
+
+        XCTAssertEqual(restoredFrame.minY, initialFrame.minY, accuracy: 0.5)
+        XCTAssertEqual(restoredContext.headerFrame.minY, initialFrame.minY, accuracy: 0.5)
+        XCTAssertEqual(pager.verticalScrollView.contentSize, initialContentSize)
     }
 
     @MainActor
@@ -1078,5 +1173,27 @@ private final class DynamicFittingView: UIView {
         verticalFittingPriority: UILayoutPriority
     ) -> CGSize {
         CGSize(width: targetSize.width, height: measuredHeight)
+    }
+}
+
+private final class SafeAreaSensitiveHeaderView: UIView {
+    let contentView = UIView()
+
+    init(contentHeight: CGFloat) {
+        super.init(frame: .zero)
+        directionalLayoutMargins = .zero
+        contentView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(contentView)
+        NSLayoutConstraint.activate([
+            contentView.leadingAnchor.constraint(equalTo: layoutMarginsGuide.leadingAnchor),
+            contentView.trailingAnchor.constraint(equalTo: layoutMarginsGuide.trailingAnchor),
+            contentView.topAnchor.constraint(equalTo: layoutMarginsGuide.topAnchor),
+            contentView.bottomAnchor.constraint(equalTo: layoutMarginsGuide.bottomAnchor),
+            contentView.heightAnchor.constraint(equalToConstant: contentHeight)
+        ])
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) 未实现")
     }
 }

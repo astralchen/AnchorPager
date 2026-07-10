@@ -49,9 +49,9 @@ final class AnchorPagerExampleUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
 
-        let headerTitle = app.staticTexts["AnchorPager Example"]
-        XCTAssertTrue(headerTitle.waitForExistence(timeout: 3))
-        let initialMinY = headerTitle.frame.minY
+        let tabItem = app.descendants(matching: .any)["短页"]
+        XCTAssertTrue(tabItem.waitForExistence(timeout: 3))
+        let initialMinY = tabItem.frame.minY
         let behaviorButton = app.navigationBars["AnchorPager"].buttons["Header 顶部行为"]
 
         behaviorButton.tap()
@@ -67,7 +67,7 @@ final class AnchorPagerExampleUITests: XCTestCase {
 
         let returned = XCTNSPredicateExpectation(
             predicate: NSPredicate { _, _ in
-                abs(headerTitle.frame.minY - initialMinY) < 1
+                abs(tabItem.frame.minY - initialMinY) < 1
             },
             object: nil
         )

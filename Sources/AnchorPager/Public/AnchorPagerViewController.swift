@@ -284,12 +284,9 @@ open class AnchorPagerViewController: UIViewController {
         isApplyingLayout = true
         defer { isApplyingLayout = false }
 
-        let width = view.bounds.width > 0 ? view.bounds.width : UIScreen.main.bounds.width
-        let measuredHeight = headerViewHost.measure(
-            in: CGSize(width: width, height: UIView.layoutFittingCompressedSize.height)
-        )
-        lastMeasuredHeaderHeight = measuredHeight
         let layoutEnvironment = currentLayoutEnvironment()
+        let measuredHeight = measureHeaderHeight(in: layoutEnvironment)
+        lastMeasuredHeaderHeight = measuredHeight
         let oldLayoutOutput = lastLayoutOutput.map {
             layoutOutputByApplyingContentOffset(
                 $0,
@@ -361,6 +358,9 @@ open class AnchorPagerViewController: UIViewController {
         logsChanges: Bool,
         updatesScrollRange: Bool
     ) {
+        let translationY = overscrollTranslationY
+        viewportView.transform = CGAffineTransform(translationX: 0, y: translationY)
+
         if updatesScrollRange {
             scrollRangeHeightConstraint?.constant = output.resolvedHeaderHeight.collapsibleDistance
         }
@@ -384,17 +384,42 @@ open class AnchorPagerViewController: UIViewController {
             )
         }
 
-        let context = AnchorPagerLayoutContext(
-            selectedIndex: effectiveSelectedIndex,
-            headerFrame: output.headerFrame,
-            barFrame: output.barFrame,
-            contentFrame: output.contentFrame
-        )
+        let context = layoutContext(for: output, translationY: translationY)
         if forceNotify || context != lastLayoutContext {
             lastLayoutContext = context
             delegate?.pagerViewController(self, didUpdateLayout: context)
         }
         lastLayoutOutput = output
+    }
+
+    private func measureHeaderHeight(in environment: LayoutEnvironment) -> CGFloat {
+        viewportView.transform = .identity
+        headerViewHost.setTopOffset(environment.bounds.minY + environment.obstruction.top)
+        headerHeightConstraint?.constant = lastMeasuredHeaderHeight ?? 0
+        view.layoutIfNeeded()
+
+        return headerViewHost.measure(
+            in: CGSize(
+                width: environment.bounds.width,
+                height: UIView.layoutFittingCompressedSize.height
+            )
+        )
+    }
+
+    private var overscrollTranslationY: CGFloat {
+        Swift.max(0, -verticalScrollView.contentOffset.y)
+    }
+
+    private func layoutContext(
+        for output: AnchorPagerLayoutEngine.Output,
+        translationY: CGFloat
+    ) -> AnchorPagerLayoutContext {
+        AnchorPagerLayoutContext(
+            selectedIndex: effectiveSelectedIndex,
+            headerFrame: output.headerFrame.offsetBy(dx: 0, dy: translationY),
+            barFrame: output.barFrame.offsetBy(dx: 0, dy: translationY),
+            contentFrame: output.contentFrame.offsetBy(dx: 0, dy: translationY)
+        )
     }
 
     private func makeLayoutOutput(
