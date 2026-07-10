@@ -117,7 +117,9 @@ let pager = AnchorPagerViewController(configuration: configuration)
 
 `AnchorPagerHeaderTopBehavior.insideSafeArea` 下，Header frame 从本地顶部 safe area 或系统栏遮挡下方开始。`.extendsUnderTopSafeArea` 下，Header frame 从容器 bounds 顶部开始；当当前 Header 内容高度小于本地顶部遮挡高度时，AnchorPager 会将 `headerFrame.height` 提升到顶部遮挡高度，并保持 `barFrame.minY == headerFrame.maxY`。因此 `AnchorPagerLayoutContext.headerFrame.height` 表示布局后的可视 frame 高度，可能大于 `AnchorPagerHeaderHeightMode` 解析出的当前 Header 内容高度。例如当前 Header 内容高度为 `108`、本地顶部遮挡高度为 `116` 时，`headerFrame.height == 116`。
 
-AnchorPager 自有的主容器 `verticalScrollView` 会关闭 UIKit 自动 content inset 调整，避免 navigation bar、safe area 等顶部遮挡被系统和 AnchorPager 布局引擎重复叠加。该主容器的 `contentInsetAdjustmentBehavior` 应保持 `.never`。
+AnchorPager 自有的主容器 `verticalScrollView` 会关闭 UIKit 自动 content inset 调整，避免 navigation bar、safe area 等顶部遮挡被系统和 AnchorPager 布局引擎重复叠加。该主容器的 `contentInsetAdjustmentBehavior` 应保持 `.never`，其 delegate 由 AnchorPager 内部管理，调用方不得替换。
+
+主容器内部把滚动范围和可见内容解耦：`scrollRangeView` 通过 `contentLayoutGuide` 定义固定的 `viewport height + Header 可折叠距离`，Header 和横向 paging adapter 则位于 `frameLayoutGuide` 对应的固定 viewport。当前 `contentOffset` 只驱动 LayoutEngine 计算 Header/bar 的可见 frame，不再参与 `contentSize` 反算，因此运行时切换顶部行为和回弹不会留下过期 offset 空白。
 
 横向分页 adapter 的区域默认延伸到容器 `bounds` 底部，也就是在全屏容器中延伸到物理屏幕最底部。bottom safe area、tab bar 和 toolbar 仍会被转换为 managed inset target；v0.2 只计算和记录该目标值，不用它裁剪横向区域，也不写入 child scroll view。
 
@@ -136,7 +138,7 @@ pager.reloadHeaderLayout(offsetAdjustment: .preserveVisualPosition)
 
 v0.2 会计算 Header、分段栏、内容 frame 和容器级 managed inset 目标值，并接管 AnchorPager 自有主容器与内部 fallback scroll host 的自动 inset 策略；尚不写入外部 child scroll view 的 managed content inset。完整 child inset ownership 属于 v0.3。
 
-`AnchorPagerLayoutContext` 回调中的 `headerFrame`、`barFrame` 和 `contentFrame` 使用 pager view 的本地可见坐标。运行时切换 Header 顶部行为并使用 `.preserveVisualPosition` 时，即使主容器保留了非零 `contentOffset.y`，实际可见 Header frame 也会与 context 对齐。
+`AnchorPagerLayoutContext` 回调中的 `headerFrame`、`barFrame` 和 `contentFrame` 使用 pager view 的本地可见坐标。Header/paging 直接在固定 viewport 中使用这些坐标；运行时切换 Header 顶部行为并使用 `.preserveVisualPosition` 时，即使主容器保留了非零 `contentOffset.y`，实际可见 Header frame 也会与 context 对齐。
 
 ## 显式 Scroll View
 

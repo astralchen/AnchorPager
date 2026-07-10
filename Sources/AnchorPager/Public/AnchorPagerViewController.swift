@@ -3,6 +3,21 @@ import UIKit
 /// UIKit 嵌套分页容器入口。
 @MainActor
 open class AnchorPagerViewController: UIViewController {
+    @MainActor
+    private final class VerticalScrollDelegate: NSObject, UIScrollViewDelegate {
+        weak var owner: AnchorPagerViewController?
+
+        init(owner: AnchorPagerViewController) {
+            self.owner = owner
+        }
+
+        func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            guard let owner,
+                  scrollView === owner.verticalScrollView else { return }
+            owner.updateVisibleLayoutForScrolling()
+        }
+    }
+
     /// 提供页面、标题和 Header 内容的数据源。
     public weak var dataSource: AnchorPagerViewControllerDataSource?
 
@@ -21,15 +36,22 @@ open class AnchorPagerViewController: UIViewController {
     }
 
     /// AnchorPager 管理的纵向容器滚动视图。
+    ///
+    /// 该滚动视图的 delegate 由 AnchorPager 内部管理，调用方不得替换。
     public let verticalScrollView = UIScrollView()
 
-    private let contentView = UIView()
+    private let scrollRangeView = UIView()
+    private let viewportView = UIView()
     private let headerViewHost = AnchorPagerHeaderViewHost()
     private let layoutEngine = AnchorPagerLayoutEngine()
     private let pagingAdapter = AnchorPagerPagingAdapter()
+    private var scrollRangeHeightConstraint: NSLayoutConstraint?
     private var headerHeightConstraint: NSLayoutConstraint?
     private var pagingTopConstraint: NSLayoutConstraint?
     private var pagingHeightConstraint: NSLayoutConstraint?
+    private var lastMeasuredHeaderHeight: CGFloat?
+    private var isApplyingLayout = false
+    private lazy var verticalScrollDelegate = VerticalScrollDelegate(owner: self)
     private var currentHeaderContent: AnchorPagerHeaderContent?
     private var currentTitles: [String] = []
     private var currentViewControllers: [UIViewController] = []
@@ -157,6 +179,7 @@ open class AnchorPagerViewController: UIViewController {
 
         verticalScrollView.alwaysBounceVertical = true
         verticalScrollView.contentInsetAdjustmentBehavior = .never
+        verticalScrollView.delegate = verticalScrollDelegate
         verticalScrollView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(verticalScrollView)
         NSLayoutConstraint.activate([
@@ -166,14 +189,30 @@ open class AnchorPagerViewController: UIViewController {
             verticalScrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
 
-        contentView.translatesAutoresizingMaskIntoConstraints = false
-        verticalScrollView.addSubview(contentView)
+        scrollRangeView.translatesAutoresizingMaskIntoConstraints = false
+        scrollRangeView.isUserInteractionEnabled = false
+        verticalScrollView.addSubview(scrollRangeView)
+        let scrollRangeHeightConstraint = scrollRangeView.heightAnchor.constraint(
+            equalTo: verticalScrollView.frameLayoutGuide.heightAnchor
+        )
         NSLayoutConstraint.activate([
-            contentView.leadingAnchor.constraint(equalTo: verticalScrollView.contentLayoutGuide.leadingAnchor),
-            contentView.trailingAnchor.constraint(equalTo: verticalScrollView.contentLayoutGuide.trailingAnchor),
-            contentView.topAnchor.constraint(equalTo: verticalScrollView.contentLayoutGuide.topAnchor),
-            contentView.bottomAnchor.constraint(equalTo: verticalScrollView.contentLayoutGuide.bottomAnchor),
-            contentView.widthAnchor.constraint(equalTo: verticalScrollView.frameLayoutGuide.widthAnchor)
+            scrollRangeView.leadingAnchor.constraint(equalTo: verticalScrollView.contentLayoutGuide.leadingAnchor),
+            scrollRangeView.trailingAnchor.constraint(equalTo: verticalScrollView.contentLayoutGuide.trailingAnchor),
+            scrollRangeView.topAnchor.constraint(equalTo: verticalScrollView.contentLayoutGuide.topAnchor),
+            scrollRangeView.bottomAnchor.constraint(equalTo: verticalScrollView.contentLayoutGuide.bottomAnchor),
+            scrollRangeView.widthAnchor.constraint(equalTo: verticalScrollView.frameLayoutGuide.widthAnchor),
+            scrollRangeHeightConstraint
+        ])
+        self.scrollRangeHeightConstraint = scrollRangeHeightConstraint
+
+        viewportView.translatesAutoresizingMaskIntoConstraints = false
+        viewportView.clipsToBounds = true
+        verticalScrollView.addSubview(viewportView)
+        NSLayoutConstraint.activate([
+            viewportView.leadingAnchor.constraint(equalTo: verticalScrollView.frameLayoutGuide.leadingAnchor),
+            viewportView.trailingAnchor.constraint(equalTo: verticalScrollView.frameLayoutGuide.trailingAnchor),
+            viewportView.topAnchor.constraint(equalTo: verticalScrollView.frameLayoutGuide.topAnchor),
+            viewportView.bottomAnchor.constraint(equalTo: verticalScrollView.frameLayoutGuide.bottomAnchor)
         ])
     }
 
@@ -197,7 +236,7 @@ open class AnchorPagerViewController: UIViewController {
 
     private func installHeaderHost() {
         let headerContent = currentHeaderContent ?? .view(UIView())
-        headerViewHost.install(headerContent, in: self, hostParentView: contentView)
+        headerViewHost.install(headerContent, in: self, hostParentView: viewportView)
 
         if headerHeightConstraint == nil {
             let headerHeightConstraint = headerViewHost.view.heightAnchor.constraint(equalToConstant: 0)
@@ -215,17 +254,16 @@ open class AnchorPagerViewController: UIViewController {
         if pagingAdapter.view.superview == nil {
             let adapterView = pagingAdapter.view!
             adapterView.translatesAutoresizingMaskIntoConstraints = false
-            contentView.addSubview(adapterView)
+            viewportView.addSubview(adapterView)
             let pagingTopConstraint = adapterView.topAnchor.constraint(equalTo: headerViewHost.view.bottomAnchor)
+            let pagingHeightConstraint = adapterView.heightAnchor.constraint(equalToConstant: 0)
             NSLayoutConstraint.activate([
-                adapterView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-                adapterView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+                adapterView.leadingAnchor.constraint(equalTo: viewportView.leadingAnchor),
+                adapterView.trailingAnchor.constraint(equalTo: viewportView.trailingAnchor),
                 pagingTopConstraint,
-                adapterView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
+                pagingHeightConstraint
             ])
 
-            let pagingHeightConstraint = adapterView.heightAnchor.constraint(equalToConstant: 0)
-            pagingHeightConstraint.isActive = true
             self.pagingTopConstraint = pagingTopConstraint
             self.pagingHeightConstraint = pagingHeightConstraint
         }
@@ -239,12 +277,18 @@ open class AnchorPagerViewController: UIViewController {
         forceNotify: Bool = false,
         offsetAdjustment: AnchorPagerHeaderOffsetAdjustment? = nil
     ) {
-        guard isViewLoaded, headerViewHost.view.superview != nil else { return }
+        guard !isApplyingLayout,
+              isViewLoaded,
+              headerViewHost.view.superview != nil else { return }
+
+        isApplyingLayout = true
+        defer { isApplyingLayout = false }
 
         let width = view.bounds.width > 0 ? view.bounds.width : UIScreen.main.bounds.width
         let measuredHeight = headerViewHost.measure(
             in: CGSize(width: width, height: UIView.layoutFittingCompressedSize.height)
         )
+        lastMeasuredHeaderHeight = measuredHeight
         let layoutEnvironment = currentLayoutEnvironment()
         let oldLayoutOutput = lastLayoutOutput.map {
             layoutOutputByApplyingContentOffset(
@@ -277,31 +321,80 @@ open class AnchorPagerViewController: UIViewController {
             )
         }
 
-        headerHeightConstraint?.constant = layoutOutput.headerFrame.height
-        headerViewHost.setTopOffset(
-            scrollContentCoordinateY(forVisibleY: layoutOutput.headerFrame.minY)
+        applyLayoutOutput(
+            layoutOutput,
+            environment: layoutEnvironment,
+            forceNotify: forceNotify,
+            logsChanges: true,
+            updatesScrollRange: true
         )
+    }
+
+    private func updateVisibleLayoutForScrolling() {
+        guard !isApplyingLayout,
+              isViewLoaded,
+              headerViewHost.view.superview != nil,
+              let measuredHeaderHeight = lastMeasuredHeaderHeight else { return }
+
+        isApplyingLayout = true
+        defer { isApplyingLayout = false }
+
+        let environment = currentLayoutEnvironment()
+        let output = makeLayoutOutput(
+            measuredHeaderHeight: measuredHeaderHeight,
+            contentOffsetY: verticalScrollView.contentOffset.y,
+            environment: environment
+        )
+        applyLayoutOutput(
+            output,
+            environment: environment,
+            forceNotify: false,
+            logsChanges: false,
+            updatesScrollRange: false
+        )
+    }
+
+    private func applyLayoutOutput(
+        _ output: AnchorPagerLayoutEngine.Output,
+        environment: LayoutEnvironment,
+        forceNotify: Bool,
+        logsChanges: Bool,
+        updatesScrollRange: Bool
+    ) {
+        if updatesScrollRange {
+            scrollRangeHeightConstraint?.constant = output.resolvedHeaderHeight.collapsibleDistance
+        }
+        headerHeightConstraint?.constant = output.headerFrame.height
+        headerViewHost.setTopOffset(output.headerFrame.minY)
         pagingTopConstraint?.constant = Swift.max(
             0,
-            layoutOutput.barFrame.minY - layoutOutput.headerFrame.maxY
+            output.barFrame.minY - output.headerFrame.maxY
         )
-        pagingHeightConstraint?.constant = layoutOutput.barFrame.height + layoutOutput.contentFrame.height
-        logLayoutChanges(
-            output: layoutOutput,
-            environment: layoutEnvironment
-        )
+        pagingHeightConstraint?.constant = output.barFrame.height + output.contentFrame.height
+
+        if logsChanges {
+            logLayoutChanges(output: output, environment: environment)
+        }
+
+        if let previousCollapseProgress = lastLayoutOutput?.collapseProgress,
+           previousCollapseProgress != output.collapseProgress {
+            delegate?.pagerViewController(
+                self,
+                didUpdateHeaderCollapseProgress: output.collapseProgress
+            )
+        }
 
         let context = AnchorPagerLayoutContext(
             selectedIndex: effectiveSelectedIndex,
-            headerFrame: layoutOutput.headerFrame,
-            barFrame: layoutOutput.barFrame,
-            contentFrame: layoutOutput.contentFrame
+            headerFrame: output.headerFrame,
+            barFrame: output.barFrame,
+            contentFrame: output.contentFrame
         )
         if forceNotify || context != lastLayoutContext {
             lastLayoutContext = context
             delegate?.pagerViewController(self, didUpdateLayout: context)
         }
-        lastLayoutOutput = layoutOutput
+        lastLayoutOutput = output
     }
 
     private func makeLayoutOutput(
@@ -322,10 +415,6 @@ open class AnchorPagerViewController: UIViewController {
                 contentOffsetY: contentOffsetY
             )
         )
-    }
-
-    private func scrollContentCoordinateY(forVisibleY visibleY: CGFloat) -> CGFloat {
-        visibleY + verticalScrollView.contentOffset.y
     }
 
     private struct LayoutEnvironment {

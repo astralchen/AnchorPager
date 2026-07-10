@@ -405,3 +405,19 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExa
 7. Header/page containment、selection、scroll discovery 和 inset ownership 行为不变。
 8. 核心测试、示例测试、示例 build 和 `git diff --check` 通过。
 9. README、architecture、task-list、v0.2 计划和本设计同步更新。
+
+## 实施记录
+
+- 主容器已使用 `scrollRangeView` 约束 `contentLayoutGuide`，range 高度仅为 viewport 高度加 Header 可折叠距离。
+- Header host 与 paging adapter 已移入约束到 `frameLayoutGuide` 的 `viewportView`，不再参与 `contentSize` 反算。
+- `visibleY + contentOffset.y` 约束补偿已移除，LayoutEngine 可见坐标直接应用于 viewport。
+- 主容器使用私有 weak-owner delegate proxy，未让 public `AnchorPagerViewController` 声明 `UIScrollViewDelegate` conformance。
+- 滚动回调复用缓存 Header 测量，只更新可见 output、layout context 和变化后的 collapse progress，不修改 range、不写逐帧普通日志。
+- TDD RED：3 个目标测试、3 个失败；失败值分别证明 range 缺失、60pt 残余空白和 progress 未派发。
+- TDD GREEN：3 个目标测试通过；`AnchorPagerViewControllerTests` 33 个通过、0 失败。
+- Public API 自审追加 RED/GREEN：直接 self-conformance 时 `delegate === pager` 断言失败，改用私有 proxy 后通过。
+- Delegate 语义自审追加 RED/GREEN：初次布局错误通知 progress `0` 的断言先失败，改为仅比较既有 output 后通过。
+- 示例 UI 回归 `testHeaderReturnsAfterTopBehaviorSwitchAndPullDown` 已通过。
+- 完整核心测试 80 个、示例测试 11 个，均 0 失败；示例 generic build、SwiftPM resolve 和 `git diff --check` 通过。
+- 最终自审确认未扩大 Public API 或泄漏 Tabman/Pageboy 类型，Header/page containment 与 lifecycle 未变，child scroll/inset/gesture/overscroll 职责未提前实现。私有 delegate proxy 不形成 retain cycle；滚动后强制下一次 `layoutIfNeeded()` 的测试仍未出现 Header 重新测量或普通布局日志。
+- 现有依赖会提示 Tabman/Pageboy 的 `PrivacyInfo.xcprivacy` 为 unhandled resource；该上游提示不是本次变更引入，不影响构建和测试结果。

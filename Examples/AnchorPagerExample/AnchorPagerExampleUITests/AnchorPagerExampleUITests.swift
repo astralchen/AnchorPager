@@ -45,6 +45,36 @@ final class AnchorPagerExampleUITests: XCTestCase {
     }
 
     @MainActor
+    func testHeaderReturnsAfterTopBehaviorSwitchAndPullDown() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        let headerTitle = app.staticTexts["AnchorPager Example"]
+        XCTAssertTrue(headerTitle.waitForExistence(timeout: 3))
+        let initialMinY = headerTitle.frame.minY
+        let behaviorButton = app.navigationBars["AnchorPager"].buttons["Header 顶部行为"]
+
+        behaviorButton.tap()
+        XCTAssertTrue(app.buttons["延伸到顶部"].waitForExistence(timeout: 3))
+        app.buttons["延伸到顶部"].tap()
+        behaviorButton.tap()
+        XCTAssertTrue(app.buttons["安全区内"].waitForExistence(timeout: 3))
+        app.buttons["安全区内"].tap()
+
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.40))
+        let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.56))
+        start.press(forDuration: 0.1, thenDragTo: end)
+
+        let returned = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in
+                abs(headerTitle.frame.minY - initialMinY) < 1
+            },
+            object: nil
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [returned], timeout: 3), .completed)
+    }
+
+    @MainActor
     func testLaunchShowsHeaderTabBarAndSelectedPageContent() throws {
         let app = XCUIApplication()
         app.launch()

@@ -280,6 +280,11 @@
 - [x] 禁用 AnchorPager 自有主容器 `verticalScrollView` 自动 content inset，避免 Header 顶部遮挡重复叠加
 - [x] 禁用无滚动页 fallback scroll host 自动 content inset，避免 plain child 底部停在安全区域上方
 - [x] 示例工程导航栏支持切换 `AnchorPagerHeaderTopBehavior`、显示当前配置，并使用 `.preserveVisualPosition` 刷新布局
+- [x] 主容器使用独立 `scrollRangeView` 固定 content range，滚动范围不依赖当前 `contentOffset`
+- [x] Header 和 paging adapter 位于 `frameLayoutGuide` viewport，不参与 `contentSize` 反算
+- [x] 主容器内部 delegate proxy 驱动 Header/bar 可见几何和 collapse progress，且不扩大 Public API
+- [x] 滚动热路径复用 Header 测量结果，不重复测量或逐帧输出普通布局日志
+- [x] 测试顶部行为双向切换并下拉回弹后 Header 返回安全区域顶部
 - [x] 为 Header 测量结果加入 layout 日志
 - [x] 为 Header frame 变化加入 layout 日志
 - [x] 为 bar frame 变化加入 layout 日志
@@ -539,8 +544,9 @@
 - [x] v0.2 follow-up：主容器自动 content inset 已禁用，修复 navigation bar 下 Header 与 layout context 顶部位置不一致的问题；验证记录见 `docs/superpowers/plans/2026-07-09-v0-2-header-layout.md`
 - [x] v0.2 follow-up：内部 fallback scroll host 自动 content inset 已禁用，修复无滚动页底部没有延伸到 content frame 底部的问题；验证记录见 `docs/superpowers/plans/2026-07-09-v0-2-header-layout.md`
 - [x] v0.2 follow-up：示例工程已新增 `AnchorPagerHeaderTopBehavior` 菜单，可显示并切换当前 Header 顶部行为配置，且切换时使用 `.preserveVisualPosition` 刷新布局；验证记录见 `docs/superpowers/plans/2026-07-09-v0-2-header-layout.md`
-- [x] v0.2 follow-up：Header host 约束写入 scroll content 坐标前会补偿当前 `contentOffset.y`，修复菜单切换保留滚动位置后同一 `AnchorPagerHeaderTopBehavior` 实际 Header frame 与 layout context 不一致的问题；验证记录见 `docs/superpowers/plans/2026-07-09-v0-2-header-layout.md`
+- [x] v0.2 历史 follow-up（已被主容器架构修订取代）：曾在 Header host 写入 scroll content 约束前补偿 `contentOffset.y`；该方案后来确认会形成 offset/constraint/contentSize 反馈闭环，现已移除且不得恢复；历史验证见 `docs/superpowers/plans/2026-07-09-v0-2-header-layout.md`
 - [x] v0.2 follow-up：`extendsUnderTopSafeArea` 下 Header 可视 frame 高度至少覆盖本地顶部遮挡，修复当前 Header 内容高度小于顶部遮挡时 Header 与分段栏之间出现空隙的问题；验证记录见 `docs/superpowers/plans/2026-07-09-v0-2-header-layout.md`
+- [x] v0.2 follow-up：主容器 scroll range 与 Header/paging viewport 已解耦，移除 `visibleY + contentOffset` 约束反馈闭环，修复顶部行为切换后下拉回弹残留空白；验证记录见 `docs/superpowers/plans/2026-07-10-header-scroll-viewport.md`
 - [x] v0.2 Header 与布局稳定版已完成；后续从 v0.3 Scroll Discovery 与 Inset Ownership 版继续
 - [x] 实现时遵循测试先行
 - [x] 每个任务完成后运行对应测试

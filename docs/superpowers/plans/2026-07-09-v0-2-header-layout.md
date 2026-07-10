@@ -285,6 +285,27 @@
 - [x] Step 5: 运行核心测试、示例工程测试和 `git diff --check`。
 - [x] Step 6: 完成自审并记录验收命令。
 
+## Follow-up: 主容器视口与滚动范围解耦
+
+**Problem:** 旧实现把 `visibleY + contentOffset.y` 写入 Header content 约束，同时通过 Header/paging
+约束反算 `contentSize`。在 `.insideSafeArea` 下可推导出 `contentHeight = bounds.height +
+contentOffset.y`，形成 `offset → constraint → contentSize → offset` 反馈闭环。顶部行为双向切换和回弹
+会把瞬时 offset 固化为残余空白。
+
+**Impact:** 不新增 Public API，不修改 LayoutEngine 纯计算契约，不改变 Header/page containment、
+selection、scroll discovery 或 child inset ownership。主容器新增独立 `scrollRangeView` 定义固定 range，
+Header/paging 移入 `frameLayoutGuide` viewport；私有 delegate proxy 只更新可见几何、layout context 和
+collapse progress，热路径不重复测量、不写逐帧普通日志。v0.5 继续负责 child scroll owner 与 offset 转移。
+
+- [x] Step 1: 先写失败测试，覆盖 content range 与 offset 解耦、顶部行为切换后回弹归位、progress 与热路径日志。
+- [x] Step 2: 验证 RED：3 个新增测试全部失败，分别为 `844 != 964`、`176 != 116` 和 `[] != [0.5]`。
+- [x] Step 3: 使用 `scrollRangeView`/`viewportView` 重构主容器约束，移除可见坐标到 content 坐标补偿。
+- [x] Step 4: 使用私有 delegate proxy 驱动滚动更新，避免 `AnchorPagerViewController` 暴露 `UIScrollViewDelegate` conformance。
+- [x] Step 5: 补初始 collapse progress 不误报测试，并验证相同 progress 不重复通知。
+- [x] Step 6: 新增示例 UI test，覆盖菜单双向切换和下拉回弹后的 Header 相对 frame。
+- [x] Step 7: 运行完整核心测试、示例测试、示例 build、SwiftPM resolve 和 `git diff --check`。
+- [x] Step 8: 完成代码自审并记录最终验收结果。
+
 ## UI Test 替代验证说明
 
 v0.2 的 navigation bar、tab bar、toolbar、additionalSafeAreaInsets 几何行为需要精确断言 Header/bar/content frame。XCUITest 对系统 bar 精确 frame 暴露不稳定，且不同模拟器和系统版本可能产生像素级差异。本计划使用同进程 UIKit 集成测试创建 `UINavigationController`、`UITabBarController` 和 toolbar 场景，直接断言 `AnchorPagerLayoutContext` 的本地坐标结果；示例工程 UI test 继续作为可见路径回归，不作为几何精度断言来源。
@@ -301,8 +322,9 @@ v0.2 的 navigation bar、tab bar、toolbar、additionalSafeAreaInsets 几何行
 - Follow-up：横向 content frame 底部现在固定到 `bounds.maxY`，bottom safe area、tab bar 和 toolbar 不再裁剪 paging adapter。bottom obstruction 仍通过 `managedInsetTarget.bottom` 保留给后续 child inset ownership。改动不新增 public API，不改变 Header view/controller containment，不改变 Tabman/Pageboy adapter 边界，也不提前写入 child scroll view inset。测试覆盖纯计算、additional bottom safe area、tab bar、toolbar、完整框架测试和示例 UI 路径。
 - Follow-up：内部 fallback scroll host 现在禁用 UIKit 自动 content inset，避免无滚动页 plain child 在 tab bar/safe area 下被系统 inset 抬高底部。改动不新增 public API，不改变 Tabman/Pageboy adapter 边界，不改变 Header containment，也不写入接入方 child scroll view managed inset。新增测试覆盖 fallback host 的 inset 策略和 UITabBarController 场景下 plain child bottom 与 layout context contentFrame bottom 对齐。
 - Follow-up：示例工程新增 Header 顶部行为菜单，只通过 public `configuration.header.topBehavior` 和 `reloadHeaderLayout(offsetAdjustment:)` 驱动现有布局，不新增框架 public API，不改变 AnchorPager containment、Tabman/Pageboy adapter、scroll discovery 或 inset ownership。导航右侧保留 push 图标作为最右按钮，菜单按钮显示当前配置并同步 accessibility value；菜单切换使用 `.preserveVisualPosition`，避免把当前折叠位置强制重置为展开状态。示例单测覆盖菜单结构、选中态和 `.extendsUnderTopSafeArea` 顶部遮挡覆盖，UI test 覆盖真实菜单切换路径。
-- Follow-up：`AnchorPagerLayoutContext` 保持使用 pager view 本地可见坐标，`AnchorPagerViewController` 在把 Header host top 约束写入 `verticalScrollView` content 时补偿当前 `contentOffset.y`，避免 `.preserveVisualPosition` 暴露的可见坐标/content 坐标混用。改动不新增 public API，不改变 LayoutEngine 输出、Header containment、Tabman/Pageboy adapter、scroll discovery 或 inset ownership。新增核心测试覆盖非零 contentOffset 下实际 Header frame 与 layout context 对齐；示例菜单继续使用 `.preserveVisualPosition`，保留修复高度跳变的行为。
+- 历史 Follow-up（已废止）：曾通过在 Header host content 约束中补偿当前 `contentOffset.y` 对齐可见坐标。后续复现证明该方案会让 Header/paging 约束反向参与 `contentSize`，形成 `offset → constraint → contentSize → offset` 闭环；现已由独立 scroll range/fixed viewport 架构取代，不得恢复该补偿。
 - Follow-up：`.extendsUnderTopSafeArea` 下 Header 可视 frame 高度至少覆盖本地顶部遮挡，保持 `barFrame.minY == headerFrame.maxY`。改动不新增 public API，不改变 Header containment、Tabman/Pageboy adapter、scroll discovery 或 child managed inset ownership。`resolvedHeaderHeight`、collapse offset/progress 和 managed inset target 仍按 Header 内容高度计算；`AnchorPagerLayoutContext.headerFrame.height` 文档化为布局后的可视 frame 高度。
+- Follow-up：主容器现以 `scrollRangeView` 单独定义 `viewport height + collapsibleDistance`，Header/paging 位于 `frameLayoutGuide` viewport 并直接使用 LayoutEngine 可见坐标。私有 weak-owner delegate proxy 未扩大 public conformance，Header controller 与 page containment 保持原职责；scroll discovery、child inset、gesture/overscroll 和 v0.5 owner 协调均未提前实现。滚动热路径只复用缓存测量并更新可见几何、layout context 和变化后的 progress，不修改 range、不写普通日志；额外强制 `layoutIfNeeded()` 的回归测试确认后续布局周期也不会重新产生测量或布局日志。
 
 ## Verification Record
 
@@ -372,3 +394,10 @@ v0.2 的 navigation bar、tab bar、toolbar、additionalSafeAreaInsets 几何行
 - Follow-up GREEN：`xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcodebuild-header-top-coverage-example-ui-menu -enableCodeCoverage NO -parallel-testing-enabled NO -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testHeaderTopBehaviorMenuSwitchesVisibleConfiguration test` 提升权限后通过。
 - Follow-up：`swift package resolve` 提升权限后通过。
 - Follow-up：`git diff --check` 通过。
+- 主容器视口 Follow-up RED：3 个新增目标测试全部失败，分别记录 `contentSize 844 != 964`、Header `176 != 116` 和 progress `[] != [0.5]`，证明旧 range/坐标反馈问题存在。
+- 主容器视口 Follow-up GREEN：3 个目标测试通过；`AnchorPagerViewControllerTests` 33 个测试、0 失败。API 边界和初始 progress 语义分别追加 RED/GREEN，最终使用私有 delegate proxy，初次布局不误报 progress。
+- 主容器视口 Follow-up UI：`testHeaderReturnsAfterTopBehaviorSwitchAndPullDown` 定向 UI test 通过；完整示例测试 11 个、0 失败。
+- 主容器视口 Follow-up 最终验证：`xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcodebuild-header-viewport-baseline -parallel-testing-enabled NO -enableCodeCoverage NO test` 通过，80 个测试、0 失败。
+- 主容器视口 Follow-up 最终验证：`xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'generic/platform=iOS Simulator' -derivedDataPath .build/example-xcodebuild-header-viewport build` 通过。首次命令误带仅 testing 支持的 `-enableCodeCoverage`，在编译前以参数错误退出，移除后正式 build 通过。
+- 主容器视口 Follow-up 最终验证：`xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/example-xcodebuild-header-viewport -parallel-testing-enabled NO -enableCodeCoverage NO test` 通过，11 个测试、0 失败。
+- 主容器视口 Follow-up 最终验证：`swift package resolve` 沙盒内因 SwiftPM/clang 用户缓存权限失败；提升权限后从缓存解析 Tabman 4.0.1、Pageboy 5.0.2 并通过。`git diff --check` 通过。
