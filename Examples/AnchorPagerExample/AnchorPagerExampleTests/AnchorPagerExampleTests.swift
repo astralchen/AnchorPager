@@ -71,15 +71,14 @@ struct AnchorPagerExampleTests {
         }
         window.layoutIfNeeded()
         let switchedContext = try #require(layoutProbe.layoutContexts.last)
-        let expectedHeaderHeight = max(
-            collapsedContext.headerFrame.height,
-            collapsedContext.headerFrame.minY
-        )
+        let expectedHeaderHeight = collapsedContext.headerFrame.height
+            + collapsedContext.headerFrame.minY
 
         #expect(abs(pagerViewController.verticalScrollView.contentOffset.y - 80) < 0.5)
         #expect(abs(switchedContext.headerFrame.minY) < 0.5)
         #expect(abs(switchedContext.headerFrame.height - expectedHeaderHeight) < 0.5)
         #expect(abs(switchedContext.barFrame.minY - switchedContext.headerFrame.maxY) < 0.5)
+        #expect(abs(switchedContext.barFrame.minY - collapsedContext.barFrame.minY) < 0.5)
     }
 }
 
