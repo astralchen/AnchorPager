@@ -99,6 +99,42 @@ final class AnchorPagerHeaderViewHostTests: XCTestCase {
     }
 
     @MainActor
+    func testMeasuresHeaderViewControllerFromViewFittingSizeWhenPreferredSizeIsEmpty() {
+        let parent = UIViewController()
+        parent.loadViewIfNeeded()
+        let headerController = FittingHeaderViewController(height: 92)
+        let host = AnchorPagerHeaderViewHost()
+        host.install(.viewController(headerController), in: parent)
+
+        let height = host.measure(in: CGSize(width: 320, height: 0))
+
+        XCTAssertEqual(height, 92)
+    }
+
+    @MainActor
+    func testInvalidHeaderMeasurementFallsBackToZeroAndWritesLayoutLog() {
+        let parent = UIViewController()
+        parent.loadViewIfNeeded()
+        let headerView = InvalidFittingView()
+        let host = AnchorPagerHeaderViewHost()
+        host.install(.view(headerView), in: parent)
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+
+        let height = AnchorPagerAssertions.$isEnabled.withValue(false) {
+            host.measure(in: CGSize(width: 320, height: 0))
+        }
+
+        XCTAssertEqual(height, 0)
+        XCTAssertTrue(
+            events.contains(
+                .init(category: .layout, level: .error, event: "header.measure.invalid")
+            )
+        )
+    }
+
+    @MainActor
     func testHeaderInstallMeasureAndRemoveWriteLogs() {
         let parent = UIViewController()
         parent.loadViewIfNeeded()
@@ -146,5 +182,32 @@ private final class CountingHeaderView: UIView {
     override func removeFromSuperview() {
         removeFromSuperviewCallCount += 1
         super.removeFromSuperview()
+    }
+}
+
+private final class FittingHeaderViewController: UIViewController {
+    private let measuredHeight: CGFloat
+
+    init(height: CGFloat) {
+        self.measuredHeight = height
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func loadView() {
+        view = FixedFittingView(height: measuredHeight)
+    }
+}
+
+private final class InvalidFittingView: UIView {
+    override func systemLayoutSizeFitting(
+        _ targetSize: CGSize,
+        withHorizontalFittingPriority horizontalFittingPriority: UILayoutPriority,
+        verticalFittingPriority: UILayoutPriority
+    ) -> CGSize {
+        CGSize(width: targetSize.width, height: -12)
     }
 }

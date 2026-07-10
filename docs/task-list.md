@@ -259,30 +259,36 @@
 
 ## v0.2：Header 与布局稳定版
 
-- [ ] 创建 `Sources/AnchorPager/Layout/AnchorPagerLayoutEngine.swift`
-- [ ] 实现 automatic height 测量
-- [ ] 实现 fixed height clamp
-- [ ] 实现 ranged height clamp
-- [ ] 实现 insideSafeArea 布局
-- [ ] 实现 extendsUnderTopSafeArea 布局
-- [ ] 实现 Header runtime frame 变化
-- [ ] 实现 `reloadHeaderLayout(.preserveVisualPosition)`
-- [ ] 实现 `reloadHeaderLayout(.preserveCollapseProgress)`
-- [ ] 实现 `reloadHeaderLayout(.resetToExpanded)`
-- [ ] 实现 `reloadHeaderLayout(.resetToCollapsed)`
-- [ ] 将顶部遮挡转换到本地坐标系
-- [ ] 将底部遮挡转换到本地坐标系
-- [ ] 为 Header 测量结果加入 layout 日志
-- [ ] 为 Header frame 变化加入 layout 日志
-- [ ] 为 bar frame 变化加入 layout 日志
-- [ ] 为 safe area 和 bounds 变化加入 layout 日志
-- [ ] 为 managed inset 变化加入 inset 日志
-- [ ] 测试 Header automatic、fixed、ranged
-- [ ] 测试 Header height clamp
-- [ ] 测试 insideSafeArea、extendsUnderTopSafeArea
-- [ ] 测试 navigation bar 显隐
-- [ ] 测试 tab bar 和 toolbar 底部遮挡
-- [ ] 测试 additionalSafeAreaInsets
+- [x] 创建 `docs/superpowers/plans/2026-07-09-v0-2-header-layout.md` 详细实施计划
+- [x] 创建 `Sources/AnchorPager/Layout/AnchorPagerLayoutEngine.swift`
+- [x] 实现 automatic height 测量
+- [x] 实现 fixed height clamp
+- [x] 实现 ranged height clamp
+- [x] 实现 insideSafeArea 布局
+- [x] 实现 extendsUnderTopSafeArea 布局
+- [x] 实现 Header runtime frame 变化
+- [x] 实现 `reloadHeaderLayout(.preserveVisualPosition)`
+- [x] 实现 `reloadHeaderLayout(.preserveCollapseProgress)`
+- [x] 实现 `reloadHeaderLayout(.resetToExpanded)`
+- [x] 实现 `reloadHeaderLayout(.resetToCollapsed)`
+- [x] 将顶部遮挡转换到本地坐标系
+- [x] 将底部遮挡转换到本地坐标系
+- [x] 横向分页区域默认延伸到容器 `bounds` 底部，底部遮挡只进入 managed inset target
+- [x] 禁用 AnchorPager 自有主容器 `verticalScrollView` 自动 content inset，避免 Header 顶部遮挡重复叠加
+- [x] 禁用无滚动页 fallback scroll host 自动 content inset，避免 plain child 底部停在安全区域上方
+- [x] 为 Header 测量结果加入 layout 日志
+- [x] 为 Header frame 变化加入 layout 日志
+- [x] 为 bar frame 变化加入 layout 日志
+- [x] 为 safe area 和 bounds 变化加入 layout 日志
+- [x] 为 managed inset 变化加入 inset 日志
+- [x] 测试 Header automatic、fixed、ranged
+- [x] 测试 Header height clamp
+- [x] 测试 insideSafeArea、extendsUnderTopSafeArea
+- [x] 测试 navigation bar 显隐
+- [x] 测试 navigation controller 下 Header 实际 frame 与 layout context 对齐
+- [x] 测试 tab bar 和 toolbar 底部遮挡
+- [x] 测试无滚动页 fallback host 底部延伸到 content frame 底部
+- [x] 测试 additionalSafeAreaInsets
 
 ## v0.3：Scroll Discovery 与 Inset Ownership 版
 
@@ -517,13 +523,22 @@
 
 ## 当前执行入口
 
-- [ ] 以 v0.1 可视分页核心版作为首个实现版本
-- [ ] 实现前创建 v0.1 详细实现计划
-- [ ] 实现时遵循测试先行
-- [ ] 每个任务完成后运行对应测试
-- [ ] 每个任务完成时确认是否需要 UI 测试
-- [ ] 需要 UI 测试的任务必须在同一任务内完成 UI 测试
-- [ ] 不允许把当前任务应有的测试推迟到后续任务
-- [ ] 每个任务完成时确认是否需要日志
-- [ ] 需要日志的任务必须在同一任务内完成日志和日志测试
-- [ ] 每个版本完成后更新本文档状态
+- [x] v0.1 可视分页核心版已完成，验收记录见 `docs/superpowers/plans/2026-07-09-v0-1-foundation.md`
+- [x] v0.2 Header 与布局稳定版已创建详细实施计划：`docs/superpowers/plans/2026-07-09-v0-2-header-layout.md`
+- [x] v0.2 Task 1：LayoutEngine 纯计算契约已完成，验证记录见 `docs/superpowers/plans/2026-07-09-v0-2-header-layout.md`
+- [x] v0.2 Task 2：Header 测量边界补齐已完成，验证记录见 `docs/superpowers/plans/2026-07-09-v0-2-header-layout.md`
+- [x] v0.2 Task 3：ViewController 布局引擎接入已完成，验证记录见 `docs/superpowers/plans/2026-07-09-v0-2-header-layout.md`
+- [x] v0.2 Task 4：Safe Area 与本地遮挡集成已完成，验证记录见 `docs/superpowers/plans/2026-07-09-v0-2-header-layout.md`
+- [x] v0.2 Task 5：v0.2 布局与 inset 日志已完成，验证记录见 `docs/superpowers/plans/2026-07-09-v0-2-header-layout.md`
+- [x] v0.2 Task 6：文档、任务状态与版本验收已完成，验证记录见 `docs/superpowers/plans/2026-07-09-v0-2-header-layout.md`
+- [x] v0.2 follow-up：主容器自动 content inset 已禁用，修复 navigation bar 下 Header 与 layout context 顶部位置不一致的问题；验证记录见 `docs/superpowers/plans/2026-07-09-v0-2-header-layout.md`
+- [x] v0.2 follow-up：内部 fallback scroll host 自动 content inset 已禁用，修复无滚动页底部没有延伸到 content frame 底部的问题；验证记录见 `docs/superpowers/plans/2026-07-09-v0-2-header-layout.md`
+- [x] v0.2 Header 与布局稳定版已完成；后续从 v0.3 Scroll Discovery 与 Inset Ownership 版继续
+- [x] 实现时遵循测试先行
+- [x] 每个任务完成后运行对应测试
+- [x] 每个任务完成时确认是否需要 UI 测试
+- [x] v0.2 系统 bar 几何行为使用同进程 UIKit 集成测试作为 UI test 替代验证，原因和范围记录在 v0.2 plan
+- [x] 不允许把当前任务应有的测试推迟到后续任务
+- [x] 每个任务完成时确认是否需要日志
+- [x] 需要日志的任务必须在同一任务内完成日志和日志测试
+- [x] 每个版本完成后更新本文档状态

@@ -18,6 +18,7 @@ final class AnchorPagerPageScrollHostViewController: UIViewController {
 
     override func loadView() {
         scrollView.alwaysBounceVertical = true
+        scrollView.contentInsetAdjustmentBehavior = .never
         view = scrollView
     }
 

@@ -193,6 +193,360 @@ final class AnchorPagerViewControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testReloadHeaderLayoutPreservesVisualPositionWhenHeaderHeightChanges() {
+        var configuration = AnchorPagerConfiguration.default
+        configuration.header.heightMode = .automatic(min: 0, max: nil)
+        let pager = AnchorPagerViewController(configuration: configuration)
+        pager.view.frame = CGRect(x: 0, y: 0, width: 320, height: 640)
+        let headerView = DynamicFittingView(height: 100)
+        let dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [ScrollChildViewController()],
+            headerContent: .view(headerView)
+        )
+        pager.dataSource = dataSource
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+        pager.view.layoutIfNeeded()
+        pager.verticalScrollView.contentOffset = CGPoint(x: 0, y: 30)
+
+        headerView.measuredHeight = 160
+        pager.reloadHeaderLayout(offsetAdjustment: .preserveVisualPosition)
+
+        XCTAssertEqual(pager.verticalScrollView.contentOffset.y, 90, accuracy: 0.001)
+    }
+
+    @MainActor
+    func testReloadHeaderLayoutPreservesCollapseProgressWhenHeaderHeightChanges() {
+        var configuration = AnchorPagerConfiguration.default
+        configuration.header.heightMode = .automatic(min: 20, max: nil)
+        let pager = AnchorPagerViewController(configuration: configuration)
+        pager.view.frame = CGRect(x: 0, y: 0, width: 320, height: 640)
+        let headerView = DynamicFittingView(height: 100)
+        let dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [ScrollChildViewController()],
+            headerContent: .view(headerView)
+        )
+        pager.dataSource = dataSource
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+        pager.view.layoutIfNeeded()
+        pager.verticalScrollView.contentOffset = CGPoint(x: 0, y: 40)
+
+        headerView.measuredHeight = 180
+        pager.reloadHeaderLayout(offsetAdjustment: .preserveCollapseProgress)
+
+        XCTAssertEqual(pager.verticalScrollView.contentOffset.y, 80, accuracy: 0.001)
+    }
+
+    @MainActor
+    func testReloadHeaderLayoutCanResetToExpandedAndCollapsed() {
+        var configuration = AnchorPagerConfiguration.default
+        configuration.header.heightMode = .automatic(min: 20, max: nil)
+        let pager = AnchorPagerViewController(configuration: configuration)
+        pager.view.frame = CGRect(x: 0, y: 0, width: 320, height: 640)
+        let headerView = DynamicFittingView(height: 100)
+        let dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [ScrollChildViewController()],
+            headerContent: .view(headerView)
+        )
+        pager.dataSource = dataSource
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+        pager.view.layoutIfNeeded()
+        pager.verticalScrollView.contentOffset = CGPoint(x: 0, y: 40)
+
+        pager.reloadHeaderLayout(offsetAdjustment: .resetToExpanded)
+        XCTAssertEqual(pager.verticalScrollView.contentOffset.y, 0, accuracy: 0.001)
+
+        pager.verticalScrollView.contentOffset = CGPoint(x: 0, y: 40)
+        pager.reloadHeaderLayout(offsetAdjustment: .resetToCollapsed)
+        XCTAssertEqual(pager.verticalScrollView.contentOffset.y, 80, accuracy: 0.001)
+    }
+
+    @MainActor
+    func testRuntimeHeaderFrameChangeUpdatesLayoutContext() throws {
+        var configuration = AnchorPagerConfiguration.default
+        configuration.header.heightMode = .automatic(min: 0, max: nil)
+        let pager = AnchorPagerViewController(configuration: configuration)
+        pager.view.frame = CGRect(x: 0, y: 0, width: 320, height: 640)
+        let headerView = DynamicFittingView(height: 72)
+        let dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [ScrollChildViewController()],
+            headerContent: .view(headerView)
+        )
+        let delegate = StubDelegate()
+        pager.dataSource = dataSource
+        pager.delegate = delegate
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+        pager.view.layoutIfNeeded()
+
+        delegate.layoutContexts.removeAll()
+        headerView.measuredHeight = 120
+        pager.reloadHeaderLayout(offsetAdjustment: .resetToExpanded)
+
+        let context = try XCTUnwrap(delegate.layoutContexts.last)
+        XCTAssertEqual(context.headerFrame.height, 120)
+        XCTAssertEqual(context.barFrame.minY, 120)
+    }
+
+    @MainActor
+    func testInsideSafeAreaUsesAdditionalSafeAreaInsetsTop() throws {
+        var configuration = AnchorPagerConfiguration.default
+        configuration.header.heightMode = .fixed(max: 80, min: 0)
+        configuration.header.topBehavior = .insideSafeArea
+        let pager = AnchorPagerViewController(configuration: configuration)
+        pager.view.frame = CGRect(x: 0, y: 0, width: 320, height: 640)
+        pager.additionalSafeAreaInsets = UIEdgeInsets(top: 24, left: 0, bottom: 0, right: 0)
+        let delegate = StubDelegate()
+        pager.dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [ScrollChildViewController()],
+            headerContent: .view(FixedFittingView(height: 80))
+        )
+        pager.delegate = delegate
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+        pager.view.layoutIfNeeded()
+
+        delegate.layoutContexts.removeAll()
+        pager.reloadHeaderLayout(offsetAdjustment: .resetToExpanded)
+
+        let context = try XCTUnwrap(delegate.layoutContexts.last)
+        XCTAssertEqual(context.headerFrame.minY, 24)
+        XCTAssertEqual(context.barFrame.minY, 104)
+    }
+
+    @MainActor
+    func testExtendsUnderTopSafeAreaKeepsHeaderAtBoundsTopAndPinsBar() throws {
+        var configuration = AnchorPagerConfiguration.default
+        configuration.header.heightMode = .fixed(max: 10, min: 0)
+        configuration.header.topBehavior = .extendsUnderTopSafeArea
+        let pager = AnchorPagerViewController(configuration: configuration)
+        pager.view.frame = CGRect(x: 0, y: 0, width: 320, height: 640)
+        pager.additionalSafeAreaInsets = UIEdgeInsets(top: 24, left: 0, bottom: 0, right: 0)
+        let delegate = StubDelegate()
+        pager.dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [ScrollChildViewController()],
+            headerContent: .view(FixedFittingView(height: 10))
+        )
+        pager.delegate = delegate
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+        pager.view.layoutIfNeeded()
+
+        delegate.layoutContexts.removeAll()
+        pager.reloadHeaderLayout(offsetAdjustment: .resetToExpanded)
+
+        let context = try XCTUnwrap(delegate.layoutContexts.last)
+        XCTAssertEqual(context.headerFrame.minY, 0)
+        XCTAssertEqual(context.barFrame.minY, 24)
+    }
+
+    @MainActor
+    func testBottomObstructionDoesNotClipContentFrame() throws {
+        var configuration = AnchorPagerConfiguration.default
+        configuration.header.heightMode = .fixed(max: 80, min: 0)
+        let pager = AnchorPagerViewController(configuration: configuration)
+        pager.view.frame = CGRect(x: 0, y: 0, width: 320, height: 640)
+        pager.additionalSafeAreaInsets = UIEdgeInsets(top: 0, left: 0, bottom: 34, right: 0)
+        let delegate = StubDelegate()
+        pager.dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [ScrollChildViewController()],
+            headerContent: .view(FixedFittingView(height: 80))
+        )
+        pager.delegate = delegate
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+        pager.view.layoutIfNeeded()
+
+        delegate.layoutContexts.removeAll()
+        pager.reloadHeaderLayout(offsetAdjustment: .resetToExpanded)
+
+        let context = try XCTUnwrap(delegate.layoutContexts.last)
+        XCTAssertEqual(context.contentFrame.minY, 128)
+        XCTAssertEqual(context.contentFrame.maxY, 640)
+        XCTAssertEqual(context.contentFrame.height, 512)
+    }
+
+    @MainActor
+    func testNavigationBarVisibilityChangesTopObstruction() throws {
+        var configuration = AnchorPagerConfiguration.default
+        configuration.header.heightMode = .fixed(max: 80, min: 0)
+        configuration.header.topBehavior = .insideSafeArea
+        let pager = AnchorPagerViewController(configuration: configuration)
+        let delegate = StubDelegate()
+        pager.dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [ScrollChildViewController()],
+            headerContent: .view(FixedFittingView(height: 80))
+        )
+        pager.delegate = delegate
+        let navigationController = UINavigationController(rootViewController: pager)
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = navigationController
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+
+        pager.reloadData()
+        window.layoutIfNeeded()
+        delegate.layoutContexts.removeAll()
+        navigationController.setNavigationBarHidden(false, animated: false)
+        window.layoutIfNeeded()
+        pager.reloadHeaderLayout(offsetAdjustment: .resetToExpanded)
+        let visibleContext = try XCTUnwrap(delegate.layoutContexts.last)
+
+        delegate.layoutContexts.removeAll()
+        navigationController.setNavigationBarHidden(true, animated: false)
+        window.layoutIfNeeded()
+        pager.reloadHeaderLayout(offsetAdjustment: .resetToExpanded)
+        let hiddenContext = try XCTUnwrap(delegate.layoutContexts.last)
+
+        XCTAssertGreaterThan(visibleContext.headerFrame.minY, hiddenContext.headerFrame.minY)
+    }
+
+    @MainActor
+    func testNavigationBarDoesNotDoubleApplyTopInsetToHeaderFrame() throws {
+        var configuration = AnchorPagerConfiguration.default
+        configuration.header.heightMode = .fixed(max: 80, min: 0)
+        configuration.header.topBehavior = .insideSafeArea
+        let pager = AnchorPagerViewController(configuration: configuration)
+        let headerView = FixedFittingView(height: 80)
+        let delegate = StubDelegate()
+        let dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [ScrollChildViewController()],
+            headerContent: .view(headerView)
+        )
+        pager.dataSource = dataSource
+        pager.delegate = delegate
+        let navigationController = UINavigationController(rootViewController: pager)
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = navigationController
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+
+        pager.reloadData()
+        window.layoutIfNeeded()
+        delegate.layoutContexts.removeAll()
+        pager.reloadHeaderLayout(offsetAdjustment: .resetToExpanded)
+        window.layoutIfNeeded()
+
+        let context = try XCTUnwrap(delegate.layoutContexts.last)
+        let headerHostView = try XCTUnwrap(headerView.superview)
+        let actualHeaderFrame = headerHostView.convert(headerHostView.bounds, to: pager.view)
+
+        XCTAssertEqual(pager.verticalScrollView.contentInsetAdjustmentBehavior, .never)
+        XCTAssertEqual(actualHeaderFrame.minY, context.headerFrame.minY, accuracy: 0.5)
+        XCTAssertEqual(actualHeaderFrame.height, context.headerFrame.height, accuracy: 0.5)
+    }
+
+    @MainActor
+    func testTabBarObstructionDoesNotClipContentFrame() throws {
+        var configuration = AnchorPagerConfiguration.default
+        configuration.header.heightMode = .fixed(max: 80, min: 0)
+        let tabPager = AnchorPagerViewController(configuration: configuration)
+        let tabDelegate = StubDelegate()
+        tabPager.dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [ScrollChildViewController()],
+            headerContent: .view(FixedFittingView(height: 80))
+        )
+        tabPager.delegate = tabDelegate
+        let tabBarController = UITabBarController()
+        tabBarController.viewControllers = [tabPager]
+        let tabWindow = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        tabWindow.rootViewController = tabBarController
+        tabWindow.makeKeyAndVisible()
+        defer { tabWindow.isHidden = true }
+
+        tabPager.reloadData()
+        tabWindow.layoutIfNeeded()
+        tabDelegate.layoutContexts.removeAll()
+        tabPager.reloadHeaderLayout(offsetAdjustment: .resetToExpanded)
+        let tabContext = try XCTUnwrap(tabDelegate.layoutContexts.last)
+
+        let plainPager = AnchorPagerViewController(configuration: configuration)
+        let plainDelegate = StubDelegate()
+        plainPager.dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [ScrollChildViewController()],
+            headerContent: .view(FixedFittingView(height: 80))
+        )
+        plainPager.delegate = plainDelegate
+        let plainWindow = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        plainWindow.rootViewController = plainPager
+        plainWindow.makeKeyAndVisible()
+        defer { plainWindow.isHidden = true }
+
+        plainPager.reloadData()
+        plainWindow.layoutIfNeeded()
+        plainDelegate.layoutContexts.removeAll()
+        plainPager.reloadHeaderLayout(offsetAdjustment: .resetToExpanded)
+        let plainContext = try XCTUnwrap(plainDelegate.layoutContexts.last)
+
+        XCTAssertEqual(tabContext.contentFrame.maxY, tabPager.view.bounds.maxY, accuracy: 0.5)
+        XCTAssertEqual(tabContext.contentFrame.height, plainContext.contentFrame.height, accuracy: 0.5)
+    }
+
+    @MainActor
+    func testNavigationToolbarObstructionDoesNotClipContentFrame() throws {
+        var configuration = AnchorPagerConfiguration.default
+        configuration.header.heightMode = .fixed(max: 80, min: 0)
+        let toolbarPager = AnchorPagerViewController(configuration: configuration)
+        let toolbarDelegate = StubDelegate()
+        toolbarPager.dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [ScrollChildViewController()],
+            headerContent: .view(FixedFittingView(height: 80))
+        )
+        toolbarPager.delegate = toolbarDelegate
+        toolbarPager.toolbarItems = [UIBarButtonItem(barButtonSystemItem: .done, target: nil, action: nil)]
+        let toolbarNavigationController = UINavigationController(rootViewController: toolbarPager)
+        toolbarNavigationController.setToolbarHidden(false, animated: false)
+        let toolbarWindow = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        toolbarWindow.rootViewController = toolbarNavigationController
+        toolbarWindow.makeKeyAndVisible()
+        defer { toolbarWindow.isHidden = true }
+
+        toolbarPager.reloadData()
+        toolbarWindow.layoutIfNeeded()
+        toolbarDelegate.layoutContexts.removeAll()
+        toolbarPager.reloadHeaderLayout(offsetAdjustment: .resetToExpanded)
+        let toolbarContext = try XCTUnwrap(toolbarDelegate.layoutContexts.last)
+
+        let plainPager = AnchorPagerViewController(configuration: configuration)
+        let plainDelegate = StubDelegate()
+        plainPager.dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [ScrollChildViewController()],
+            headerContent: .view(FixedFittingView(height: 80))
+        )
+        plainPager.delegate = plainDelegate
+        let plainNavigationController = UINavigationController(rootViewController: plainPager)
+        plainNavigationController.setToolbarHidden(true, animated: false)
+        let plainWindow = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        plainWindow.rootViewController = plainNavigationController
+        plainWindow.makeKeyAndVisible()
+        defer { plainWindow.isHidden = true }
+
+        plainPager.reloadData()
+        plainWindow.layoutIfNeeded()
+        plainDelegate.layoutContexts.removeAll()
+        plainPager.reloadHeaderLayout(offsetAdjustment: .resetToExpanded)
+        let plainContext = try XCTUnwrap(plainDelegate.layoutContexts.last)
+
+        XCTAssertEqual(toolbarContext.contentFrame.maxY, toolbarPager.view.bounds.maxY, accuracy: 0.5)
+        XCTAssertEqual(toolbarContext.contentFrame.height, plainContext.contentFrame.height, accuracy: 0.5)
+    }
+
+    @MainActor
     func testReloadDataWrapsChildWithoutScrollViewInFallbackHost() {
         let pager = AnchorPagerViewController()
         let plainChild = UIViewController()
@@ -216,6 +570,47 @@ final class AnchorPagerViewControllerTests: XCTestCase {
 
         fallbackHost?.loadViewIfNeeded()
         XCTAssertTrue(plainChild.parent === fallbackHost)
+    }
+
+    @MainActor
+    func testFallbackPageHostExtendsPlainChildToContentFrameBottomInTabBarController() throws {
+        var configuration = AnchorPagerConfiguration.default
+        configuration.header.heightMode = .fixed(max: 80, min: 0)
+        let pager = AnchorPagerViewController(configuration: configuration)
+        let plainChild = UIViewController()
+        plainChild.view.backgroundColor = .systemBlue
+        let delegate = StubDelegate()
+        pager.dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [plainChild],
+            headerContent: .view(FixedFittingView(height: 80))
+        )
+        pager.delegate = delegate
+        let tabBarController = UITabBarController()
+        tabBarController.viewControllers = [pager]
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = tabBarController
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+
+        pager.reloadData()
+        window.layoutIfNeeded()
+        delegate.layoutContexts.removeAll()
+        pager.reloadHeaderLayout(offsetAdjustment: .resetToExpanded)
+        window.layoutIfNeeded()
+
+        let context = try XCTUnwrap(delegate.layoutContexts.last)
+        let adapter = try XCTUnwrap(installedAdapter(in: pager))
+        let fallbackHost = try XCTUnwrap(
+            adapter.viewController(for: adapter, at: 0) as? AnchorPagerPageScrollHostViewController
+        )
+        fallbackHost.loadViewIfNeeded()
+        window.layoutIfNeeded()
+
+        let childFrame = plainChild.view.convert(plainChild.view.bounds, to: pager.view)
+        XCTAssertEqual(fallbackHost.scrollView.contentInsetAdjustmentBehavior, .never)
+        XCTAssertEqual(fallbackHost.scrollView.adjustedContentInset.bottom, 0, accuracy: 0.5)
+        XCTAssertEqual(childFrame.maxY, context.contentFrame.maxY, accuracy: 1)
     }
 
     @MainActor
@@ -308,6 +703,79 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         }
 
         XCTAssertTrue(events.contains(.init(category: .paging, level: .debug, event: "setSelectedIndex.outOfRange")))
+    }
+
+    @MainActor
+    func testHeaderAndBarFrameChangesWriteLayoutLogs() {
+        var configuration = AnchorPagerConfiguration.default
+        configuration.header.heightMode = .fixed(max: 72, min: 0)
+        let pager = AnchorPagerViewController(configuration: configuration)
+        pager.view.frame = CGRect(x: 0, y: 0, width: 320, height: 640)
+        pager.dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [ScrollChildViewController()],
+            headerContent: .view(FixedFittingView(height: 72))
+        )
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+        pager.view.layoutIfNeeded()
+
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+
+        pager.configuration.header.heightMode = .fixed(max: 120, min: 0)
+        pager.reloadHeaderLayout(offsetAdjustment: .resetToExpanded)
+
+        XCTAssertTrue(events.contains(.init(category: .layout, level: .debug, event: "layout.headerHeightResolved")))
+        XCTAssertTrue(events.contains(.init(category: .layout, level: .debug, event: "layout.headerFrameChanged")))
+        XCTAssertTrue(events.contains(.init(category: .layout, level: .debug, event: "layout.barFrameChanged")))
+
+        events.removeAll()
+        pager.reloadHeaderLayout(offsetAdjustment: .resetToExpanded)
+
+        XCTAssertFalse(events.contains(.init(category: .layout, level: .debug, event: "layout.headerHeightResolved")))
+        XCTAssertFalse(events.contains(.init(category: .layout, level: .debug, event: "layout.headerFrameChanged")))
+        XCTAssertFalse(events.contains(.init(category: .layout, level: .debug, event: "layout.barFrameChanged")))
+    }
+
+    @MainActor
+    func testSafeAreaBoundsAndManagedInsetChangesWriteLogs() {
+        var configuration = AnchorPagerConfiguration.default
+        configuration.header.heightMode = .fixed(max: 80, min: 0)
+        let pager = AnchorPagerViewController(configuration: configuration)
+        pager.view.frame = CGRect(x: 0, y: 0, width: 320, height: 640)
+        pager.dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [ScrollChildViewController()],
+            headerContent: .view(FixedFittingView(height: 80))
+        )
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+        pager.view.layoutIfNeeded()
+
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+
+        pager.additionalSafeAreaInsets = UIEdgeInsets(top: 24, left: 0, bottom: 34, right: 0)
+        pager.reloadHeaderLayout(offsetAdjustment: .resetToExpanded)
+
+        XCTAssertTrue(events.contains(.init(category: .layout, level: .info, event: "layout.safeAreaChanged")))
+        XCTAssertTrue(events.contains(.init(category: .inset, level: .debug, event: "inset.managedTargetChanged")))
+
+        events.removeAll()
+        pager.view.frame = CGRect(x: 0, y: 0, width: 320, height: 700)
+        pager.reloadHeaderLayout(offsetAdjustment: .resetToExpanded)
+
+        XCTAssertTrue(events.contains(.init(category: .layout, level: .info, event: "layout.boundsChanged")))
+
+        events.removeAll()
+        pager.reloadHeaderLayout(offsetAdjustment: .resetToExpanded)
+
+        XCTAssertFalse(events.contains(.init(category: .layout, level: .info, event: "layout.safeAreaChanged")))
+        XCTAssertFalse(events.contains(.init(category: .layout, level: .info, event: "layout.boundsChanged")))
+        XCTAssertFalse(events.contains(.init(category: .inset, level: .debug, event: "inset.managedTargetChanged")))
     }
 
     @MainActor
@@ -420,6 +888,27 @@ private final class ScrollChildViewController: UIViewController {
 
 private final class FixedFittingView: UIView {
     private let measuredHeight: CGFloat
+
+    init(height: CGFloat) {
+        self.measuredHeight = height
+        super.init(frame: .zero)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func systemLayoutSizeFitting(
+        _ targetSize: CGSize,
+        withHorizontalFittingPriority horizontalFittingPriority: UILayoutPriority,
+        verticalFittingPriority: UILayoutPriority
+    ) -> CGSize {
+        CGSize(width: targetSize.width, height: measuredHeight)
+    }
+}
+
+private final class DynamicFittingView: UIView {
+    var measuredHeight: CGFloat
 
     init(height: CGFloat) {
         self.measuredHeight = height

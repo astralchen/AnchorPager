@@ -7,6 +7,7 @@ final class AnchorPagerHeaderViewHost {
     private weak var parentViewController: UIViewController?
     private var currentView: UIView?
     private var currentViewController: UIViewController?
+    private var topConstraint: NSLayoutConstraint?
 
     init() {
         view.translatesAutoresizingMaskIntoConstraints = false
@@ -43,12 +44,19 @@ final class AnchorPagerHeaderViewHost {
         removeContent(keepHostView: false)
     }
 
+    func setTopOffset(_ offset: CGFloat) {
+        topConstraint?.constant = offset
+    }
+
     func measure(in size: CGSize) -> CGFloat {
         let measuredHeight = measuredContentHeight(in: size)
-        let height = measuredHeight.isFinite ? max(0, measuredHeight) : 0
-        if measuredHeight < 0 || !measuredHeight.isFinite {
+        if isInvalidMeasuredHeight(measuredHeight) {
             AnchorPagerAssertions.failure("AnchorPager header measured an invalid height.")
+            AnchorPagerLogger.log(.error, category: .layout, event: "header.measure.invalid")
+            return 0
         }
+
+        let height = max(0, measuredHeight)
         AnchorPagerLogger.log(.debug, category: .layout, event: "header.measure")
         return height
     }
@@ -58,11 +66,13 @@ final class AnchorPagerHeaderViewHost {
 
         view.removeFromSuperview()
         parentView.addSubview(view)
+        let topConstraint = view.topAnchor.constraint(equalTo: parentView.topAnchor)
         NSLayoutConstraint.activate([
             view.leadingAnchor.constraint(equalTo: parentView.leadingAnchor),
             view.trailingAnchor.constraint(equalTo: parentView.trailingAnchor),
-            view.topAnchor.constraint(equalTo: parentView.topAnchor)
+            topConstraint
         ])
+        self.topConstraint = topConstraint
     }
 
     private func installHeaderView(_ headerView: UIView) {
@@ -105,6 +115,7 @@ final class AnchorPagerHeaderViewHost {
 
         if !keepHostView {
             view.removeFromSuperview()
+            topConstraint = nil
             parentViewController = nil
         }
     }
@@ -112,6 +123,10 @@ final class AnchorPagerHeaderViewHost {
     private func measuredContentHeight(in size: CGSize) -> CGFloat {
         if let preferredHeight = currentViewController?.preferredContentSize.height,
            preferredHeight > 0 {
+            return preferredHeight
+        }
+        if let preferredHeight = currentViewController?.preferredContentSize.height,
+           isInvalidMeasuredHeight(preferredHeight) {
             return preferredHeight
         }
 
@@ -125,8 +140,14 @@ final class AnchorPagerHeaderViewHost {
         if fittingSize.height > 0 {
             return fittingSize.height
         }
+        if isInvalidMeasuredHeight(fittingSize.height) {
+            return fittingSize.height
+        }
 
         if currentView.bounds.height > 0 {
+            return currentView.bounds.height
+        }
+        if isInvalidMeasuredHeight(currentView.bounds.height) {
             return currentView.bounds.height
         }
 
@@ -134,7 +155,15 @@ final class AnchorPagerHeaderViewHost {
         if intrinsicHeight > 0, intrinsicHeight != UIView.noIntrinsicMetric {
             return intrinsicHeight
         }
+        if intrinsicHeight != UIView.noIntrinsicMetric,
+           isInvalidMeasuredHeight(intrinsicHeight) {
+            return intrinsicHeight
+        }
 
         return 0
+    }
+
+    private func isInvalidMeasuredHeight(_ height: CGFloat) -> Bool {
+        height < 0 || !height.isFinite
     }
 }

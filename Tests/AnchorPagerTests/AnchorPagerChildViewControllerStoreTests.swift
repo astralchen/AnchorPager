@@ -60,6 +60,7 @@ final class AnchorPagerChildViewControllerStoreTests: XCTestCase {
         host.loadViewIfNeeded()
 
         XCTAssertTrue(host.scrollView === host.view)
+        XCTAssertEqual(host.scrollView.contentInsetAdjustmentBehavior, .never)
         XCTAssertTrue(child.parent === host)
         XCTAssertTrue(child.view.superview === host.scrollView)
     }

@@ -11,8 +11,23 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let windowScene = scene as? UIWindowScene else { return }
 
         let window = UIWindow(windowScene: windowScene)
-        window.rootViewController = UINavigationController(rootViewController: ExamplePagerViewController())
+        window.rootViewController = makeExampleRootViewController()
         self.window = window
         window.makeKeyAndVisible()
     }
+}
+
+@MainActor
+func makeExampleRootViewController() -> UITabBarController {
+    let pagerViewController = ExamplePagerViewController()
+    let navigationController = UINavigationController(rootViewController: pagerViewController)
+    navigationController.tabBarItem = UITabBarItem(
+        title: "AnchorPager",
+        image: UIImage(systemName: "doc.on.doc"),
+        selectedImage: UIImage(systemName: "doc.on.doc.fill")
+    )
+
+    let tabBarController = UITabBarController()
+    tabBarController.viewControllers = [navigationController]
+    return tabBarController
 }

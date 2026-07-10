@@ -25,14 +25,23 @@ open class AnchorPagerViewController: UIViewController {
 
     private let contentView = UIView()
     private let headerViewHost = AnchorPagerHeaderViewHost()
+    private let layoutEngine = AnchorPagerLayoutEngine()
     private let pagingAdapter = AnchorPagerPagingAdapter()
     private var headerHeightConstraint: NSLayoutConstraint?
+    private var pagingTopConstraint: NSLayoutConstraint?
     private var pagingHeightConstraint: NSLayoutConstraint?
     private var currentHeaderContent: AnchorPagerHeaderContent?
     private var currentTitles: [String] = []
     private var currentViewControllers: [UIViewController] = []
     private var fallbackPageHosts: [ObjectIdentifier: AnchorPagerPageScrollHostViewController] = [:]
     private var lastLayoutContext: AnchorPagerLayoutContext?
+    private var lastLayoutOutput: AnchorPagerLayoutEngine.Output?
+    private var lastLoggedResolvedHeaderHeight: AnchorPagerLayoutEngine.ResolvedHeaderHeight?
+    private var lastLoggedHeaderFrame: CGRect?
+    private var lastLoggedBarFrame: CGRect?
+    private var lastLoggedSafeAreaObstruction: LocalSafeAreaObstruction?
+    private var lastLoggedBounds: CGRect?
+    private var lastLoggedManagedInsetTarget: AnchorPagerLayoutEngine.ManagedInsetTarget?
     private var pageCount = 0
 
     /// 创建 AnchorPager 容器。
@@ -63,6 +72,11 @@ open class AnchorPagerViewController: UIViewController {
 
     open override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        updateVisibleLayout()
+    }
+
+    open override func viewSafeAreaInsetsDidChange() {
+        super.viewSafeAreaInsetsDidChange()
         updateVisibleLayout()
     }
 
@@ -134,7 +148,7 @@ open class AnchorPagerViewController: UIViewController {
         offsetAdjustment: AnchorPagerHeaderOffsetAdjustment = .preserveVisualPosition
     ) {
         AnchorPagerLogger.log(.info, category: .layout, event: "reloadHeaderLayout")
-        updateVisibleLayout(forceNotify: true)
+        updateVisibleLayout(forceNotify: true, offsetAdjustment: offsetAdjustment)
         view.setNeedsLayout()
     }
 
@@ -142,6 +156,7 @@ open class AnchorPagerViewController: UIViewController {
         guard verticalScrollView.superview == nil else { return }
 
         verticalScrollView.alwaysBounceVertical = true
+        verticalScrollView.contentInsetAdjustmentBehavior = .never
         verticalScrollView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(verticalScrollView)
         NSLayoutConstraint.activate([
@@ -201,15 +216,17 @@ open class AnchorPagerViewController: UIViewController {
             let adapterView = pagingAdapter.view!
             adapterView.translatesAutoresizingMaskIntoConstraints = false
             contentView.addSubview(adapterView)
+            let pagingTopConstraint = adapterView.topAnchor.constraint(equalTo: headerViewHost.view.bottomAnchor)
             NSLayoutConstraint.activate([
                 adapterView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
                 adapterView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-                adapterView.topAnchor.constraint(equalTo: headerViewHost.view.bottomAnchor),
+                pagingTopConstraint,
                 adapterView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
             ])
 
-            let pagingHeightConstraint = adapterView.heightAnchor.constraint(equalTo: verticalScrollView.frameLayoutGuide.heightAnchor)
+            let pagingHeightConstraint = adapterView.heightAnchor.constraint(equalToConstant: 0)
             pagingHeightConstraint.isActive = true
+            self.pagingTopConstraint = pagingTopConstraint
             self.pagingHeightConstraint = pagingHeightConstraint
         }
 
@@ -218,41 +235,185 @@ open class AnchorPagerViewController: UIViewController {
         }
     }
 
-    private func updateVisibleLayout(forceNotify: Bool = false) {
+    private func updateVisibleLayout(
+        forceNotify: Bool = false,
+        offsetAdjustment: AnchorPagerHeaderOffsetAdjustment? = nil
+    ) {
         guard isViewLoaded, headerViewHost.view.superview != nil else { return }
 
         let width = view.bounds.width > 0 ? view.bounds.width : UIScreen.main.bounds.width
         let measuredHeight = headerViewHost.measure(
             in: CGSize(width: width, height: UIView.layoutFittingCompressedSize.height)
         )
-        let headerHeight = resolvedHeaderHeight(for: measuredHeight)
-        headerHeightConstraint?.constant = headerHeight
-        pagingHeightConstraint?.isActive = true
+        let layoutEnvironment = currentLayoutEnvironment()
+        let oldLayoutOutput = lastLayoutOutput.map {
+            layoutOutputByApplyingContentOffset(
+                $0,
+                contentOffsetY: verticalScrollView.contentOffset.y
+            )
+        }
+        var layoutOutput = makeLayoutOutput(
+            measuredHeaderHeight: measuredHeight,
+            contentOffsetY: verticalScrollView.contentOffset.y,
+            environment: layoutEnvironment
+        )
+        if let offsetAdjustment {
+            let adjustedOffsetY = layoutEngine.adjustedContentOffsetY(
+                current: verticalScrollView.contentOffset.y,
+                old: oldLayoutOutput,
+                new: layoutOutput,
+                strategy: offsetAdjustment
+            )
+            if abs(verticalScrollView.contentOffset.y - adjustedOffsetY) > 0.001 {
+                verticalScrollView.setContentOffset(
+                    CGPoint(x: verticalScrollView.contentOffset.x, y: adjustedOffsetY),
+                    animated: false
+                )
+            }
+            layoutOutput = makeLayoutOutput(
+                measuredHeaderHeight: measuredHeight,
+                contentOffsetY: adjustedOffsetY,
+                environment: layoutEnvironment
+            )
+        }
 
-        let contentHeight = Swift.max(0, view.bounds.height - headerHeight)
+        headerHeightConstraint?.constant = layoutOutput.headerFrame.height
+        headerViewHost.setTopOffset(layoutOutput.headerFrame.minY)
+        pagingTopConstraint?.constant = Swift.max(
+            0,
+            layoutOutput.barFrame.minY - layoutOutput.headerFrame.maxY
+        )
+        pagingHeightConstraint?.constant = layoutOutput.barFrame.height + layoutOutput.contentFrame.height
+        logLayoutChanges(
+            output: layoutOutput,
+            environment: layoutEnvironment
+        )
+
         let context = AnchorPagerLayoutContext(
             selectedIndex: effectiveSelectedIndex,
-            headerFrame: CGRect(x: 0, y: 0, width: width, height: headerHeight),
-            barFrame: CGRect(x: 0, y: headerHeight, width: width, height: configuration.bar.height),
-            contentFrame: CGRect(x: 0, y: headerHeight, width: width, height: contentHeight)
+            headerFrame: layoutOutput.headerFrame,
+            barFrame: layoutOutput.barFrame,
+            contentFrame: layoutOutput.contentFrame
         )
         if forceNotify || context != lastLayoutContext {
             lastLayoutContext = context
             delegate?.pagerViewController(self, didUpdateLayout: context)
         }
+        lastLayoutOutput = layoutOutput
     }
 
-    private func resolvedHeaderHeight(for measuredHeight: CGFloat) -> CGFloat {
-        switch configuration.header.heightMode {
-        case let .automatic(min, max):
-            let lowerBounded = Swift.max(min, measuredHeight)
-            guard let max else { return lowerBounded }
-            return Swift.min(max, lowerBounded)
-        case let .fixed(max, min):
-            return Swift.max(min, max)
-        case let .ranged(min, max):
-            return Swift.min(max, Swift.max(min, measuredHeight))
+    private func makeLayoutOutput(
+        measuredHeaderHeight: CGFloat,
+        contentOffsetY: CGFloat,
+        environment: LayoutEnvironment? = nil
+    ) -> AnchorPagerLayoutEngine.Output {
+        let environment = environment ?? currentLayoutEnvironment()
+        return layoutEngine.layout(
+            for: AnchorPagerLayoutEngine.Input(
+                bounds: environment.bounds,
+                measuredHeaderHeight: measuredHeaderHeight,
+                headerHeightMode: configuration.header.heightMode,
+                headerTopBehavior: configuration.header.topBehavior,
+                barHeight: configuration.bar.height,
+                topObstructionHeight: environment.obstruction.top,
+                bottomObstructionHeight: environment.obstruction.bottom,
+                contentOffsetY: contentOffsetY
+            )
+        )
+    }
+
+    private struct LayoutEnvironment {
+        var bounds: CGRect
+        var obstruction: LocalSafeAreaObstruction
+    }
+
+    private struct LocalSafeAreaObstruction: Equatable {
+        var top: CGFloat
+        var bottom: CGFloat
+    }
+
+    private func currentLayoutEnvironment() -> LayoutEnvironment {
+        let width = view.bounds.width > 0 ? view.bounds.width : UIScreen.main.bounds.width
+        let height = view.bounds.height > 0 ? view.bounds.height : UIScreen.main.bounds.height
+        return LayoutEnvironment(
+            bounds: CGRect(x: 0, y: 0, width: width, height: height),
+            obstruction: localSafeAreaObstruction()
+        )
+    }
+
+    private func localSafeAreaObstruction() -> LocalSafeAreaObstruction {
+        let bounds = view.bounds
+        let layoutFrame = view.safeAreaLayoutGuide.layoutFrame
+        let safeAreaInsets = view.safeAreaInsets
+        return LocalSafeAreaObstruction(
+            top: Swift.max(
+                nonNegativeFinite(layoutFrame.minY - bounds.minY),
+                nonNegativeFinite(safeAreaInsets.top),
+                nonNegativeFinite(additionalSafeAreaInsets.top)
+            ),
+            bottom: Swift.max(
+                nonNegativeFinite(bounds.maxY - layoutFrame.maxY),
+                nonNegativeFinite(safeAreaInsets.bottom),
+                nonNegativeFinite(additionalSafeAreaInsets.bottom)
+            )
+        )
+    }
+
+    private func nonNegativeFinite(_ value: CGFloat) -> CGFloat {
+        guard value.isFinite else { return 0 }
+        return Swift.max(0, value)
+    }
+
+    private func logLayoutChanges(
+        output: AnchorPagerLayoutEngine.Output,
+        environment: LayoutEnvironment
+    ) {
+        if lastLoggedResolvedHeaderHeight != output.resolvedHeaderHeight {
+            AnchorPagerLogger.log(.debug, category: .layout, event: "layout.headerHeightResolved")
+            lastLoggedResolvedHeaderHeight = output.resolvedHeaderHeight
         }
+
+        if lastLoggedHeaderFrame != output.headerFrame {
+            AnchorPagerLogger.log(.debug, category: .layout, event: "layout.headerFrameChanged")
+            lastLoggedHeaderFrame = output.headerFrame
+        }
+
+        if lastLoggedBarFrame != output.barFrame {
+            AnchorPagerLogger.log(.debug, category: .layout, event: "layout.barFrameChanged")
+            lastLoggedBarFrame = output.barFrame
+        }
+
+        if lastLoggedSafeAreaObstruction != environment.obstruction {
+            AnchorPagerLogger.log(.info, category: .layout, event: "layout.safeAreaChanged")
+            lastLoggedSafeAreaObstruction = environment.obstruction
+        }
+
+        if lastLoggedBounds != environment.bounds {
+            AnchorPagerLogger.log(.info, category: .layout, event: "layout.boundsChanged")
+            lastLoggedBounds = environment.bounds
+        }
+
+        if lastLoggedManagedInsetTarget != output.managedInsetTarget {
+            AnchorPagerLogger.log(.debug, category: .inset, event: "inset.managedTargetChanged")
+            lastLoggedManagedInsetTarget = output.managedInsetTarget
+        }
+    }
+
+    private func layoutOutputByApplyingContentOffset(
+        _ output: AnchorPagerLayoutEngine.Output,
+        contentOffsetY: CGFloat
+    ) -> AnchorPagerLayoutEngine.Output {
+        var output = output
+        let collapsibleDistance = output.resolvedHeaderHeight.collapsibleDistance
+        let collapseOffset = Swift.min(
+            collapsibleDistance,
+            Swift.max(0, contentOffsetY)
+        )
+        output.collapseOffset = collapseOffset
+        output.collapseProgress = collapsibleDistance > 0
+            ? collapseOffset / collapsibleDistance
+            : 0
+        return output
     }
 
     private func commitSelectedIndex(_ index: Int, animated: Bool) {

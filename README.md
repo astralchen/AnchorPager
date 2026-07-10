@@ -1,6 +1,6 @@
 # AnchorPager
 
-AnchorPager 是一个 UIKit 容器框架，用于组合可变 Header、吸顶分段栏、多页面横向分页和 child scroll view 接入。当前仓库处于 v0.1 可视分页核心阶段，已建立 Swift Package、Public API skeleton、日志门面、Header/fallback 基础承载、scroll view discovery、Tabman/Pageboy internal adapter 边界，并已把 Header、分段栏和页面内容串入主容器的基础可视路径。
+AnchorPager 是一个 UIKit 容器框架，用于组合可变 Header、吸顶分段栏、多页面横向分页和 child scroll view 接入。当前仓库处于 v0.2 Header 与布局稳定阶段，已建立 Swift Package、Public API skeleton、日志门面、Header/fallback 基础承载、scroll view discovery、Tabman/Pageboy internal adapter 边界，并已固化 Header height mode、safe area/top behavior、`reloadHeaderLayout(offsetAdjustment:)` 和布局日志的基础契约。
 
 ## 安装
 
@@ -97,6 +97,45 @@ Header 使用 `UIViewController` 时，AnchorPager 内部通过标准 UIKit cont
 
 可见状态下调用 `setSelectedIndex(_:animated:)` 时，AnchorPager 会等内部分页 adapter 确认完成后再更新 `selectedIndex` 并通知 delegate；取消或回弹不会提前提交。若分页 adapter 正在处理上一笔切页而拒绝新请求，v0.1 不做请求排队，当前 public 选择状态保持不变。
 
+## Header 布局配置
+
+`AnchorPagerConfiguration.header.heightMode` 控制 Header 展开和折叠高度：
+
+```swift
+var configuration = AnchorPagerConfiguration.default
+configuration.header.heightMode = .automatic(min: 44, max: 180)
+configuration.header.topBehavior = .insideSafeArea
+
+let pager = AnchorPagerViewController(configuration: configuration)
+```
+
+当前 height mode 语义：
+
+- `.automatic(min:max:)`：使用 Header 测量高度作为展开高度，并按 min/max 夹取。
+- `.fixed(max:min:)`：使用 `max` 作为展开高度，`min` 作为折叠高度。
+- `.ranged(min:max:)`：使用 Header 测量高度，并限制在 min/max 范围内。
+
+`AnchorPagerHeaderTopBehavior.insideSafeArea` 会让 Header 从本地顶部 safe area 或系统栏遮挡下方开始；`.extendsUnderTopSafeArea` 会让 Header 从容器 bounds 顶部开始，但分段栏吸顶基线仍不高于顶部遮挡。
+
+AnchorPager 自有的主容器 `verticalScrollView` 会关闭 UIKit 自动 content inset 调整，避免 navigation bar、safe area 等顶部遮挡被系统和 AnchorPager 布局引擎重复叠加。接入方不应重新打开这个主容器的 `contentInsetAdjustmentBehavior`。
+
+横向分页 adapter 的区域默认延伸到容器 `bounds` 底部，也就是在全屏容器中延伸到物理屏幕最底部。bottom safe area、tab bar 和 toolbar 仍会被转换为 managed inset target；v0.2 只计算和记录该目标值，不用它裁剪横向区域，也不写入 child scroll view。
+
+当 Header 内容高度或配置运行时变化时，调用：
+
+```swift
+pager.reloadHeaderLayout(offsetAdjustment: .preserveVisualPosition)
+```
+
+四种 offset 策略：
+
+- `.preserveVisualPosition`：尽量保持当前可见 Header 高度。
+- `.preserveCollapseProgress`：按旧折叠进度迁移到新高度范围。
+- `.resetToExpanded`：回到展开位置。
+- `.resetToCollapsed`：移动到当前折叠上限。
+
+v0.2 会计算 Header、分段栏、内容 frame 和容器级 managed inset 目标值，并接管 AnchorPager 自有主容器与内部 fallback scroll host 的自动 inset 策略；尚不写入接入方 child scroll view 的 managed content inset。完整 child inset ownership 属于 v0.3。
+
 ## 显式 Scroll View
 
 ```swift
@@ -124,11 +163,11 @@ final class PlainPageViewController: UIViewController {
 }
 ```
 
-无候选 `UIScrollView` 时，AnchorPager 会先使用内部 fallback scroll host 包装普通 child，再交给横向分页 adapter。fallback host 会让普通 child 至少覆盖页面 viewport，因此无 scroll view 页面也能在示例工程和分页切换中正常显示。
+无候选 `UIScrollView` 时，AnchorPager 会先使用内部 fallback scroll host 包装普通 child，再交给横向分页 adapter。fallback host 会禁用 UIKit 自动 content inset，并让普通 child 至少覆盖页面 viewport，因此无 scroll view 页面也会延伸到横向内容区域底部。
 
 ## 示例工程
 
-仓库包含 `Examples/AnchorPagerExample.xcodeproj`，用于验证示例 App 能接入本地 `AnchorPager` package、启动基础 UIKit 宿主并通过 public API 提供 Header、分段栏、显式 scroll view child 和无 scroll view child。当前示例工程可构建，并已有基础启动、Header/分段栏/页面内容可视、分段栏点击切页、横向滑动切页和 public API 切页 UI test。
+仓库包含 `Examples/AnchorPagerExample.xcodeproj`，用于验证示例 App 能接入本地 `AnchorPager` package、以 `UITabBarController` 作为 window root、首屏直接显示 AnchorPager 示例页，并可通过导航按钮 push 另一个 AnchorPager 示例页来验证 `hidesBottomBarWhenPushed` 隐藏 tab bar。示例页通过 public API 提供 Header、分段栏、显式 scroll view child 和无 scroll view child。当前示例工程可构建，并已有基础启动、root tab bar、导航按钮 push 后隐藏 tab bar、Header/分段栏/页面内容可视、分段栏点击切页、横向滑动切页和 public API 切页 UI test。
 
 ```bash
 xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'generic/platform=iOS Simulator' build
@@ -138,6 +177,8 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExa
 ## 日志
 
 AnchorPager 通过内部 `AnchorPagerLogger` 使用 `os.Logger` 输出关键事件，subsystem 为 `com.anchorpager.AnchorPager`。`AnchorPagerLogger.log` 可从非主线程内部路径调用；测试用 sink 会回到 MainActor 记录事件。当前 category 包括 `lifecycle`、`layout`、`header`、`paging`、`children`、`scroll`、`inset`、`overscroll`、`gesture`、`accessibility`、`resource`。
+
+v0.2 布局日志包括 Header 高度解析、Header frame、bar frame、safe area、bounds 和 managed inset 目标值变化。日志只在状态变化时输出，避免普通布局 pass 或滚动热路径产生重复噪声。
 
 建议使用 Console.app 或 `log stream` 按 subsystem/category 过滤：
 
@@ -149,4 +190,4 @@ log stream --predicate 'subsystem == "com.anchorpager.AnchorPager"'
 
 ## 当前限制
 
-v0.1 当前已交付基础 Header/分段栏/页面内容显示路径、确认后提交的程序化切页、Header 重复安装幂等处理和基础 layout context 回调，并通过示例 UI test 验证点击、横滑和 public API 三种切页方式。完整纵向嵌套滚动协调、managed inset ownership、顶部 overscroll owner、状态栏点击顶滚、尺寸变化恢复、page cache window、Header offsetAdjustment 完整语义和 Tabman 驱动的 appearance lifecycle 语义仍在后续版本。Tabman/Pageboy 仅出现在 internal adapter 层，Public API 不暴露第三方类型。
+v0.2 当前已交付基础 Header/分段栏/页面内容显示路径、确认后提交的程序化切页、Header 重复安装幂等处理、Header 高度解析、safe area/top behavior、`reloadHeaderLayout(offsetAdjustment:)` 和布局日志。完整纵向嵌套滚动协调、child managed inset ownership、顶部 overscroll owner、状态栏点击顶滚、尺寸变化恢复、page cache window 和 Tabman 驱动的 appearance lifecycle 语义仍在后续版本。Tabman/Pageboy 仅出现在 internal adapter 层，Public API 不暴露第三方类型。

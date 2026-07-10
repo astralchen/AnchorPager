@@ -1,6 +1,6 @@
 # AnchorPager 架构说明
 
-本文档面向维护者，记录当前 v0.1 可视分页核心阶段的架构边界和已固定的基础契约。
+本文档面向维护者，记录当前 v0.2 Header 与布局稳定阶段的架构边界和已固定的基础契约。
 
 ## 模块划分
 
@@ -8,6 +8,7 @@
 Sources/AnchorPager/
   Public/      Public API、配置、协议、UIViewController scroll 接入扩展
   Core/        内部断言和非 UI 基础设施
+  Layout/      Header、bar、content frame 和 offset 策略的纯计算层
   Header/      Header UIView/UIViewController 基础承载与测量
   Children/    Page state/fallback page scroll host
   Paging/      Tabman/Pageboy internal adapter 和横向 page containment 执行层
@@ -72,7 +73,38 @@ Public API source scan 测试会检查 `Sources/AnchorPager/Public/` 不包含 `
 4. Header view `intrinsicContentSize.height`
 5. 无有效结果时为 `0`
 
-`AnchorPagerViewController` 现在会在主容器内安装 Header host，并把测量后的 Header 高度接入纵向内容布局。完整 header 折叠、safe area 和 runtime frame 恢复在后续版本实现。
+负数或非有限测量会触发内部断言，并在 `layout` category 记录 `header.measure.invalid` 事件，运行时降级为 `0`。`AnchorPagerViewController` 会在主容器内安装 Header host，并把测量后的 Header 高度交给 LayoutEngine 解析。
+
+Header host 只负责 Header 内容和 containment。它可以接收内部 top offset 约束更新，但不计算 safe area、折叠进度、bar frame 或 child inset。
+
+## LayoutEngine 与 Safe Area
+
+`AnchorPagerLayoutEngine` 是 internal 纯计算类型，只 import `CoreGraphics`，不操作 UIKit 对象，也不绑定 MainActor。输入包括：
+
+- 容器 bounds
+- Header measured height
+- `AnchorPagerHeaderHeightMode`
+- `AnchorPagerHeaderTopBehavior`
+- bar height
+- 本地 top/bottom obstruction
+- 当前 `verticalScrollView.contentOffset.y`
+
+输出包括：
+
+- resolved Header expanded/collapsed height
+- collapse offset 和 collapse progress
+- Header frame
+- bar frame
+- content frame
+- 容器级 managed inset target
+
+`AnchorPagerViewController` 负责把 UIKit safe area 转为本地遮挡。top obstruction 取 `safeAreaLayoutGuide.layoutFrame.minY - view.bounds.minY`、`view.safeAreaInsets.top` 和 `additionalSafeAreaInsets.top` 的非负最大值；bottom obstruction 取 `view.bounds.maxY - safeAreaLayoutGuide.layoutFrame.maxY`、`view.safeAreaInsets.bottom` 和 `additionalSafeAreaInsets.bottom` 的非负最大值。这个策略覆盖 root、navigation controller、tab bar controller、toolbar 和未入 window 的 additional safe area 测试路径。
+
+AnchorPager 自有主容器 `verticalScrollView` 的 `contentInsetAdjustmentBehavior` 固定为 `.never`。safe area、navigation bar、tab bar 和 toolbar 遮挡已经被转换为 LayoutEngine 的本地 obstruction；如果继续使用 UIKit 自动 content inset，Header 实际 frame 会比 `AnchorPagerLayoutContext.headerFrame` 多叠一层 top inset。这个约束只属于主容器，不代表 v0.3 的 child managed inset 写入已完成。
+
+`insideSafeArea` 会让 Header 从顶部 obstruction 下方开始。`extendsUnderTopSafeArea` 会让 Header 从 bounds 顶部开始，但 bar frame 的吸顶基线仍不高于顶部 obstruction。paging adapter 的 top spacing 和高度跟随 engine 输出，使实际分段栏/页面区域与 layout context 保持一致。content frame 默认延伸到容器 `bounds.maxY`，在全屏容器中即物理屏幕最底部；bottom obstruction 不裁剪横向区域，只进入 `managedInsetTarget.bottom`，供 v0.3 的 child inset ownership 使用。
+
+v0.2 只计算 managed inset target 并记录日志，不写入接入方 child scroll view 的 managed content inset；完整 inset ownership 在 v0.3 实现。AnchorPager 自有主容器和内部 fallback scroll host 会禁用 UIKit 自动 content inset，避免系统 inset 与 LayoutEngine 的本地遮挡计算重复作用。
 
 ## 主容器可视装配
 
@@ -84,7 +116,16 @@ Public API source scan 测试会检查 `Sources/AnchorPager/Public/` 不包含 `
 
 主容器只持有内部 adapter，不向 Public API 暴露 Tabman/Pageboy 类型。当前装配提供基础可视路径，并已通过 UI test 验证分段栏点击、横向滑动和 public API 程序化切页。完整 page state store、scroll inset ownership 和纵向嵌套滚动协调将在后续版本推进。
 
-v0.1 会在基础布局更新和 `reloadHeaderLayout()` 时发送 `AnchorPagerLayoutContext`。当前 context 覆盖有效 selectedIndex、Header frame、基础 bar frame 和内容 frame，用于调试和早期接入验证。`reloadHeaderLayout(offsetAdjustment:)` 在 v0.1 只做重新测量和 context 通知；`.preserveVisualPosition`、`.preserveCollapseProgress`、`.resetToExpanded`、`.resetToCollapsed` 的完整 offset 迁移语义仍属于 v0.2 布局稳定版。
+v0.2 会在基础布局更新和 `reloadHeaderLayout()` 时发送 `AnchorPagerLayoutContext`。当前 context 覆盖有效 selectedIndex、Header frame、bar frame 和内容 frame，用于调试和接入验证。
+
+`reloadHeaderLayout(offsetAdjustment:)` 会重新测量 Header，并按策略迁移 `verticalScrollView.contentOffset.y`：
+
+- `.preserveVisualPosition`：尽量保持旧的可见 Header 高度。
+- `.preserveCollapseProgress`：保持旧折叠进度。
+- `.resetToExpanded`：回到展开位置。
+- `.resetToCollapsed`：移动到当前折叠上限。
+
+普通 `viewDidLayoutSubviews` 和 `viewSafeAreaInsetsDidChange` 布局更新不会主动迁移 content offset，避免系统布局 pass 改变用户当前滚动位置。
 
 ## Child Lifecycle
 
@@ -92,7 +133,7 @@ v0.1 会在基础布局更新和 `reloadHeaderLayout()` 时发送 `AnchorPagerLa
 
 `AnchorPagerChildViewControllerStore` 是 v0.1 保留的独立基础 containment 工具，不接入横向分页主路径。后续 v0.4 可以将其重定位或替换为 page state store；如果继续保留，也只能用于 AnchorPager 自有 wrapper 场景，不能与 Tabman/Pageboy 对同一个 page view controller 形成双重 containment。
 
-`AnchorPagerPageScrollHostViewController` 为无 scroll view child 提供内部 fallback scroll host。fallback host 会把普通 child view 约束到 scroll view content layout guide，并保证内容高度至少覆盖可视 viewport，避免无固有高度的普通 child 在示例工程中不可见。`AnchorPagerViewController.reloadData()` 会清理不再使用的旧 fallback host content，并记录 `children` 日志。完整 page cache window、Tabman 驱动的 appearance lifecycle 语义和 offset snapshot 将在后续版本实现。
+`AnchorPagerPageScrollHostViewController` 为无 scroll view child 提供内部 fallback scroll host。fallback host 的 scroll view 使用 `.never` content inset adjustment，把普通 child view 约束到 scroll view content layout guide，并保证内容高度至少覆盖可视 viewport，避免无固有高度的普通 child 在示例工程中不可见或被 tab bar/safe area 自动 inset 抬高底部。`AnchorPagerViewController.reloadData()` 会清理不再使用的旧 fallback host content，并记录 `children` 日志。完整 page cache window、Tabman 驱动的 appearance lifecycle 语义和 offset snapshot 将在后续版本实现。
 
 ## Scroll Discovery
 
@@ -124,17 +165,26 @@ category 覆盖：
 
 日志测试通过内部可注入 sink 验证，不依赖人工查看控制台。日志消息只使用稳定事件名，不记录业务数据、用户内容或完整 view 层级。
 
+v0.2 布局日志事件：
+
+- `layout.headerHeightResolved`
+- `layout.headerFrameChanged`
+- `layout.barFrameChanged`
+- `layout.safeAreaChanged`
+- `layout.boundsChanged`
+- `inset.managedTargetChanged`
+
+这些事件只在对应状态变化时记录，不在无变化的 layout pass、`reloadHeaderLayout` 或滚动热路径中重复输出。事件名不携带几何数值，避免泄漏用户界面内容或完整层级信息。
+
 ## Known Limitations
 
-当前 v0.1 已完成可视分页核心路径，仍不包含后续版本能力：
+当前 v0.2 已完成可视分页核心路径和 Header 布局稳定契约，仍不包含后续版本能力：
 
-- Header 折叠/展开布局引擎
-- Header top safe area 视觉迁移完整实现
-- managed inset ownership
+- child managed inset ownership 写入
 - 完整 page cache window 和 Tabman 驱动的 appearance lifecycle 语义
 - 纵向嵌套滚动协调
 - 顶部 overscroll owner
 - 手势状态机
 - 状态栏点击顶滚 owner
 - 尺寸变化恢复
-- `AnchorPagerConfiguration` 中 `topOverscrollHandlingMode`、`header.topBehavior`、`paging.keepsAdjacentPagesLoaded` 等后续版本配置项只保留 public skeleton 和默认值，完整行为按版本路线推进
+- `AnchorPagerConfiguration` 中 `topOverscrollHandlingMode`、`paging.keepsAdjacentPagesLoaded` 等后续版本配置项只保留 public skeleton 和默认值，完整行为按版本路线推进

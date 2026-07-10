@@ -4,8 +4,9 @@ import UIKit
 final class ExamplePagerViewController: UIViewController {
     private let pagerViewController = AnchorPagerViewController()
     private let pages: [UIViewController] = [
-        ExampleScrollPageViewController(title: "第一页", rows: 18),
-        ExampleScrollPageViewController(title: "第二页", rows: 30),
+        ExampleScrollPageViewController(title: "无内容页", rows: 0),
+        ExampleScrollPageViewController(title: "短页", rows: 6),
+        ExampleScrollPageViewController(title: "长页", rows: 30),
         ExamplePlainPageViewController(title: "无滚动页")
     ]
 
@@ -14,7 +15,25 @@ final class ExamplePagerViewController: UIViewController {
 
         title = "AnchorPager"
         view.backgroundColor = .systemBackground
+        installNavigationItem()
         installPager()
+    }
+
+    private func installNavigationItem() {
+        let pushItem = UIBarButtonItem(
+            image: UIImage(systemName: "arrow.right.circle"),
+            style: .plain,
+            target: self,
+            action: #selector(pushAnchorPagerExample)
+        )
+        pushItem.accessibilityLabel = "打开 AnchorPager"
+        navigationItem.rightBarButtonItem = pushItem
+    }
+
+    @objc private func pushAnchorPagerExample() {
+        let viewController = ExamplePagerViewController()
+        viewController.hidesBottomBarWhenPushed = true
+        navigationController?.pushViewController(viewController, animated: true)
     }
 
     private func installPager() {
@@ -56,7 +75,7 @@ extension ExamplePagerViewController: AnchorPagerViewControllerDataSource {
         _ pagerViewController: AnchorPagerViewController,
         titleForViewControllerAt index: Int
     ) -> String {
-        ["短页", "长页", "无滚动"][index]
+        pages[index].title ?? "无标题"
     }
 
     func pagerViewController(
@@ -137,6 +156,7 @@ private final class ExampleScrollPageViewController: UIViewController {
         self.pageTitle = title
         self.rows = rows
         super.init(nibName: nil, bundle: nil)
+        self.title = title
     }
 
     required init?(coder: NSCoder) {
@@ -161,9 +181,9 @@ private final class ExampleScrollPageViewController: UIViewController {
         stackView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.addSubview(stackView)
 
-        for row in 1...rows {
+        for row in 0..<rows {
             let label = UILabel()
-            label.text = "\(pageTitle) - \(row)"
+            label.text = "\(pageTitle) - \(row + 1)"
             label.font = .preferredFont(forTextStyle: .body)
             label.textColor = .label
             label.backgroundColor = .secondarySystemBackground
@@ -194,6 +214,7 @@ private final class ExamplePlainPageViewController: UIViewController {
     init(title: String) {
         self.pageTitle = title
         super.init(nibName: nil, bundle: nil)
+        self.title = title
     }
 
     required init?(coder: NSCoder) {

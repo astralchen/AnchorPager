@@ -1,0 +1,166 @@
+import CoreGraphics
+import XCTest
+@testable import AnchorPager
+
+final class AnchorPagerLayoutEngineTests: XCTestCase {
+    func testAutomaticHeightUsesMeasuredHeightClampedByMinAndMax() {
+        let output = AnchorPagerLayoutEngine().layout(
+            for: input(
+                measuredHeaderHeight: 120,
+                headerHeightMode: .automatic(min: 40, max: 96)
+            )
+        )
+
+        XCTAssertEqual(output.resolvedHeaderHeight.expanded, 96)
+        XCTAssertEqual(output.resolvedHeaderHeight.collapsed, 40)
+        XCTAssertEqual(output.resolvedHeaderHeight.collapsibleDistance, 56)
+    }
+
+    func testFixedHeightUsesMaxAsExpandedAndMinAsCollapsed() {
+        let output = AnchorPagerLayoutEngine().layout(
+            for: input(
+                measuredHeaderHeight: 12,
+                headerHeightMode: .fixed(max: 88, min: 24)
+            )
+        )
+
+        XCTAssertEqual(output.resolvedHeaderHeight.expanded, 88)
+        XCTAssertEqual(output.resolvedHeaderHeight.collapsed, 24)
+        XCTAssertEqual(output.resolvedHeaderHeight.collapsibleDistance, 64)
+    }
+
+    func testRangedHeightClampsMeasuredHeight() {
+        let shortOutput = AnchorPagerLayoutEngine().layout(
+            for: input(
+                measuredHeaderHeight: 20,
+                headerHeightMode: .ranged(min: 64, max: 120)
+            )
+        )
+        let tallOutput = AnchorPagerLayoutEngine().layout(
+            for: input(
+                measuredHeaderHeight: 160,
+                headerHeightMode: .ranged(min: 64, max: 120)
+            )
+        )
+
+        XCTAssertEqual(shortOutput.resolvedHeaderHeight.expanded, 64)
+        XCTAssertEqual(shortOutput.resolvedHeaderHeight.collapsed, 64)
+        XCTAssertEqual(tallOutput.resolvedHeaderHeight.expanded, 120)
+        XCTAssertEqual(tallOutput.resolvedHeaderHeight.collapsed, 64)
+    }
+
+    func testInsideSafeAreaPlacesHeaderBelowTopObstruction() {
+        let output = AnchorPagerLayoutEngine().layout(
+            for: input(
+                headerTopBehavior: .insideSafeArea,
+                topObstructionHeight: 44
+            )
+        )
+
+        XCTAssertEqual(output.headerFrame.minY, 44)
+        XCTAssertEqual(output.headerFrame.height, 100)
+        XCTAssertEqual(output.barFrame.minY, output.headerFrame.maxY)
+    }
+
+    func testExtendsUnderTopSafeAreaPlacesHeaderAtBoundsTop() {
+        let output = AnchorPagerLayoutEngine().layout(
+            for: input(
+                headerTopBehavior: .extendsUnderTopSafeArea,
+                topObstructionHeight: 44
+            )
+        )
+
+        XCTAssertEqual(output.headerFrame.minY, 0)
+        XCTAssertGreaterThanOrEqual(output.barFrame.minY, 44)
+        XCTAssertEqual(output.barFrame.minY, output.headerFrame.maxY)
+    }
+
+    func testBottomObstructionDoesNotClipContentFrameAndPreservesManagedInsetTarget() {
+        let output = AnchorPagerLayoutEngine().layout(
+            for: input(
+                bottomObstructionHeight: 83
+            )
+        )
+
+        XCTAssertEqual(output.contentFrame.maxY, 640)
+        XCTAssertEqual(output.contentFrame.height, 492)
+        XCTAssertEqual(output.managedInsetTarget.bottom, 83)
+    }
+
+    func testOffsetAdjustmentStrategiesReturnExpectedContentOffset() {
+        let engine = AnchorPagerLayoutEngine()
+        let old = engine.layout(
+            for: input(
+                measuredHeaderHeight: 100,
+                headerHeightMode: .fixed(max: 100, min: 20),
+                contentOffsetY: 30
+            )
+        )
+        let new = engine.layout(
+            for: input(
+                measuredHeaderHeight: 160,
+                headerHeightMode: .fixed(max: 160, min: 20),
+                contentOffsetY: 30
+            )
+        )
+
+        XCTAssertEqual(
+            engine.adjustedContentOffsetY(
+                current: 30,
+                old: old,
+                new: new,
+                strategy: .preserveVisualPosition
+            ),
+            90
+        )
+        XCTAssertEqual(
+            engine.adjustedContentOffsetY(
+                current: 30,
+                old: old,
+                new: new,
+                strategy: .preserveCollapseProgress
+            ),
+            52.5
+        )
+        XCTAssertEqual(
+            engine.adjustedContentOffsetY(
+                current: 30,
+                old: old,
+                new: new,
+                strategy: .resetToExpanded
+            ),
+            0
+        )
+        XCTAssertEqual(
+            engine.adjustedContentOffsetY(
+                current: 30,
+                old: old,
+                new: new,
+                strategy: .resetToCollapsed
+            ),
+            140
+        )
+    }
+
+    private func input(
+        bounds: CGRect = CGRect(x: 0, y: 0, width: 320, height: 640),
+        measuredHeaderHeight: CGFloat = 100,
+        headerHeightMode: AnchorPagerHeaderHeightMode = .fixed(max: 100, min: 0),
+        headerTopBehavior: AnchorPagerHeaderTopBehavior = .insideSafeArea,
+        barHeight: CGFloat = 48,
+        topObstructionHeight: CGFloat = 0,
+        bottomObstructionHeight: CGFloat = 0,
+        contentOffsetY: CGFloat = 0
+    ) -> AnchorPagerLayoutEngine.Input {
+        AnchorPagerLayoutEngine.Input(
+            bounds: bounds,
+            measuredHeaderHeight: measuredHeaderHeight,
+            headerHeightMode: headerHeightMode,
+            headerTopBehavior: headerTopBehavior,
+            barHeight: barHeight,
+            topObstructionHeight: topObstructionHeight,
+            bottomObstructionHeight: bottomObstructionHeight,
+            contentOffsetY: contentOffsetY
+        )
+    }
+}
