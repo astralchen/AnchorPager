@@ -71,8 +71,36 @@ final class AnchorPagerLayoutEngineTests: XCTestCase {
         )
 
         XCTAssertEqual(output.headerFrame.minY, 0)
-        XCTAssertGreaterThanOrEqual(output.barFrame.minY, 44)
+        XCTAssertEqual(output.headerFrame.height, 144)
+        XCTAssertEqual(output.barFrame.minY, 144)
         XCTAssertEqual(output.barFrame.minY, output.headerFrame.maxY)
+    }
+
+    func testTopBehaviorsKeepSameBarBaseline() {
+        let inside = AnchorPagerLayoutEngine().layout(
+            for: input(
+                measuredHeaderHeight: 100,
+                headerHeightMode: .fixed(max: 100, min: 20),
+                headerTopBehavior: .insideSafeArea,
+                topObstructionHeight: 44,
+                contentOffsetY: 30
+            )
+        )
+        let extended = AnchorPagerLayoutEngine().layout(
+            for: input(
+                measuredHeaderHeight: 100,
+                headerHeightMode: .fixed(max: 100, min: 20),
+                headerTopBehavior: .extendsUnderTopSafeArea,
+                topObstructionHeight: 44,
+                contentOffsetY: 30
+            )
+        )
+
+        XCTAssertEqual(inside.barFrame.minY, extended.barFrame.minY)
+        XCTAssertEqual(inside.headerFrame.height, 70)
+        XCTAssertEqual(extended.headerFrame.height, 114)
+        XCTAssertEqual(inside.resolvedHeaderHeight.collapsibleDistance, 80)
+        XCTAssertEqual(extended.resolvedHeaderHeight.collapsibleDistance, 80)
     }
 
     func testExtendsUnderTopSafeAreaCoversTopObstructionWhenHeaderIsShorter() {
@@ -87,7 +115,7 @@ final class AnchorPagerLayoutEngineTests: XCTestCase {
 
         XCTAssertEqual(output.resolvedHeaderHeight.expanded, 108)
         XCTAssertEqual(output.headerFrame.minY, 0)
-        XCTAssertEqual(output.headerFrame.height, 116)
+        XCTAssertEqual(output.headerFrame.height, 224)
         XCTAssertEqual(output.barFrame.minY, output.headerFrame.maxY)
         XCTAssertEqual(output.contentFrame.maxY, 640)
     }
@@ -106,7 +134,7 @@ final class AnchorPagerLayoutEngineTests: XCTestCase {
         XCTAssertEqual(output.collapseOffset, 80)
         XCTAssertEqual(output.collapseProgress, 0.5)
         XCTAssertEqual(output.headerFrame.minY, 0)
-        XCTAssertEqual(output.headerFrame.height, 116)
+        XCTAssertEqual(output.headerFrame.height, 196)
         XCTAssertEqual(output.barFrame.minY, output.headerFrame.maxY)
     }
 
