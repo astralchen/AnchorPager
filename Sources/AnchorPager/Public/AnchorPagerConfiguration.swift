@@ -54,14 +54,16 @@ public struct AnchorPagerHeaderConfiguration: Sendable, Equatable {
 
 /// 分段栏基础配置。
 public struct AnchorPagerBarConfiguration: Sendable, Equatable {
-    /// 分段栏高度。
-    public var height: CGFloat
+    /// 分段栏显式高度。为 `nil` 时使用内部分页适配器的自适应高度。
+    public var height: CGFloat?
 
     /// 默认分段栏配置。
     public static let `default` = AnchorPagerBarConfiguration()
 
     /// 创建分段栏配置。
-    public init(height: CGFloat = 48) {
+    ///
+    /// - Parameter height: 可选显式高度；为 `nil` 时由内部分页适配器自适应。
+    public init(height: CGFloat? = nil) {
         self.height = height
     }
 }

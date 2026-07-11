@@ -45,6 +45,7 @@ open class AnchorPagerViewController: UIViewController {
     private let headerViewHost = AnchorPagerHeaderViewHost()
     private let layoutEngine = AnchorPagerLayoutEngine()
     private let pagingAdapter = AnchorPagerPagingAdapter()
+    private let managedInsetCoordinator = AnchorPagerManagedInsetCoordinator()
     private var scrollRangeHeightConstraint: NSLayoutConstraint?
     private var headerHeightConstraint: NSLayoutConstraint?
     private var pagingTopConstraint: NSLayoutConstraint?
@@ -55,7 +56,11 @@ open class AnchorPagerViewController: UIViewController {
     private var currentHeaderContent: AnchorPagerHeaderContent?
     private var currentTitles: [String] = []
     private var currentViewControllers: [UIViewController] = []
+    private var activePageScrollViews: [UIScrollView] = []
     private var fallbackPageHosts: [ObjectIdentifier: AnchorPagerPageScrollHostViewController] = [:]
+    private var resolvedBarInsets: UIEdgeInsets = .zero
+    private var lastManagedInsetTarget: AnchorPagerManagedInsetCoordinator.Target?
+    private var lastManagedScrollViewIdentifiers: [ObjectIdentifier] = []
     private var lastLayoutContext: AnchorPagerLayoutContext?
     private var lastLayoutOutput: AnchorPagerLayoutEngine.Output?
     private var lastLoggedResolvedHeaderHeight: AnchorPagerLayoutEngine.ResolvedHeaderHeight?
@@ -82,6 +87,9 @@ open class AnchorPagerViewController: UIViewController {
     }
 
     deinit {
+        MainActor.assumeIsolated {
+            managedInsetCoordinator.releaseAll()
+        }
         AnchorPagerLogger.log(.info, category: .lifecycle, event: "deinit")
     }
 
@@ -104,6 +112,7 @@ open class AnchorPagerViewController: UIViewController {
     /// 重新加载页面、标题和 Header 数据。
     public func reloadData() {
         AnchorPagerLogger.log(.info, category: .lifecycle, event: "reloadData.begin")
+        let previouslyActiveScrollViews = activePageScrollViews
 
         let requestedCount = dataSource?.numberOfViewControllers(in: self) ?? 0
         if requestedCount < 0 {
@@ -117,6 +126,7 @@ open class AnchorPagerViewController: UIViewController {
             selectedIndex = 0
             currentTitles = []
             currentViewControllers = []
+            activePageScrollViews = []
         } else if selectedIndex >= pageCount {
             selectedIndex = pageCount - 1
         }
@@ -125,18 +135,26 @@ open class AnchorPagerViewController: UIViewController {
         currentTitles = (0..<pageCount).map { index in
             dataSource?.pagerViewController(self, titleForViewControllerAt: index) ?? ""
         }
+        var claimedScrollViews = Set<ObjectIdentifier>()
         var activeFallbackHostIdentifiers = Set<ObjectIdentifier>()
-        currentViewControllers = (0..<pageCount).map { index in
-            pageViewController(
+        let preparedPages = (0..<pageCount).map { index in
+            preparePage(
                 for: dataSource?.pagerViewController(self, viewControllerAt: index) ?? UIViewController(),
+                claimedScrollViews: &claimedScrollViews,
                 activeFallbackHostIdentifiers: &activeFallbackHostIdentifiers
             )
         }
+        currentViewControllers = preparedPages.map(\.viewController)
+        activePageScrollViews = preparedPages.map(\.scrollView)
         let staleFallbackHosts = removeStaleFallbackPageHosts(
             keeping: activeFallbackHostIdentifiers
         )
 
         reloadVisibleContentIfNeeded()
+        let activeIdentifiers = Set(activePageScrollViews.map(ObjectIdentifier.init))
+        previouslyActiveScrollViews
+            .filter { !activeIdentifiers.contains(ObjectIdentifier($0)) }
+            .forEach(managedInsetCoordinator.release)
         staleFallbackHosts.forEach { $0.removeContentForReloadData() }
         AnchorPagerLogger.log(.info, category: .lifecycle, event: "reloadData.end")
     }
@@ -280,6 +298,7 @@ open class AnchorPagerViewController: UIViewController {
               isViewLoaded,
               headerViewHost.view.superview != nil else { return }
 
+        pagingAdapter.setBarHeight(configuration.bar.height)
         isApplyingLayout = true
         defer { isApplyingLayout = false }
 
@@ -367,9 +386,13 @@ open class AnchorPagerViewController: UIViewController {
         headerViewHost.setTopOffset(output.headerFrame.minY)
         pagingTopConstraint?.constant = Swift.max(
             0,
-            output.barFrame.minY - output.headerFrame.maxY
+            output.pagingFrame.minY - output.headerFrame.maxY
         )
-        pagingHeightConstraint?.constant = output.barFrame.height + output.contentFrame.height
+        pagingHeightConstraint?.constant = output.pagingFrame.height
+
+        if updatesScrollRange {
+            applyManagedInsets(environment: environment)
+        }
 
         if logsChanges {
             logLayoutChanges(output: output, environment: environment)
@@ -433,7 +456,7 @@ open class AnchorPagerViewController: UIViewController {
                 measuredHeaderHeight: measuredHeaderHeight,
                 headerHeightMode: configuration.header.heightMode,
                 headerTopBehavior: configuration.header.topBehavior,
-                barHeight: configuration.bar.height,
+                barHeight: resolvedBarInsets.top,
                 topObstructionHeight: environment.obstruction.top,
                 bottomObstructionHeight: environment.obstruction.bottom,
                 contentOffsetY: contentOffsetY
@@ -538,19 +561,15 @@ open class AnchorPagerViewController: UIViewController {
         delegate?.pagerViewController(self, didSelectViewControllerAt: index)
     }
 
-    private func pageViewController(
+    private struct PreparedPage {
+        let viewController: UIViewController
+        let scrollView: UIScrollView
+    }
+
+    private func fallbackPageHost(
         for childViewController: UIViewController,
         activeFallbackHostIdentifiers: inout Set<ObjectIdentifier>
-    ) -> UIViewController {
-        if childViewController is AnchorPagerPageScrollHostViewController {
-            return childViewController
-        }
-
-        childViewController.loadViewIfNeeded()
-        if childViewController.anchorPagerScrollView != nil {
-            return childViewController
-        }
-
+    ) -> AnchorPagerPageScrollHostViewController {
         let childIdentifier = ObjectIdentifier(childViewController)
         activeFallbackHostIdentifiers.insert(childIdentifier)
 
@@ -563,6 +582,74 @@ open class AnchorPagerViewController: UIViewController {
         )
         fallbackPageHosts[childIdentifier] = fallbackHost
         return fallbackHost
+    }
+
+    private func preparePage(
+        for childViewController: UIViewController,
+        claimedScrollViews: inout Set<ObjectIdentifier>,
+        activeFallbackHostIdentifiers: inout Set<ObjectIdentifier>
+    ) -> PreparedPage {
+        childViewController.loadViewIfNeeded()
+
+        if let resolvedScrollView = childViewController.anchorPagerScrollView,
+           claimedScrollViews.insert(ObjectIdentifier(resolvedScrollView)).inserted {
+            return PreparedPage(
+                viewController: childViewController,
+                scrollView: resolvedScrollView
+            )
+        }
+
+        if childViewController.anchorPagerScrollView != nil {
+            AnchorPagerAssertions.failure("AnchorPager pages must not share a scroll view.")
+            AnchorPagerLogger.log(.debug, category: .inset, event: "inset.targetCollision")
+            if let defaultScrollView = childViewController.anchorPagerDefaultScrollView,
+               claimedScrollViews.insert(ObjectIdentifier(defaultScrollView)).inserted {
+                return PreparedPage(
+                    viewController: childViewController,
+                    scrollView: defaultScrollView
+                )
+            }
+        }
+
+        let fallbackHost = fallbackPageHost(
+            for: childViewController,
+            activeFallbackHostIdentifiers: &activeFallbackHostIdentifiers
+        )
+        fallbackHost.loadViewIfNeeded()
+        claimedScrollViews.insert(ObjectIdentifier(fallbackHost.scrollView))
+        return PreparedPage(
+            viewController: fallbackHost,
+            scrollView: fallbackHost.scrollView
+        )
+    }
+
+    private func applyManagedInsets(environment: LayoutEnvironment) {
+        let target = AnchorPagerManagedInsetCoordinator.Target(
+            content: UIEdgeInsets(
+                top: resolvedBarInsets.top,
+                left: 0,
+                bottom: environment.obstruction.bottom,
+                right: 0
+            ),
+            indicators: UIEdgeInsets(
+                top: 0,
+                left: 0,
+                bottom: environment.obstruction.bottom,
+                right: 0
+            )
+        )
+        let identifiers = activePageScrollViews.map(ObjectIdentifier.init)
+        guard target != lastManagedInsetTarget
+                || identifiers != lastManagedScrollViewIdentifiers else { return }
+
+        for (viewController, scrollView) in zip(currentViewControllers, activePageScrollViews) {
+            if let fallbackHost = viewController as? AnchorPagerPageScrollHostViewController {
+                fallbackHost.setManagedContentInsets(target.content)
+            }
+            managedInsetCoordinator.apply(target, to: scrollView)
+        }
+        lastManagedInsetTarget = target
+        lastManagedScrollViewIdentifiers = identifiers
     }
 
     private func removeStaleFallbackPageHosts(
@@ -579,6 +666,18 @@ open class AnchorPagerViewController: UIViewController {
 }
 
 extension AnchorPagerViewController: AnchorPagerPagingAdapterDelegate {
+    func pagingAdapter(
+        _ adapter: AnchorPagerPagingAdapter,
+        didUpdateBarInsets barInsets: UIEdgeInsets
+    ) {
+        guard resolvedBarInsets != barInsets else { return }
+        resolvedBarInsets = barInsets
+        view.setNeedsLayout()
+        if !isApplyingLayout {
+            updateVisibleLayout()
+        }
+    }
+
     func pagingAdapter(_ adapter: AnchorPagerPagingAdapter, willSelect index: Int, animated: Bool) {}
 
     func pagingAdapter(_ adapter: AnchorPagerPagingAdapter, didSelect index: Int, animated: Bool) {

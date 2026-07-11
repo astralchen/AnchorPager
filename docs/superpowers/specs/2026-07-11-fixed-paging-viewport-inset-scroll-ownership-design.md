@@ -225,6 +225,11 @@ restoredIndicatorInset = currentIndicatorInset - lastManagedIndicatorInset
 
 然后恢复原始 `contentInsetAdjustmentBehavior`。如果 weak scroll view 已释放，直接丢弃 record。
 
+Swift 6 对 `deinit` 采用 nonisolated 编译检查，即使所属 `UIViewController` 整体标记为
+`@MainActor`。因此控制器释放时通过 `MainActor.assumeIsolated` 同步执行 `releaseAll()`；该断言
+建立在 UIKit 控制器创建、使用和释放均位于主线程的框架约束上。不得改成异步 Task、延迟归还、
+`nonisolated(unsafe)` 或 `@unchecked Sendable` 来绕开释放顺序。
+
 ### Offset 与 Bar 高度变化
 
 page state 不保存绝对 child offset，而保存：

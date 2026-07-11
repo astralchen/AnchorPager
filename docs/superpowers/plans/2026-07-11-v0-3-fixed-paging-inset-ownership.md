@@ -572,7 +572,7 @@ git commit -m "实现子页面插入量所有权"
 - Consumes: Task 1 `Output.pagingFrame`、Task 2 `didUpdateBarInsets`、Task 3 inset coordinator。
 - Produces: active page scroll target 列表、resolved bar geometry、真实 managed top/bottom、reload/deinit ownership 归还。
 
-- [ ] **Step 1: 写固定 adapter 和真实 managed inset 失败测试**
+- [x] **Step 1: 写固定 adapter 和真实 managed inset 失败测试**
 
 先把默认配置断言改为：
 
@@ -655,7 +655,7 @@ func testManagedTopUsesTabmanBarOnlyAndPreservesExternalInsets() throws {
 
 该断言证明 managed top 为 56，而不是 Header 120 + bar 56。
 
-- [ ] **Step 2: 写 reload 归还和 fallback 失败测试**
+- [x] **Step 2: 写 reload 归还和 fallback 失败测试**
 
 增加 reload 归还测试：
 
@@ -695,16 +695,21 @@ func testReloadReleasesStaleInsetOwnershipAndManagesReplacement() {
 }
 ```
 
-扩展现有 fallback test；测试先设置 `pager.additionalSafeAreaInsets.bottom = 23`，再断言：
+扩展现有 fallback test；测试先设置 `pager.additionalSafeAreaInsets.bottom = 23`。由于 UIKit 会把
+设备自身 safe area 与 additional safe area 合成，断言应使用容器最终解析到的本地底部遮挡：
 
 ```swift
 XCTAssertEqual(fallbackHost.scrollView.contentInset.top, adapter.barInsets.top, accuracy: 0.5)
-XCTAssertEqual(fallbackHost.scrollView.contentInset.bottom, 23, accuracy: 0.5)
+XCTAssertEqual(
+    fallbackHost.scrollView.contentInset.bottom,
+    pager.view.safeAreaInsets.bottom,
+    accuracy: 0.5
+)
 ```
 
 增加重复 apply 日志测试，结构性 layout 重跑不得重复 `inset.ownership.update`。
 
-- [ ] **Step 3: 运行 Task 4 RED**
+- [x] **Step 3: 运行 Task 4 RED**
 
 Run:
 
@@ -714,7 +719,7 @@ xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 
 
 Expected: FAIL，adapter height 随 offset 变化，child inset 未写入，reload 未归还 ownership。
 
-- [ ] **Step 4: 接入 resolved barInsets 和 fixed paging frame**
+- [x] **Step 4: 接入 resolved barInsets 和 fixed paging frame**
 
 先切换 public 配置：
 
@@ -758,7 +763,7 @@ pagingHeightConstraint?.constant = output.pagingFrame.height
 
 Task 1 已删除 ViewController 的旧 `lastLoggedManagedInsetTarget` 和 `inset.managedTargetChanged` 布局日志；本步骤不得重新引入。
 
-- [ ] **Step 5: 实现 barInsets delegate 收敛**
+- [x] **Step 5: 实现 barInsets delegate 收敛**
 
 在 adapter delegate extension 增加：
 
@@ -778,7 +783,7 @@ func pagingAdapter(
 
 在结构性布局开始前调用 `pagingAdapter.setBarHeight(configuration.bar.height)`。若 callback 发生在当前布局事务中，只缓存并请求下一次 layout，不递归进入。
 
-- [ ] **Step 6: 准备 active scroll targets 并处理冲突**
+- [x] **Step 6: 准备 active scroll targets 并处理冲突**
 
 reloadData 期间为每个 page 解析一次 target，保存与 `currentViewControllers` 同索引的 active scroll 列表：
 
@@ -846,7 +851,7 @@ private func preparePage(
 
 在 fallback host `loadViewIfNeeded()` 后读取其 `scrollView`；不得让 managed coordinator 重新执行 view hierarchy discovery。
 
-- [ ] **Step 7: 应用和归还 ownership**
+- [x] **Step 7: 应用和归还 ownership**
 
 结构性 layout 获得 barInsets 和 local bottom obstruction 后构造：
 
@@ -871,14 +876,18 @@ let target = AnchorPagerManagedInsetCoordinator.Target(
 
 ```swift
 deinit {
-    managedInsetCoordinator.releaseAll()
+    MainActor.assumeIsolated {
+        managedInsetCoordinator.releaseAll()
+    }
     AnchorPagerLogger.log(.info, category: .lifecycle, event: "deinit")
 }
 ```
 
-不得为 deinit 使用 `nonisolated(unsafe)`、异步 Task 或延迟归还。
+Swift 6 将 `deinit` 按 nonisolated 上下文检查；这里依赖 UIKit 生命周期必须位于主线程的约束，
+用 `MainActor.assumeIsolated` 同步归还。不得使用 `nonisolated(unsafe)`、异步 Task、延迟归还或
+unchecked Sendable 绕过释放顺序。
 
-- [ ] **Step 8: 运行 Task 4 GREEN 和回归测试**
+- [x] **Step 8: 运行 Task 4 GREEN 和回归测试**
 
 Run: Task 4 RED 的同一命令。
 
@@ -892,7 +901,7 @@ xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 
 
 Expected: package 全部测试通过；旧 v0.2 Header/bounce/layout tests 无回归。
 
-- [ ] **Step 9: 自审并提交 Task 4**
+- [x] **Step 9: 自审并提交 Task 4**
 
 重点检查：Tabman/Pageboy containment 未改；scroll discovery 只在 reload 安全点发生；fallback containment 顺序不变；热路径不写 inset/不改变 paging height；bar callback 幂等；stale ownership 可释放；日志不逐帧输出。
 
@@ -901,6 +910,13 @@ git diff --check
 git add Sources/AnchorPager/Public/AnchorPagerConfiguration.swift Sources/AnchorPager/Public/AnchorPagerViewController.swift Sources/AnchorPager/Children/AnchorPagerPageScrollHostViewController.swift Tests/AnchorPagerTests/AnchorPagerViewControllerTests.swift
 git commit -m "接入子页面插入量管理"
 ```
+
+Task 4 验证记录：
+
+- RED：控制器测试 41 项中 6 项按预期失败，覆盖默认高度、固定 viewport、managed inset、reload 与 target collision；修正两处 weak data source 测试夹具后进入实现。
+- GREEN：`AnchorPagerViewControllerTests` 原 41 项全部通过；新增 deinit ownership 用例单独通过。
+- 回归：package 全量 99 项先得到 98 项通过，唯一失败为 Public DocC 出现第三方库名称；修正后对应架构守卫测试通过，最终全量将在 Task 6 再执行一次。
+- 自审：Public API 仅把 `bar.height` 改为可选 `CGFloat?`，未泄漏第三方类型；Tabman/Pageboy containment 未改；scroll discovery 只发生在 reload；stale/deinit ownership 均同步归还；滚动热路径不写 inset、不改变 adapter 高度；fallback containment 顺序保持不变。
 
 ---
 
