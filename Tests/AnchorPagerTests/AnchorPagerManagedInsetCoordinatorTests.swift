@@ -68,6 +68,7 @@ final class AnchorPagerManagedInsetCoordinatorTests: XCTestCase {
         let coordinator = AnchorPagerManagedInsetCoordinator()
         let scrollView = UIScrollView()
         scrollView.contentInsetAdjustmentBehavior = .always
+        scrollView.automaticallyAdjustsScrollIndicatorInsets = true
         scrollView.contentInset = UIEdgeInsets(top: 10, left: 0, bottom: 7, right: 0)
         scrollView.contentOffset.y = -10
         let target = AnchorPagerManagedInsetCoordinator.Target(
@@ -76,6 +77,7 @@ final class AnchorPagerManagedInsetCoordinatorTests: XCTestCase {
         )
 
         coordinator.apply(target, to: scrollView)
+        XCTAssertFalse(scrollView.automaticallyAdjustsScrollIndicatorInsets)
         scrollView.contentInset.bottom += 5
         coordinator.release(scrollView)
 
@@ -83,6 +85,22 @@ final class AnchorPagerManagedInsetCoordinatorTests: XCTestCase {
         XCTAssertEqual(scrollView.contentInset.bottom, 12, accuracy: 0.001)
         XCTAssertEqual(scrollView.contentOffset.y, -10, accuracy: 0.001)
         XCTAssertEqual(scrollView.contentInsetAdjustmentBehavior, .always)
+        XCTAssertTrue(scrollView.automaticallyAdjustsScrollIndicatorInsets)
+    }
+
+    func testRepeatedTargetReclaimsAutomaticIndicatorAdjustment() {
+        let coordinator = AnchorPagerManagedInsetCoordinator()
+        let scrollView = UIScrollView()
+        let target = AnchorPagerManagedInsetCoordinator.Target(
+            content: UIEdgeInsets(top: 48, left: 0, bottom: 34, right: 0),
+            indicators: UIEdgeInsets(top: 48, left: 0, bottom: 34, right: 0)
+        )
+
+        coordinator.apply(target, to: scrollView)
+        scrollView.automaticallyAdjustsScrollIndicatorInsets = true
+        coordinator.apply(target, to: scrollView)
+
+        XCTAssertFalse(scrollView.automaticallyAdjustsScrollIndicatorInsets)
     }
 
     func testRepeatedTargetSkipsWritesAndWritesSkipLog() {

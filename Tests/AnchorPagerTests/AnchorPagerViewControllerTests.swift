@@ -761,6 +761,46 @@ final class AnchorPagerViewControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testManagedScrollIndicatorInsetsUseBarAndBottomObstruction() {
+        var configuration = AnchorPagerConfiguration.default
+        configuration.bar.height = 56
+        let pager = AnchorPagerViewController(configuration: configuration)
+        pager.additionalSafeAreaInsets.bottom = 23
+        let child = ScrollChildViewController()
+        child.loadViewIfNeeded()
+        child.scrollView.verticalScrollIndicatorInsets = UIEdgeInsets(
+            top: 2,
+            left: 1,
+            bottom: 5,
+            right: 3
+        )
+        child.scrollView.automaticallyAdjustsScrollIndicatorInsets = true
+        let dataSource = StubDataSource(count: 1, viewControllers: [child])
+        pager.dataSource = dataSource
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = pager
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+
+        pager.reloadData()
+        window.layoutIfNeeded()
+
+        XCTAssertEqual(
+            child.scrollView.verticalScrollIndicatorInsets.top,
+            58,
+            accuracy: 0.5
+        )
+        XCTAssertEqual(
+            child.scrollView.verticalScrollIndicatorInsets.bottom,
+            5 + pager.view.safeAreaInsets.bottom,
+            accuracy: 0.5
+        )
+        XCTAssertEqual(child.scrollView.verticalScrollIndicatorInsets.left, 1, accuracy: 0.001)
+        XCTAssertEqual(child.scrollView.verticalScrollIndicatorInsets.right, 3, accuracy: 0.001)
+        XCTAssertFalse(child.scrollView.automaticallyAdjustsScrollIndicatorInsets)
+    }
+
+    @MainActor
     func testTabBarObstructionDoesNotClipContentFrame() throws {
         var configuration = AnchorPagerConfiguration.default
         configuration.header.heightMode = .fixed(max: 80, min: 0)
@@ -1026,6 +1066,13 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         oldChild.loadViewIfNeeded()
         oldChild.scrollView.contentInsetAdjustmentBehavior = .always
         oldChild.scrollView.contentInset = UIEdgeInsets(top: 7, left: 3, bottom: 11, right: 4)
+        oldChild.scrollView.verticalScrollIndicatorInsets = UIEdgeInsets(
+            top: 2,
+            left: 1,
+            bottom: 5,
+            right: 3
+        )
+        oldChild.scrollView.automaticallyAdjustsScrollIndicatorInsets = true
         oldChild.scrollView.contentOffset.y = -7
         let dataSource = StubDataSource(count: 1, viewControllers: [oldChild])
         let pager = AnchorPagerViewController(configuration: configuration)
@@ -1046,8 +1093,14 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         XCTAssertEqual(oldChild.scrollView.contentInset.top, 7, accuracy: 0.5)
         XCTAssertEqual(oldChild.scrollView.contentInset.bottom, 11, accuracy: 0.5)
         XCTAssertEqual(oldChild.scrollView.contentInsetAdjustmentBehavior, .always)
+        XCTAssertEqual(
+            oldChild.scrollView.verticalScrollIndicatorInsets,
+            UIEdgeInsets(top: 2, left: 1, bottom: 5, right: 3)
+        )
+        XCTAssertTrue(oldChild.scrollView.automaticallyAdjustsScrollIndicatorInsets)
         XCTAssertEqual(replacementChild.scrollView.contentInset.top, 56, accuracy: 0.5)
         XCTAssertEqual(replacementChild.scrollView.contentInsetAdjustmentBehavior, .never)
+        XCTAssertFalse(replacementChild.scrollView.automaticallyAdjustsScrollIndicatorInsets)
     }
 
     @MainActor

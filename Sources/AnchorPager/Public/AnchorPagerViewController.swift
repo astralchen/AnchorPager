@@ -632,7 +632,7 @@ open class AnchorPagerViewController: UIViewController {
                 right: 0
             ),
             indicators: UIEdgeInsets(
-                top: 0,
+                top: resolvedBarInsets.top,
                 left: 0,
                 bottom: environment.obstruction.bottom,
                 right: 0

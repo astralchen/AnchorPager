@@ -1114,7 +1114,7 @@ git commit -m "记录 v0.3 固定分页视口验收"
 - Consumes: `resolvedBarInsets.top`、`LayoutEnvironment.obstruction.bottom`、`AnchorPagerManagedInsetCoordinator.Target.indicators`。
 - Produces: indicator top/bottom 单一 owner、`automaticallyAdjustsScrollIndicatorInsets` 同步接管与归还；不扩大 Public API。
 
-- [ ] **Step 1: 写 indicator top 和自动调整所有权失败测试**
+- [x] **Step 1: 写 indicator top 和自动调整所有权失败测试**
 
 在 coordinator 测试中确认接管期间关闭、release 后恢复 UIKit 自动 indicator 调整：
 
@@ -1140,7 +1140,7 @@ XCTAssertFalse(child.scrollView.automaticallyAdjustsScrollIndicatorInsets)
 
 reload 替换页面后，旧 child 必须恢复 external indicator insets 和原始自动调整状态。
 
-- [ ] **Step 2: 运行 Task 7 RED**
+- [x] **Step 2: 运行 Task 7 RED**
 
 ```bash
 xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcodebuild-v03-indicator -parallel-testing-enabled NO -enableCodeCoverage NO -only-testing:AnchorPagerTests/AnchorPagerManagedInsetCoordinatorTests -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testManagedScrollIndicatorInsetsUseBarAndBottomObstruction -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testReloadReleasesStaleInsetOwnershipAndManagesReplacement test
@@ -1148,7 +1148,7 @@ xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=
 
 Expected: FAIL；当前 indicator top 仍为 external top，且 `automaticallyAdjustsScrollIndicatorInsets` 仍为 true。
 
-- [ ] **Step 3: 实现 indicator 完整 ownership**
+- [x] **Step 3: 实现 indicator 完整 ownership**
 
 Coordinator record 增加：
 
@@ -1174,7 +1174,7 @@ indicators: UIEdgeInsets(
 )
 ```
 
-- [ ] **Step 4: 运行 Task 7 GREEN 与 package 回归**
+- [x] **Step 4: 运行 Task 7 GREEN 与 package 回归**
 
 先运行 Step 2 同一命令，Expected: PASS。再运行：
 
@@ -1184,7 +1184,7 @@ xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=
 
 Expected: package 全部测试通过、0 failures。
 
-- [ ] **Step 5: 运行示例可视回归**
+- [x] **Step 5: 运行示例可视回归**
 
 UIKit 没有稳定 public API 暴露 indicator 私有 view frame，XCUITest 也不保证把滚动指示器作为 accessibility element；因此以真实 window 集成测试验证决定实际轨道的 top/bottom property 和自动调整 owner，再运行现有示例 UI 流程作为可视回归：
 
@@ -1194,7 +1194,7 @@ xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorP
 
 Expected: 示例单元/UI tests 全部通过。
 
-- [ ] **Step 6: 自审、更新状态并提交**
+- [x] **Step 6: 自审、更新状态并提交**
 
 检查 indicator top 不越过 bar bottom、bottom 不重复 safe area、external indicator insets 保留、reload/deinit 恢复自动状态、滚动热路径不写 inset、Public API 和 containment 均未变化。验证完成后勾选 task-list 两项修复状态并追加真实命令记录。
 
@@ -1240,3 +1240,8 @@ git commit -m "修复滚动指示器安全区避让"
 - 最终 package：复用已启动的 `iPhone 17 Pro` 和 `.build/xcodebuild-v03-controller-red` 执行完整测试，99 项通过、0 failures、0 skipped，测试阶段约 35 秒。
 - 最终示例证据：复用 Task 5 当前提交的 `.build/example-xcodebuild-v03-ui`；generic build 成功，完整示例单元/UI tests 14 项通过、0 failures、0 skipped。
 - 最终文档审查：AGENTS 必读索引、README、architecture、requirements、task-list、spec 和 plan 已统一 optional bar height、fixed paging frame、managed inset ownership 与后续版本限制。
+- Task 7 RED：定向 8 项测试中 4 项按预期失败；真实 window 中 indicator top 为 external `2` 而非 `2 + bar 56`，coordinator、reload replacement 均未关闭 UIKit 自动 indicator 调整。
+- Task 7 GREEN：同一定向命令通过。Coordinator record 保存原 `automaticallyAdjustsScrollIndicatorInsets`，apply 关闭、幂等 apply 可重新接管、release/reload 恢复；ViewController indicator target top 使用 runtime `resolvedBarInsets.top`。
+- Task 7 package 回归：复用 `iPhone 17 Pro` 与 `.build/xcodebuild-v03-indicator`，101 项通过、0 failures、0 skipped，测试阶段约 43 秒。
+- Task 7 示例回归：复用同一模拟器与 `.build/example-xcodebuild-v03-indicator`，示例单元/UI tests 14 项通过、0 failures、0 skipped，测试阶段约 211 秒。
+- Task 7 自审：Public API、Tabman/Pageboy containment、Header/fallback containment 和 scroll discovery 未变化；indicator external 四边差量保留，上下 managed target 只有 AnchorPager 一个 owner；reload/deinit 使用既有 release/releaseAll 同步归还；滚动热路径不写 inset。

@@ -11,12 +11,15 @@ final class AnchorPagerManagedInsetCoordinator {
     private final class Record {
         weak var scrollView: UIScrollView?
         let originalAdjustmentBehavior: UIScrollView.ContentInsetAdjustmentBehavior
+        let originalAutomaticallyAdjustsScrollIndicatorInsets: Bool
         var lastManagedContent: UIEdgeInsets = .zero
         var lastManagedIndicators: UIEdgeInsets = .zero
 
         init(scrollView: UIScrollView) {
             self.scrollView = scrollView
             self.originalAdjustmentBehavior = scrollView.contentInsetAdjustmentBehavior
+            self.originalAutomaticallyAdjustsScrollIndicatorInsets =
+                scrollView.automaticallyAdjustsScrollIndicatorInsets
         }
     }
 
@@ -32,7 +35,8 @@ final class AnchorPagerManagedInsetCoordinator {
 
         guard record.lastManagedContent != target.content
                 || record.lastManagedIndicators != target.indicators
-                || scrollView.contentInsetAdjustmentBehavior != .never else {
+                || scrollView.contentInsetAdjustmentBehavior != .never
+                || scrollView.automaticallyAdjustsScrollIndicatorInsets else {
             AnchorPagerLogger.log(.debug, category: .inset, event: "inset.ownership.skip")
             return
         }
@@ -45,6 +49,7 @@ final class AnchorPagerManagedInsetCoordinator {
         let newIndicators = externalIndicators.adding(target.indicators)
 
         scrollView.contentInsetAdjustmentBehavior = .never
+        scrollView.automaticallyAdjustsScrollIndicatorInsets = false
         scrollView.contentInset = newContent
         scrollView.verticalScrollIndicatorInsets = newIndicators
         scrollView.contentOffset = CGPoint(
@@ -78,6 +83,8 @@ final class AnchorPagerManagedInsetCoordinator {
             y: -restoredContent.top + distanceFromTop
         )
         scrollView.contentInsetAdjustmentBehavior = record.originalAdjustmentBehavior
+        scrollView.automaticallyAdjustsScrollIndicatorInsets =
+            record.originalAutomaticallyAdjustsScrollIndicatorInsets
         AnchorPagerLogger.log(.debug, category: .inset, event: "inset.ownership.end")
     }
 
