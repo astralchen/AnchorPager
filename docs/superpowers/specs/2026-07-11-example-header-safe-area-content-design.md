@@ -63,3 +63,13 @@ stackView.maxY <= headerView.safeAreaLayoutGuide.layoutFrame.maxY - 20
 
 主要风险是 safe area 参与 automatic fitting 后重复增加 Header 高度。测试必须同时检查内容安全区位置和切换后的
 Header/bar 几何基线，确保只改变内部内容位置，没有改变框架 Header 高度模型、分段栏位置或回弹行为。
+
+## 实施记录
+
+- `ExampleHeaderView` 标题栈左右继续使用 `layoutMarginsGuide`，上下已改为 `safeAreaLayoutGuide`，常量保持 20 pt。
+- 蓝色背景仍覆盖 Header 完整 bounds；AnchorPager Header 外框、分段栏基线、automatic 中立测量和 viewport bounce 未修改。
+- 同进程测试覆盖两种顶部行为下标题栈相对 Header safe area 的上下 20 pt 间距，并确认 extends 外框仍从容器 `minY == 0` 开始。
+- UI 测试覆盖 inside → extends 切换后标题始终位于导航栏底部下方 20 pt。
+- TDD RED 中同进程测试和 UI 测试都记录到旧 `layoutMarginsGuide` 额外引入 8 pt；最小约束修改后两个目标路径均 GREEN。
+- 最终验收使用同一台 Booted iPhone 17：框架测试 83/83、示例测试 13/13 通过，generic iOS Simulator build 和 `git diff --check` 通过。
+- 最终自审确认未修改框架 Public API、Header 外框、第三方 adapter、containment/lifecycle、scroll/inset、overscroll、日志或并发边界。

@@ -303,6 +303,7 @@
 - [x] 测试 tab bar 和 toolbar 底部遮挡
 - [x] 测试无滚动页 fallback host 底部延伸到 content frame 底部
 - [x] 测试示例工程 `AnchorPagerHeaderTopBehavior` 菜单显示、切换和 `extendsUnderTopSafeArea` 顶部遮挡覆盖
+- [x] 示例 Header 标题栈上下约束到 `safeAreaLayoutGuide`，两种顶部行为下保持 20 pt 内容间距
 - [x] 测试 additionalSafeAreaInsets
 
 ## v0.3：Scroll Discovery 与 Inset Ownership 版
@@ -553,6 +554,7 @@
 - [x] v0.2 follow-up：`extendsUnderTopSafeArea` 下 Header 可视 frame 高度至少覆盖本地顶部遮挡，修复当前 Header 内容高度小于顶部遮挡时 Header 与分段栏之间出现空隙的问题；验证记录见 `docs/superpowers/plans/2026-07-09-v0-2-header-layout.md`
 - [x] v0.2 follow-up：主容器 scroll range 与 Header/paging viewport 已解耦，移除 `visibleY + contentOffset` 约束反馈闭环，修复顶部行为切换后下拉回弹残留空白；验证记录见 `docs/superpowers/plans/2026-07-10-header-scroll-viewport.md`
 - [x] v0.2 follow-up：保留 Header 双顶部行为并统一分段栏基线；automatic Header 使用中立测量，负 offset 使用 viewport presentation translation，修复视觉 bounce 消失和回弹后高度增长；验证记录见 `docs/superpowers/plans/2026-07-11-dual-header-top-behavior-bounce-stability.md`
+- [x] v0.2 follow-up：示例 Header 蓝色背景保持顶部行为语义，标题栈上下改用 safe area 并保留 20 pt 间距；验证记录见 `docs/superpowers/plans/2026-07-11-example-header-safe-area-content.md`
 - [x] v0.2 Header 与布局稳定版已完成；后续从 v0.3 Scroll Discovery 与 Inset Ownership 版继续
 - [x] 实现时遵循测试先行
 - [x] 每个任务完成后运行对应测试
