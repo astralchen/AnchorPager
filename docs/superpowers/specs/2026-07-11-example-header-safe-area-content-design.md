@@ -73,3 +73,40 @@ Header/bar 几何基线，确保只改变内部内容位置，没有改变框架
 - TDD RED 中同进程测试和 UI 测试都记录到旧 `layoutMarginsGuide` 额外引入 8 pt；最小约束修改后两个目标路径均 GREEN。
 - 最终验收使用同一台 Booted iPhone 17：框架测试 83/83、示例测试 13/13 通过，generic iOS Simulator build 和 `git diff --check` 通过。
 - 最终自审确认未修改框架 Public API、Header 外框、第三方 adapter、containment/lifecycle、scroll/inset、overscroll、日志或并发边界。
+
+## Follow-up：文本组顶部对齐与固定间距
+
+### 问题关系
+
+标题栈虽然设置了 `spacing = 8`，但其 top 和 bottom 都以等式约束到 Header safe area。最终 Header 的 safe area
+高度大于标题栈 intrinsic height 时，`UIStackView.distribution == .fill` 会把多余高度分配给 arranged label，
+导致文字视觉间距大于 8 pt。该现象是示例内部内容约束造成的，不是 AnchorPager Header 高度、safe area 计算或
+viewport bounce 改变。
+
+### 设计决策
+
+文本组采用顶部对齐：
+
+```text
+stackView.top == safeArea.top + 20
+stackView.bottom <= safeArea.bottom - 20
+stackView.spacing == 8
+```
+
+左右约束继续使用 `layoutMarginsGuide`。bottom 使用 `lessThanOrEqualTo` 后，标题栈保持 intrinsic height，Header
+多余高度全部留在副标题下方；安全区不足时仍要求至少保留 20 pt 底部空间。不得通过额外 spacer、UILabel 高优先级
+hugging、固定 Header 高度或修改框架布局掩盖问题。
+
+### 行为与边界
+
+- inside 和 extends 两种顶部行为下，标题栈顶部保持 safe area 下方 20 pt。
+- 标题与副标题的相邻 frame 间距保持 8 pt；Dynamic Type 和副标题换行继续由 intrinsic content size 驱动。
+- 负主容器 offset 只整体平移 viewport，不改变标题栈内部 frame 或 8 pt 间距。
+- 蓝色背景、Header 外框、分段栏基线、automatic 中立测量、scroll range 和 bounce 语义不变。
+
+### 测试与验收
+
+采用测试先行：先把现有同进程测试扩展为验证标题/副标题 frame 间距和 bottom 不越过 safe area，并模拟负 offset
+确认内部间距不变；再增加真实 UI 断言，覆盖 inside → extends 后两段文本仍相邻 8 pt。最小实现只把 bottom 等式
+约束改为 `lessThanOrEqualTo`，随后运行完整框架测试、完整示例测试、generic iOS Simulator build 和
+`git diff --check`。
