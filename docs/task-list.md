@@ -311,30 +311,30 @@
 
 - [x] 创建 `docs/superpowers/specs/2026-07-11-fixed-paging-viewport-inset-scroll-ownership-design.md`，固定 v0.3–v0.5 几何、inset 和 owner 边界
 - [x] 创建 v0.3 详细实施计划：`docs/superpowers/plans/2026-07-11-v0-3-fixed-paging-inset-ownership.md`
-- [ ] 固化默认 scroll view lookup 文档
-- [ ] 将 `AnchorPagerBarConfiguration.height` 改为 optional，默认 nil
-- [ ] nil 高度使用 Tabman bar 自适应布局，显式高度约束实际 bar
-- [ ] Paging adapter 在布局后通过 public `barInsets` 回报实际 bar obstruction
-- [ ] Tabman adapter 使用 collapsed-state fixed height，滚动热路径只移动 top
-- [ ] 测试 Header 折叠期间 adapter height 和 Pageboy child bounds 不变
-- [ ] 实现 managed inset 数据结构
-- [ ] 区分 managed inset 和外部 contentInset
-- [ ] 设置接管 scroll view 的 `contentInsetAdjustmentBehavior = .never`
-- [ ] ownership 结束时移除最后一次 managed inset 并恢复原始 adjustment behavior
-- [ ] 实现 child managed contentInset.top
-- [ ] 实现 child managed contentInset.bottom
-- [ ] 实现 scrollIndicatorInsets.bottom 避让
-- [ ] bar 高度变化时按 child distance-from-top 保持可见内容
-- [ ] 测试 managed inset 不覆盖外部 contentInset
-- [ ] 测试 contentInsetAdjustmentBehavior 策略
-- [ ] 测试 fallback page scroll host inset
-- [ ] 测试 optional bar height、自适应 barInsets 和显式高度
-- [ ] 测试 ownership 归还、重复 target 跳过和 scroll target 冲突降级
-- [ ] 示例工程真实列表页和 fallback 页 UI test
-- [ ] 更新 README 的 scroll 接入说明
-- [ ] 更新 `docs/architecture.md` 的 inset ownership 章节
-- [ ] 为 managed inset 写入加入 inset 日志
-- [ ] 为 managed inset 跳过重复写入加入 inset 日志
+- [x] 固化默认 scroll view lookup 文档
+- [x] 将 `AnchorPagerBarConfiguration.height` 改为 optional，默认 nil
+- [x] nil 高度使用 Tabman bar 自适应布局，显式高度约束实际 bar
+- [x] Paging adapter 在布局后通过 public `barInsets` 回报实际 bar obstruction
+- [x] Tabman adapter 使用 collapsed-state fixed height，滚动热路径只移动 top
+- [x] 测试 Header 折叠期间 adapter height 和 Pageboy child bounds 不变
+- [x] 实现 managed inset 数据结构
+- [x] 区分 managed inset 和外部 contentInset
+- [x] 设置接管 scroll view 的 `contentInsetAdjustmentBehavior = .never`
+- [x] ownership 结束时移除最后一次 managed inset 并恢复原始 adjustment behavior
+- [x] 实现 child managed contentInset.top
+- [x] 实现 child managed contentInset.bottom
+- [x] 实现 scrollIndicatorInsets.bottom 避让
+- [x] bar 高度变化时按 child distance-from-top 保持可见内容
+- [x] 测试 managed inset 不覆盖外部 contentInset
+- [x] 测试 contentInsetAdjustmentBehavior 策略
+- [x] 测试 fallback page scroll host inset
+- [x] 测试 optional bar height、自适应 barInsets 和显式高度
+- [x] 测试 ownership 归还、重复 target 跳过和 scroll target 冲突降级
+- [x] 示例工程真实列表页和 fallback 页 UI test
+- [x] 更新 README 的 scroll 接入说明
+- [x] 更新 `docs/architecture.md` 的 inset ownership 章节
+- [x] 为 managed inset 写入加入 inset 日志
+- [x] 为 managed inset 跳过重复写入加入 inset 日志
 
 ## v0.4：Child 生命周期与缓存版
 

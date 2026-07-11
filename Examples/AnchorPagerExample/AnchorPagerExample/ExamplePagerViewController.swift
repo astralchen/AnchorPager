@@ -248,6 +248,9 @@ private final class ExampleScrollPageViewController: UIViewController {
         for row in 0..<rows {
             let label = UILabel()
             label.text = "\(pageTitle) - \(row + 1)"
+            if row == 0 {
+                label.accessibilityIdentifier = "scroll-page-first-row"
+            }
             label.font = .preferredFont(forTextStyle: .body)
             label.textColor = .label
             label.backgroundColor = .secondarySystemBackground
@@ -292,6 +295,7 @@ private final class ExamplePlainPageViewController: UIViewController {
 
         let label = UILabel()
         label.text = pageTitle
+        label.accessibilityIdentifier = "plain-page-content"
         label.font = .preferredFont(forTextStyle: .title3)
         label.textColor = .label
         label.translatesAutoresizingMaskIntoConstraints = false

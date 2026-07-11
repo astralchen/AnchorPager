@@ -126,6 +126,18 @@ final class AnchorPagerExampleUITests: XCTestCase {
     }
 
     @MainActor
+    func testAdaptiveBarKeepsRealScrollAndFallbackPagesVisible() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        let firstRow = app.staticTexts["scroll-page-first-row"]
+        XCTAssertTrue(firstRow.waitForExistence(timeout: 3))
+
+        app.descendants(matching: .any)["无滚动页"].tap()
+        XCTAssertTrue(app.staticTexts["plain-page-content"].waitForExistence(timeout: 3))
+    }
+
+    @MainActor
     func testHorizontalSwipeSelectsNextPageContent() throws {
         let app = XCUIApplication()
         app.launch()
