@@ -207,7 +207,7 @@ git commit -m "固定分页适配器布局范围"
 - Consumes: internal optional height request `CGFloat?`；public 配置在 Task 4 一次性切换并接入。
 - Produces: `AnchorPagerPagingAdapter.setBarHeight(_ height: CGFloat?)`；delegate 新增 `pagingAdapter(_:didUpdateBarInsets:)`。
 
-- [ ] **Step 1: 写 optional API 和真实 bar 布局失败测试**
+- [x] **Step 1: 写 optional API 和真实 bar 布局失败测试**
 
 在 paging adapter tests 增加 window-backed helper 和测试：
 
@@ -286,7 +286,7 @@ func pagingAdapter(
 }
 ```
 
-- [ ] **Step 2: 运行 Task 2 RED**
+- [x] **Step 2: 运行 Task 2 RED**
 
 Run:
 
@@ -296,7 +296,7 @@ xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 
 
 Expected: FAIL，核心错误为 adapter 缺少 `setBarHeight` 和 barInsets delegate。
 
-- [ ] **Step 3: 保存实际 bar 并实现 idempotent height constraint**
+- [x] **Step 3: 保存实际 bar 并实现 idempotent height constraint**
 
 在 adapter 保存：
 
@@ -328,7 +328,7 @@ func setBarHeight(_ height: CGFloat?) {
 
 `installBarIfNeeded()` 创建 bar 后保存实例，并由 `updateBarHeightConstraintIfNeeded()` 在 nil 时 deactivate，非 nil 时创建/更新 `heightAnchor` constraint。
 
-- [ ] **Step 4: 布局后回报 public barInsets**
+- [x] **Step 4: 布局后回报 public barInsets**
 
 delegate protocol 增加：
 
@@ -367,7 +367,7 @@ override func viewDidLayoutSubviews() {
 
 `sanitizedBarInsets` 把负数或非有限分量降级为 0，不输出业务数据。
 
-- [ ] **Step 5: 运行 Task 2 GREEN 和完整 adapter tests**
+- [x] **Step 5: 运行 Task 2 GREEN 和完整 adapter tests**
 
 Run: Task 2 RED 的同一命令。
 
@@ -381,7 +381,7 @@ xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 
 
 Expected: `AnchorPagerPagingAdapterTests` 全部通过，日志测试包含 `paging.barInsetsChanged` 和 invalid height。
 
-- [ ] **Step 6: 自审并提交 Task 2**
+- [x] **Step 6: 自审并提交 Task 2**
 
 检查 Tabman/Pageboy 仍只在 Paging 层；bar constraint 在 nil/value 切换时不重复创建；delegate 不返回 TMBar；本任务不提前修改 public API。
 
@@ -1076,6 +1076,7 @@ git commit -m "记录 v0.3 固定分页视口验收"
 ## Self-review Record
 
 - Task 1：`AnchorPagerLayoutEngine` 仍为只 import CoreGraphics 的纯计算类型；`pagingFrame.height` 只依赖 bounds、top obstruction 和 collapsed Header height，不依赖 contentOffset、bar height 或 bottom obstruction。旧容器级 managed target 与未落地的 target 日志已移除，Header、Tabman/Pageboy containment、selection 和 scroll discovery 未改变。
+- Task 2：optional height 只作为 internal adapter 请求，尚未提前修改 public configuration；实际 TMBar 仍由 Paging 层创建和持有。nil 不安装高度约束，非 nil 复用单一 constraint；公开 `barInsets` 只在 sanitized value 变化时通过 UIKit `UIEdgeInsets` 回调，未向 Public/Layout 层泄漏 TMBar 或 Pageboy 类型。invalid height 和 barInsets 变化均有 sink 测试。
 - 计划覆盖 spec 中 v0.3 的 optional bar height、fixed adapter、barInsets callback、managed inset ownership、fallback、日志、文档和 UI test；v0.4/v0.5 只保留接口兼容边界，没有提前实现。
 - Task 1 的 `barHeight` runtime 语义/`pagingFrame`、Task 2 的 `setBarHeight`/`didUpdateBarInsets`、Task 3 的 `Target`/apply/release 与 Task 4 的消费名称保持一致。
 - 每个实现任务都有明确 RED、GREEN、定向命令、自审和中文提交；最终任务包含 package、example build 和 UI tests。
@@ -1087,4 +1088,8 @@ git commit -m "记录 v0.3 固定分页视口验收"
 - Task 1 RED：`xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcodebuild-v03-layout-red -only-testing:AnchorPagerTests/AnchorPagerLayoutEngineTests test` 失败，核心错误为 `AnchorPagerLayoutEngine.Output` 没有 `pagingFrame`，符合测试先行预期。
 - Task 1 GREEN：同一 LayoutEngine 定向测试命令通过。
 - Task 1 回归：`xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcodebuild-v03-layout-green -only-testing:AnchorPagerTests/AnchorPagerLayoutEngineTests -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests test` 通过。
+- Task 2 RED：`xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcodebuild-v03-bar-red -only-testing:AnchorPagerTests/AnchorPagerPagingAdapterTests test` 失败，核心错误为 `AnchorPagerPagingAdapter` 没有 `setBarHeight`，符合测试先行预期。
+- Task 2 GREEN：同一定向 PagingAdapter 测试命令通过。
+- Task 2 日志 RED：移除 `paging.barInsetsChanged` 发射后，定向 `testExplicitBarHeightConstrainsActualTabmanBarAndReportsInsets` 失败；恢复最小日志实现后同一测试通过。
+- Task 2 回归：`xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcodebuild-v03-bar-green -only-testing:AnchorPagerTests/AnchorPagerPagingAdapterTests test` 通过。
 - 实现验证记录将在各任务完成后按真实结果追加，不提前填写通过状态。

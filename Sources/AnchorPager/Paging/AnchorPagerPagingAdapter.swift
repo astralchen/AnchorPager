@@ -11,6 +11,17 @@ protocol AnchorPagerPagingAdapterDelegate: AnyObject {
         didCancelSelectionAt index: Int,
         returningTo previousIndex: Int
     )
+    func pagingAdapter(
+        _ adapter: AnchorPagerPagingAdapter,
+        didUpdateBarInsets barInsets: UIEdgeInsets
+    )
+}
+
+extension AnchorPagerPagingAdapterDelegate {
+    func pagingAdapter(
+        _ adapter: AnchorPagerPagingAdapter,
+        didUpdateBarInsets barInsets: UIEdgeInsets
+    ) {}
 }
 
 @MainActor
@@ -23,6 +34,10 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
     private var committedSelectedIndex = 0
     private var pendingPageboySelectionIndex: Int?
     private var pendingProgrammaticSelection: ProgrammaticSelection?
+    private var installedBar: TMBar?
+    private var barHeightConstraint: NSLayoutConstraint?
+    private var requestedBarHeight: CGFloat?
+    private var lastReportedBarInsets: UIEdgeInsets?
 
     private struct ProgrammaticSelection: Equatable {
         let index: Int
@@ -47,6 +62,33 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
     override func viewDidLoad() {
         super.viewDidLoad()
         installBarIfNeeded()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+
+        let resolvedInsets = sanitizedBarInsets(barInsets)
+        guard lastReportedBarInsets != resolvedInsets else { return }
+
+        lastReportedBarInsets = resolvedInsets
+        AnchorPagerLogger.log(.debug, category: .paging, event: "paging.barInsetsChanged")
+        eventDelegate?.pagingAdapter(self, didUpdateBarInsets: resolvedInsets)
+    }
+
+    func setBarHeight(_ height: CGFloat?) {
+        let resolvedHeight: CGFloat?
+        if let height, (!height.isFinite || height < 0) {
+            AnchorPagerAssertions.failure("AnchorPager bar height must be finite and nonnegative.")
+            AnchorPagerLogger.log(.debug, category: .paging, event: "paging.barHeightInvalid")
+            resolvedHeight = 0
+        } else {
+            resolvedHeight = height
+        }
+
+        guard requestedBarHeight != resolvedHeight else { return }
+
+        requestedBarHeight = resolvedHeight
+        updateBarHeightConstraintIfNeeded()
     }
 
     func reload(
@@ -250,6 +292,38 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
     private func installBarIfNeeded() {
         guard bars.isEmpty else { return }
         let bar = AnchorPagerTabBarAdapter.makeDefaultBar()
+        installedBar = bar
         addBar(bar, dataSource: self, at: .top)
+        updateBarHeightConstraintIfNeeded()
+    }
+
+    private func updateBarHeightConstraintIfNeeded() {
+        guard let installedBar else { return }
+
+        if let requestedBarHeight {
+            let constraint = barHeightConstraint
+                ?? installedBar.heightAnchor.constraint(equalToConstant: requestedBarHeight)
+            constraint.constant = requestedBarHeight
+            constraint.isActive = true
+            barHeightConstraint = constraint
+        } else {
+            barHeightConstraint?.isActive = false
+            barHeightConstraint = nil
+        }
+        viewIfLoaded?.setNeedsLayout()
+    }
+
+    private func sanitizedBarInsets(_ insets: UIEdgeInsets) -> UIEdgeInsets {
+        UIEdgeInsets(
+            top: sanitizedInset(insets.top),
+            left: sanitizedInset(insets.left),
+            bottom: sanitizedInset(insets.bottom),
+            right: sanitizedInset(insets.right)
+        )
+    }
+
+    private func sanitizedInset(_ value: CGFloat) -> CGFloat {
+        guard value.isFinite else { return 0 }
+        return Swift.max(0, value)
     }
 }

@@ -14,6 +14,72 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
     }
 
     @MainActor
+    func testExplicitBarHeightConstrainsActualTabmanBarAndReportsInsets() {
+        let adapter = AnchorPagerPagingAdapter()
+        let delegate = RecordingPagingDelegate()
+        adapter.eventDelegate = delegate
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+        adapter.setBarHeight(64)
+        adapter.reload(
+            titles: ["First"],
+            viewControllers: [UIViewController()],
+            selectedIndex: 0
+        )
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = adapter
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+
+        window.layoutIfNeeded()
+        adapter.view.setNeedsLayout()
+        adapter.view.layoutIfNeeded()
+
+        XCTAssertEqual(adapter.barInsets.top, 64, accuracy: 0.5)
+        XCTAssertTrue(delegate.barInsets.contains { abs($0.top - 64) < 0.5 })
+        XCTAssertTrue(events.contains(
+            .init(category: .paging, level: .debug, event: "paging.barInsetsChanged")
+        ))
+    }
+
+    @MainActor
+    func testNilBarHeightUsesAdaptiveTabmanHeight() {
+        let adapter = AnchorPagerPagingAdapter()
+        adapter.setBarHeight(nil)
+        adapter.reload(
+            titles: ["First"],
+            viewControllers: [UIViewController()],
+            selectedIndex: 0
+        )
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = adapter
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+
+        window.layoutIfNeeded()
+        adapter.view.layoutIfNeeded()
+
+        XCTAssertGreaterThan(adapter.barInsets.top, 0)
+    }
+
+    @MainActor
+    func testInvalidBarHeightFallsBackToZeroAndWritesPagingLog() {
+        let adapter = AnchorPagerPagingAdapter()
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+
+        AnchorPagerAssertions.$isEnabled.withValue(false) {
+            adapter.setBarHeight(.nan)
+        }
+
+        XCTAssertTrue(events.contains(
+            .init(category: .paging, level: .debug, event: "paging.barHeightInvalid")
+        ))
+    }
+
+    @MainActor
     func testAdapterSuppliesTitlesAndViewControllersToTabmanAndPageboy() {
         let adapter = AnchorPagerPagingAdapter()
         let first = UIViewController()
@@ -176,6 +242,14 @@ private final class RecordingPagingDelegate: AnchorPagerPagingAdapterDelegate {
     }
 
     var events: [Event] = []
+    var barInsets: [UIEdgeInsets] = []
+
+    func pagingAdapter(
+        _ adapter: AnchorPagerPagingAdapter,
+        didUpdateBarInsets barInsets: UIEdgeInsets
+    ) {
+        self.barInsets.append(barInsets)
+    }
 
     func pagingAdapter(
         _ adapter: AnchorPagerPagingAdapter,
