@@ -403,7 +403,7 @@ git commit -m "支持分段栏自适应高度"
 - Consumes: managed `UIEdgeInsets` target 和 `UIScrollView`。
 - Produces: `AnchorPagerManagedInsetCoordinator.Target`、`apply(_:to:)`、`release(_:)`、`releaseAll()`。
 
-- [ ] **Step 1: 写 coordinator 失败测试**
+- [x] **Step 1: 写 coordinator 失败测试**
 
 创建测试文件，至少包含：
 
@@ -496,7 +496,7 @@ func testCoordinatorDoesNotRetainManagedScrollView() {
 }
 ```
 
-- [ ] **Step 2: 运行 Task 3 RED**
+- [x] **Step 2: 运行 Task 3 RED**
 
 Run:
 
@@ -506,7 +506,7 @@ xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 
 
 Expected: FAIL，核心错误为找不到 `AnchorPagerManagedInsetCoordinator`。
 
-- [ ] **Step 3: 实现 weak ownership record 和 Target**
+- [x] **Step 3: 实现 weak ownership record 和 Target**
 
 核心结构：
 
@@ -536,19 +536,19 @@ final class AnchorPagerManagedInsetCoordinator {
 
 实现 private inset add/subtract、finite sanitization、distance-from-top 迁移和 guarded equality。apply 首次记录 `inset.ownership.begin`，变化记录 update，相同记录 skip；release 记录 end。
 
-- [ ] **Step 4: 实现 apply/release/releaseAll**
+- [x] **Step 4: 实现 apply/release/releaseAll**
 
 `apply` 顺序固定为：清理 dead records、计算旧 top distance、分离 external、设置 `.never`、写新 insets、迁移 offset、更新 last managed。
 
 `release` 使用相同 distance 算法把 managed target 迁移到 zero，然后恢复 original behavior 并移除 record。`releaseAll()` 对 live records 逐一归还，不在迭代字典时修改原字典。
 
-- [ ] **Step 5: 运行 Task 3 GREEN**
+- [x] **Step 5: 运行 Task 3 GREEN**
 
 Run: Task 3 RED 的同一命令。
 
 Expected: 全部 coordinator tests 通过。
 
-- [ ] **Step 6: 自审并提交 Task 3**
+- [x] **Step 6: 自审并提交 Task 3**
 
 检查 coordinator 为 MainActor、record 弱持有 scroll、没有 Tabman/Pageboy、没有 `nonisolated(unsafe)`、日志不包含几何值、重复 target 不写 UIKit 属性。
 
@@ -1077,6 +1077,7 @@ git commit -m "记录 v0.3 固定分页视口验收"
 
 - Task 1：`AnchorPagerLayoutEngine` 仍为只 import CoreGraphics 的纯计算类型；`pagingFrame.height` 只依赖 bounds、top obstruction 和 collapsed Header height，不依赖 contentOffset、bar height 或 bottom obstruction。旧容器级 managed target 与未落地的 target 日志已移除，Header、Tabman/Pageboy containment、selection 和 scroll discovery 未改变。
 - Task 2：optional height 只作为 internal adapter 请求，尚未提前修改 public configuration；实际 TMBar 仍由 Paging 层创建和持有。nil 不安装高度约束，非 nil 复用单一 constraint；公开 `barInsets` 只在 sanitized value 变化时通过 UIKit `UIEdgeInsets` 回调，未向 Public/Layout 层泄漏 TMBar 或 Pageboy 类型。invalid height 和 barInsets 变化均有 sink 测试。
+- Task 3：`AnchorPagerManagedInsetCoordinator` 与 nested Record 均为 MainActor；record 弱持有 UIScrollView，不阻止页面资源释放。apply/update/release 使用“current - previous managed + new managed”合成 external inset，并按 distance-from-top 迁移 offset；release 恢复原 adjustment behavior。日志只记录 begin/update/skip/end 稳定事件，没有几何或业务数据。
 - 计划覆盖 spec 中 v0.3 的 optional bar height、fixed adapter、barInsets callback、managed inset ownership、fallback、日志、文档和 UI test；v0.4/v0.5 只保留接口兼容边界，没有提前实现。
 - Task 1 的 `barHeight` runtime 语义/`pagingFrame`、Task 2 的 `setBarHeight`/`didUpdateBarInsets`、Task 3 的 `Target`/apply/release 与 Task 4 的消费名称保持一致。
 - 每个实现任务都有明确 RED、GREEN、定向命令、自审和中文提交；最终任务包含 package、example build 和 UI tests。
@@ -1092,4 +1093,7 @@ git commit -m "记录 v0.3 固定分页视口验收"
 - Task 2 GREEN：同一定向 PagingAdapter 测试命令通过。
 - Task 2 日志 RED：移除 `paging.barInsetsChanged` 发射后，定向 `testExplicitBarHeightConstrainsActualTabmanBarAndReportsInsets` 失败；恢复最小日志实现后同一测试通过。
 - Task 2 回归：`xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcodebuild-v03-bar-green -only-testing:AnchorPagerTests/AnchorPagerPagingAdapterTests test` 通过。
+- Task 3 RED：`xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcodebuild-v03-inset-red -only-testing:AnchorPagerTests/AnchorPagerManagedInsetCoordinatorTests test` 失败，核心错误为找不到 `AnchorPagerManagedInsetCoordinator`，符合测试先行预期。
+- Task 3 初次 GREEN：同一命令通过，但编译器报告 nested Record 读取 MainActor UIKit 属性的隔离警告。
+- Task 3 最终 GREEN：显式标记 nested Record 为 MainActor 后，`xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcodebuild-v03-inset-green -only-testing:AnchorPagerTests/AnchorPagerManagedInsetCoordinatorTests test` 通过且不再出现该 Swift 6 actor warning。
 - 实现验证记录将在各任务完成后按真实结果追加，不提前填写通过状态。
