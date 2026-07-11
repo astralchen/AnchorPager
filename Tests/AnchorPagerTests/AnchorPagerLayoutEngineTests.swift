@@ -103,6 +103,31 @@ final class AnchorPagerLayoutEngineTests: XCTestCase {
         XCTAssertEqual(extended.resolvedHeaderHeight.collapsibleDistance, 80)
     }
 
+    func testPagingFrameMovesWithHeaderButKeepsCollapsedViewportHeight() {
+        let engine = AnchorPagerLayoutEngine()
+        let expanded = engine.layout(
+            for: input(
+                headerHeightMode: .fixed(max: 100, min: 20),
+                topObstructionHeight: 44,
+                contentOffsetY: 0
+            )
+        )
+        let collapsed = engine.layout(
+            for: input(
+                headerHeightMode: .fixed(max: 100, min: 20),
+                topObstructionHeight: 44,
+                contentOffsetY: 80
+            )
+        )
+
+        XCTAssertEqual(expanded.pagingFrame.minY, 144)
+        XCTAssertEqual(collapsed.pagingFrame.minY, 64)
+        XCTAssertEqual(expanded.pagingFrame.height, 576)
+        XCTAssertEqual(collapsed.pagingFrame.height, 576)
+        XCTAssertEqual(expanded.pagingFrame.maxY, 720)
+        XCTAssertEqual(collapsed.pagingFrame.maxY, 640)
+    }
+
     func testExtendsUnderTopSafeAreaCoversTopObstructionWhenHeaderIsShorter() {
         let output = AnchorPagerLayoutEngine().layout(
             for: input(
@@ -138,7 +163,7 @@ final class AnchorPagerLayoutEngineTests: XCTestCase {
         XCTAssertEqual(output.barFrame.minY, output.headerFrame.maxY)
     }
 
-    func testBottomObstructionDoesNotClipContentFrameAndPreservesManagedInsetTarget() {
+    func testBottomObstructionDoesNotClipContentOrPagingFrame() {
         let output = AnchorPagerLayoutEngine().layout(
             for: input(
                 bottomObstructionHeight: 83
@@ -147,7 +172,7 @@ final class AnchorPagerLayoutEngineTests: XCTestCase {
 
         XCTAssertEqual(output.contentFrame.maxY, 640)
         XCTAssertEqual(output.contentFrame.height, 492)
-        XCTAssertEqual(output.managedInsetTarget.bottom, 83)
+        XCTAssertEqual(output.pagingFrame.height, 640)
     }
 
     func testOffsetAdjustmentStrategiesReturnExpectedContentOffset() {
@@ -210,6 +235,7 @@ final class AnchorPagerLayoutEngineTests: XCTestCase {
         measuredHeaderHeight: CGFloat = 100,
         headerHeightMode: AnchorPagerHeaderHeightMode = .fixed(max: 100, min: 0),
         headerTopBehavior: AnchorPagerHeaderTopBehavior = .insideSafeArea,
+        // 输入值表示 Tabman 完成布局后的真实 bar 高度。
         barHeight: CGFloat = 48,
         topObstructionHeight: CGFloat = 0,
         bottomObstructionHeight: CGFloat = 0,

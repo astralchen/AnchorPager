@@ -80,7 +80,7 @@
 - Consumes: `AnchorPagerHeaderHeightMode`、`AnchorPagerHeaderTopBehavior`、container bounds/obstruction/contentOffset。
 - Produces: `AnchorPagerLayoutEngine.Input.barHeight: CGFloat` 的语义固定为 runtime resolved height、`Output.pagingFrame: CGRect`；不再产生 `ManagedInsetTarget`。
 
-- [ ] **Step 1: 写 fixed paging frame 失败测试**
+- [x] **Step 1: 写 fixed paging frame 失败测试**
 
 在 `AnchorPagerLayoutEngineTests` 增加：
 
@@ -124,7 +124,7 @@ func testBottomObstructionDoesNotClipContentOrPagingFrame() {
 }
 ```
 
-- [ ] **Step 2: 运行 Task 1 RED**
+- [x] **Step 2: 运行 Task 1 RED**
 
 Run:
 
@@ -134,7 +134,7 @@ xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 
 
 Expected: FAIL，核心错误为 `Output` 没有 `pagingFrame`，旧测试仍引用 `managedInsetTarget`。
 
-- [ ] **Step 3: 实现最小固定 frame 纯计算**
+- [x] **Step 3: 实现最小固定 frame 纯计算**
 
 保留 input 的 `barHeight` 参数标签以避免无意义调用点改名，并在类型定义旁记录它表示 runtime
 resolved bar height，不是 public 配置的先验值：
@@ -177,7 +177,7 @@ let pagingFrame = CGRect(
 `testSafeAreaAndBoundsChangesWriteLayoutLogs`，删除对旧 managed target 事件的正/负断言；safe area 和
 bounds 日志断言保持不变。新的真实 inset 日志从 Task 3 coordinator 开始覆盖。
 
-- [ ] **Step 4: 更新全部 LayoutEngine helper 参数名并运行 GREEN**
+- [x] **Step 4: 更新全部 LayoutEngine helper 参数名并运行 GREEN**
 
 测试 helper 继续使用 `barHeight` 标签；增加注释说明传入的是已解析的 runtime bar height。
 
@@ -185,7 +185,7 @@ Run: Task 1 RED 的同一命令。
 
 Expected: PASS，`AnchorPagerLayoutEngineTests` 全部通过。
 
-- [ ] **Step 5: 自审并提交 Task 1**
+- [x] **Step 5: 自审并提交 Task 1**
 
 检查纯计算层不 import UIKit、不绑定 MainActor；paging frame height 不依赖 contentOffset、bar height 或 bottom obstruction；不新增日志。
 
@@ -1075,6 +1075,7 @@ git commit -m "记录 v0.3 固定分页视口验收"
 
 ## Self-review Record
 
+- Task 1：`AnchorPagerLayoutEngine` 仍为只 import CoreGraphics 的纯计算类型；`pagingFrame.height` 只依赖 bounds、top obstruction 和 collapsed Header height，不依赖 contentOffset、bar height 或 bottom obstruction。旧容器级 managed target 与未落地的 target 日志已移除，Header、Tabman/Pageboy containment、selection 和 scroll discovery 未改变。
 - 计划覆盖 spec 中 v0.3 的 optional bar height、fixed adapter、barInsets callback、managed inset ownership、fallback、日志、文档和 UI test；v0.4/v0.5 只保留接口兼容边界，没有提前实现。
 - Task 1 的 `barHeight` runtime 语义/`pagingFrame`、Task 2 的 `setBarHeight`/`didUpdateBarInsets`、Task 3 的 `Target`/apply/release 与 Task 4 的消费名称保持一致。
 - 每个实现任务都有明确 RED、GREEN、定向命令、自审和中文提交；最终任务包含 package、example build 和 UI tests。
@@ -1083,4 +1084,7 @@ git commit -m "记录 v0.3 固定分页视口验收"
 ## Verification Record
 
 - 计划编写阶段：`git diff --check` 通过。
+- Task 1 RED：`xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcodebuild-v03-layout-red -only-testing:AnchorPagerTests/AnchorPagerLayoutEngineTests test` 失败，核心错误为 `AnchorPagerLayoutEngine.Output` 没有 `pagingFrame`，符合测试先行预期。
+- Task 1 GREEN：同一 LayoutEngine 定向测试命令通过。
+- Task 1 回归：`xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcodebuild-v03-layout-green -only-testing:AnchorPagerTests/AnchorPagerLayoutEngineTests -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests test` 通过。
 - 实现验证记录将在各任务完成后按真实结果追加，不提前填写通过状态。

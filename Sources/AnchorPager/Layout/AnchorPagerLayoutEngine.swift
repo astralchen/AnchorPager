@@ -21,11 +21,6 @@ struct AnchorPagerLayoutEngine {
         }
     }
 
-    struct ManagedInsetTarget: Equatable {
-        var top: CGFloat
-        var bottom: CGFloat
-    }
-
     struct Output: Equatable {
         var resolvedHeaderHeight: ResolvedHeaderHeight
         var collapseOffset: CGFloat
@@ -33,13 +28,13 @@ struct AnchorPagerLayoutEngine {
         var headerFrame: CGRect
         var barFrame: CGRect
         var contentFrame: CGRect
-        var managedInsetTarget: ManagedInsetTarget
+        var pagingFrame: CGRect
     }
 
     func layout(for input: Input) -> Output {
         let bounds = input.bounds
         let topObstructionHeight = nonNegativeFinite(input.topObstructionHeight)
-        let bottomObstructionHeight = nonNegativeFinite(input.bottomObstructionHeight)
+        // 该值表示分页 adapter 完成布局后的真实 bar 高度，而不是配置先验值。
         let barHeight = nonNegativeFinite(input.barHeight)
         let resolvedHeaderHeight = resolvedHeaderHeight(
             measuredHeaderHeight: input.measuredHeaderHeight,
@@ -90,9 +85,12 @@ struct AnchorPagerLayoutEngine {
             width: bounds.width,
             height: Swift.max(0, bounds.maxY - contentY)
         )
-        let managedInsetTarget = ManagedInsetTarget(
-            top: topObstructionHeight + resolvedHeaderHeight.expanded + barHeight,
-            bottom: bottomObstructionHeight
+        let collapsedAdapterTop = topPinY + resolvedHeaderHeight.collapsed
+        let pagingFrame = CGRect(
+            x: bounds.minX,
+            y: barY,
+            width: bounds.width,
+            height: Swift.max(0, bounds.maxY - collapsedAdapterTop)
         )
 
         return Output(
@@ -102,7 +100,7 @@ struct AnchorPagerLayoutEngine {
             headerFrame: headerFrame,
             barFrame: barFrame,
             contentFrame: contentFrame,
-            managedInsetTarget: managedInsetTarget
+            pagingFrame: pagingFrame
         )
     }
 

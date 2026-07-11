@@ -63,7 +63,6 @@ open class AnchorPagerViewController: UIViewController {
     private var lastLoggedBarFrame: CGRect?
     private var lastLoggedSafeAreaObstruction: LocalSafeAreaObstruction?
     private var lastLoggedBounds: CGRect?
-    private var lastLoggedManagedInsetTarget: AnchorPagerLayoutEngine.ManagedInsetTarget?
     private var pageCount = 0
 
     /// 创建 AnchorPager 容器。
@@ -511,11 +510,6 @@ open class AnchorPagerViewController: UIViewController {
         if lastLoggedBounds != environment.bounds {
             AnchorPagerLogger.log(.info, category: .layout, event: "layout.boundsChanged")
             lastLoggedBounds = environment.bounds
-        }
-
-        if lastLoggedManagedInsetTarget != output.managedInsetTarget {
-            AnchorPagerLogger.log(.debug, category: .inset, event: "inset.managedTargetChanged")
-            lastLoggedManagedInsetTarget = output.managedInsetTarget
         }
     }
 

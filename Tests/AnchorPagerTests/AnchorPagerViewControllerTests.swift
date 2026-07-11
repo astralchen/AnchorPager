@@ -988,7 +988,7 @@ final class AnchorPagerViewControllerTests: XCTestCase {
     }
 
     @MainActor
-    func testSafeAreaBoundsAndManagedInsetChangesWriteLogs() {
+    func testSafeAreaAndBoundsChangesWriteLayoutLogs() {
         var configuration = AnchorPagerConfiguration.default
         configuration.header.heightMode = .fixed(max: 80, min: 0)
         let pager = AnchorPagerViewController(configuration: configuration)
@@ -1010,7 +1010,6 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         pager.reloadHeaderLayout(offsetAdjustment: .resetToExpanded)
 
         XCTAssertTrue(events.contains(.init(category: .layout, level: .info, event: "layout.safeAreaChanged")))
-        XCTAssertTrue(events.contains(.init(category: .inset, level: .debug, event: "inset.managedTargetChanged")))
 
         events.removeAll()
         pager.view.frame = CGRect(x: 0, y: 0, width: 320, height: 700)
@@ -1023,7 +1022,6 @@ final class AnchorPagerViewControllerTests: XCTestCase {
 
         XCTAssertFalse(events.contains(.init(category: .layout, level: .info, event: "layout.safeAreaChanged")))
         XCTAssertFalse(events.contains(.init(category: .layout, level: .info, event: "layout.boundsChanged")))
-        XCTAssertFalse(events.contains(.init(category: .inset, level: .debug, event: "inset.managedTargetChanged")))
     }
 
     @MainActor
