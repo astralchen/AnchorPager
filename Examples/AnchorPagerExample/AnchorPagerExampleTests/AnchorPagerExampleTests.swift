@@ -101,6 +101,11 @@ struct AnchorPagerExampleTests {
                 $0.text == "AnchorPager Example"
             }
         )
+        let subtitleLabel = try #require(
+            firstSubview(in: pagerViewController.view, as: UILabel.self) {
+                $0.text == "Header UIView、显式 scroll view、无 scroll view child"
+            }
+        )
         let stackView = try #require(titleLabel.superview as? UIStackView)
         let headerView = try #require(stackView.superview)
         let layoutProbe = LayoutProbe()
@@ -116,11 +121,33 @@ struct AnchorPagerExampleTests {
 
             let safeAreaFrame = headerView.safeAreaLayoutGuide.layoutFrame
             #expect(abs(stackView.frame.minY - (safeAreaFrame.minY + 20)) < 0.5)
-            #expect(abs(stackView.frame.maxY - (safeAreaFrame.maxY - 20)) < 0.5)
+            let titleIntrinsicHeight = titleLabel.intrinsicContentSize.height
+            let subtitleFittingHeight = subtitleLabel.systemLayoutSizeFitting(
+                CGSize(
+                    width: subtitleLabel.bounds.width,
+                    height: UIView.layoutFittingCompressedSize.height
+                ),
+                withHorizontalFittingPriority: .required,
+                verticalFittingPriority: .fittingSizeLevel
+            ).height
+            #expect(abs(titleLabel.bounds.height - titleIntrinsicHeight) < 0.5)
+            #expect(abs(subtitleLabel.bounds.height - subtitleFittingHeight) < 0.5)
+            #expect(abs(subtitleLabel.frame.minY - titleLabel.frame.maxY - 8) < 0.5)
+            #expect(stackView.frame.maxY <= safeAreaFrame.maxY - 20 + 0.5)
 
             if behavior == .extendsUnderTopSafeArea {
                 let context = try #require(layoutProbe.layoutContexts.last)
                 #expect(abs(context.headerFrame.minY) < 0.5)
+                let titleFrameBeforeBounce = titleLabel.frame
+                let subtitleFrameBeforeBounce = subtitleLabel.frame
+                pagerViewController.verticalScrollView.contentOffset = CGPoint(x: 0, y: -24)
+                window.layoutIfNeeded()
+                #expect(abs(titleLabel.frame.minY - titleFrameBeforeBounce.minY) < 0.5)
+                #expect(abs(titleLabel.frame.height - titleFrameBeforeBounce.height) < 0.5)
+                #expect(abs(subtitleLabel.frame.minY - subtitleFrameBeforeBounce.minY) < 0.5)
+                #expect(abs(subtitleLabel.frame.height - subtitleFrameBeforeBounce.height) < 0.5)
+                #expect(abs(subtitleLabel.frame.minY - titleLabel.frame.maxY - 8) < 0.5)
+                pagerViewController.verticalScrollView.contentOffset = .zero
             }
         }
     }

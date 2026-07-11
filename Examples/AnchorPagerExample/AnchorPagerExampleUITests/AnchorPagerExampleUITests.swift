@@ -51,11 +51,15 @@ final class AnchorPagerExampleUITests: XCTestCase {
 
         let navigationBar = app.navigationBars["AnchorPager"]
         let title = app.staticTexts["AnchorPager Example"]
+        let subtitle = app.staticTexts["Header UIView、显式 scroll view、无 scroll view child"]
         let behaviorButton = navigationBar.buttons["Header 顶部行为"]
         XCTAssertTrue(navigationBar.waitForExistence(timeout: 3))
         XCTAssertTrue(title.waitForExistence(timeout: 3))
+        XCTAssertTrue(subtitle.waitForExistence(timeout: 3))
         XCTAssertTrue(behaviorButton.waitForExistence(timeout: 3))
         XCTAssertEqual(title.frame.minY, navigationBar.frame.maxY + 20, accuracy: 1)
+        XCTAssertEqual(subtitle.frame.minY - title.frame.maxY, 8, accuracy: 1)
+        XCTAssertLessThanOrEqual(title.frame.height, 44)
 
         behaviorButton.tap()
         let extendedAction = app.buttons["延伸到顶部"]
@@ -63,6 +67,8 @@ final class AnchorPagerExampleUITests: XCTestCase {
         extendedAction.tap()
 
         XCTAssertEqual(title.frame.minY, navigationBar.frame.maxY + 20, accuracy: 1)
+        XCTAssertEqual(subtitle.frame.minY - title.frame.maxY, 8, accuracy: 1)
+        XCTAssertLessThanOrEqual(title.frame.height, 44)
     }
 
     @MainActor
