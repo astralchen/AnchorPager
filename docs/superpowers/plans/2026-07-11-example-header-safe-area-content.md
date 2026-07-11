@@ -281,3 +281,175 @@ git commit -m "记录示例 Header 安全区布局验收"
 - Layout/scroll/inset：Header 蓝色背景和外框语义不变；LayoutEngine、automatic 中立测量、分段栏基线、scroll range、viewport bounce、child inset 和 overscroll owner 均未修改。
 - 日志/资源：没有新增框架状态或关键事件，不需要新增日志；没有新增资源、observer、Task、KVO 或 display link。
 - 测试/文档：同进程测试覆盖上下 safe-area 间距和 extends 外框，UI 测试覆盖用户可见切换；设计、计划和任务状态已同步真实 RED/GREEN 与最终验收结果。
+
+## Follow-up Plan：文本组顶部对齐与固定间距
+
+### Task 3: 测试先行消除 arranged label 拉伸
+
+**Files:**
+- Modify: `Examples/AnchorPagerExample/AnchorPagerExampleTests/AnchorPagerExampleTests.swift:84-126`
+- Modify: `Examples/AnchorPagerExample/AnchorPagerExampleUITests/AnchorPagerExampleUITests.swift:48-66`
+- Modify: `Examples/AnchorPagerExample/AnchorPagerExample/ExamplePagerViewController.swift:202-207`
+
+**Interfaces:**
+- Consumes: 现有 `ExampleHeaderView`、`UIStackView.spacing == 8`、双 `AnchorPagerHeaderTopBehavior`
+- Produces: 顶部对齐且 arranged label 保持 intrinsic/fitting height 的示例 Header 文本布局
+- Preserves: safe area 顶部 20 pt、底部至少 20 pt、Header 外框和 viewport bounce
+
+- [ ] **Step 1: 扩展同进程测试以暴露 label 拉伸**
+
+在现有 `headerContentUsesSafeAreaForVerticalPaddingInBothTopBehaviors()` 中找到副标题，并在每种顶部行为布局后加入：
+
+```swift
+let subtitleLabel = try #require(
+    firstSubview(in: pagerViewController.view, as: UILabel.self) {
+        $0.text == "Header UIView、显式 scroll view、无 scroll view child"
+    }
+)
+
+let titleIntrinsicHeight = titleLabel.intrinsicContentSize.height
+let subtitleFittingHeight = subtitleLabel.systemLayoutSizeFitting(
+    CGSize(
+        width: subtitleLabel.bounds.width,
+        height: UIView.layoutFittingCompressedSize.height
+    ),
+    withHorizontalFittingPriority: .required,
+    verticalFittingPriority: .fittingSizeLevel
+).height
+#expect(abs(titleLabel.bounds.height - titleIntrinsicHeight) < 0.5)
+#expect(abs(subtitleLabel.bounds.height - subtitleFittingHeight) < 0.5)
+#expect(abs(subtitleLabel.frame.minY - titleLabel.frame.maxY - 8) < 0.5)
+#expect(stackView.frame.maxY <= safeAreaFrame.maxY - 20 + 0.5)
+```
+
+在 extends 分支记录本地 frame，模拟负 offset 后确认内部 frame 和间距不变：
+
+```swift
+let titleFrameBeforeBounce = titleLabel.frame
+let subtitleFrameBeforeBounce = subtitleLabel.frame
+pagerViewController.verticalScrollView.contentOffset = CGPoint(x: 0, y: -24)
+window.layoutIfNeeded()
+#expect(titleLabel.frame == titleFrameBeforeBounce)
+#expect(subtitleLabel.frame == subtitleFrameBeforeBounce)
+#expect(abs(subtitleLabel.frame.minY - titleLabel.frame.maxY - 8) < 0.5)
+pagerViewController.verticalScrollView.contentOffset = .zero
+```
+
+- [ ] **Step 2: 扩展 UI 测试验证用户可见文本间距**
+
+在现有 `testHeaderContentKeepsTwentyPointTopSafeAreaPaddingWhenSwitchingBehaviors()` 中查询副标题，并在 inside 和 extends 两次断言：
+
+```swift
+let subtitle = app.staticTexts["Header UIView、显式 scroll view、无 scroll view child"]
+XCTAssertTrue(subtitle.waitForExistence(timeout: 3))
+
+XCTAssertEqual(subtitle.frame.minY - title.frame.maxY, 8, accuracy: 1)
+XCTAssertLessThanOrEqual(title.frame.height, 44)
+```
+
+上述两个断言同时覆盖两种可能的 accessibility frame：若 frame 使用拉伸后的 UILabel bounds，则标题高度失败；若 frame 收紧到文字绘制区域，则可见间距失败。
+
+- [ ] **Step 3: 运行目标测试并确认 RED**
+
+```bash
+xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,id=28B089AA-A03D-49CE-A037-D999D84E9606' -derivedDataPath .build/xcodebuild-example-header-text-spacing -parallel-testing-enabled NO -enableCodeCoverage NO -only-testing:AnchorPagerExampleTests test
+xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,id=28B089AA-A03D-49CE-A037-D999D84E9606' -derivedDataPath .build/xcodebuild-example-header-text-spacing -parallel-testing-enabled NO -enableCodeCoverage NO -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testHeaderContentKeepsTwentyPointTopSafeAreaPaddingWhenSwitchingBehaviors test
+```
+
+Expected: 同进程测试至少一个 label 高度断言失败；UI 测试在标题高度或可见 8 pt 间距断言失败。失败必须来自当前 bottom 等式导致的 arranged label 拉伸，不得是元素查找或测试装配错误。
+
+- [ ] **Step 4: 实现最小顶部对齐约束**
+
+只修改 `ExampleHeaderView.configure()` 的 bottom 关系：
+
+```swift
+NSLayoutConstraint.activate([
+    stackView.leadingAnchor.constraint(equalTo: layoutMarginsGuide.leadingAnchor),
+    stackView.trailingAnchor.constraint(equalTo: layoutMarginsGuide.trailingAnchor),
+    stackView.topAnchor.constraint(equalTo: safeAreaLayoutGuide.topAnchor, constant: 20),
+    stackView.bottomAnchor.constraint(
+        lessThanOrEqualTo: safeAreaLayoutGuide.bottomAnchor,
+        constant: -20
+    )
+])
+```
+
+- [ ] **Step 5: 重跑目标测试并确认 GREEN**
+
+Run: Step 3 的两个命令。
+
+Expected: 示例单元测试 target 4/4 通过，目标 UI 测试 1/1 通过；标题和副标题相邻 frame 间距为 8 pt，负 offset 不改变内部 frame。
+
+- [ ] **Step 6: 自审并提交 Task 3**
+
+```bash
+git diff --check
+git add Examples/AnchorPagerExample/AnchorPagerExample/ExamplePagerViewController.swift Examples/AnchorPagerExample/AnchorPagerExampleTests/AnchorPagerExampleTests.swift Examples/AnchorPagerExample/AnchorPagerExampleUITests/AnchorPagerExampleUITests.swift
+git commit -m "收紧示例 Header 文本间距"
+```
+
+确认 diff 只包含一个约束关系和相应测试；不修改框架 Sources、Public API、Header 高度、safe area、分段栏或 bounce。
+
+---
+
+### Task 4: Follow-up 文档、完整验证与自审
+
+**Files:**
+- Modify: `docs/superpowers/specs/2026-07-11-example-header-safe-area-content-design.md`
+- Modify: `docs/superpowers/plans/2026-07-11-example-header-safe-area-content.md`
+- Modify: `docs/task-list.md`
+
+**Interfaces:**
+- Consumes: Task 3 的 RED/GREEN 与顶部对齐约束
+- Produces: 固定 8 pt 文本间距的长期验收记录
+- Preserves: v0.2 已完成状态与后续版本职责边界
+
+- [ ] **Step 1: 同步实施记录和任务状态**
+
+在设计和本计划记录：旧 bottom 等式导致的实际 label 拉伸值、最小实现、目标测试 GREEN 和最终验证结果。在 `docs/task-list.md` v0.2 区域及当前执行入口登记“示例 Header 文本顶部对齐、固定 8 pt 间距”的完成状态。
+
+- [ ] **Step 2: 运行完整框架测试**
+
+```bash
+xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,id=28B089AA-A03D-49CE-A037-D999D84E9606' -derivedDataPath .build/xcodebuild-example-header-text-spacing-core -parallel-testing-enabled NO -enableCodeCoverage NO test
+```
+
+Expected: 83 tests、0 failures、0 skipped。
+
+- [ ] **Step 3: 运行完整示例测试**
+
+```bash
+xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,id=28B089AA-A03D-49CE-A037-D999D84E9606' -derivedDataPath .build/xcodebuild-example-header-text-spacing -parallel-testing-enabled NO -enableCodeCoverage NO test
+```
+
+Expected: 13 tests、0 failures、0 skipped。
+
+- [ ] **Step 4: 运行 generic build 与静态校验**
+
+```bash
+xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'generic/platform=iOS Simulator' -derivedDataPath .build/xcodebuild-example-header-text-spacing-generic build
+git diff --check
+rg -n "Tabman|Pageboy" Sources/AnchorPager/Public
+rg -n "\\bprint\\(" Sources/AnchorPager
+git status --short
+```
+
+Expected: build 和 diff check 通过；两个边界扫描无输出；状态只包含 follow-up 文档改动。
+
+- [ ] **Step 5: 完成最终自审**
+
+确认 Public API、第三方 adapter、containment/lifecycle、MainActor、Header 测量、scroll discovery、inset ownership、paging、gesture/overscroll、日志与资源策略均未改变；新增测试覆盖真实 UIKit label frame、双顶部行为和负 offset。
+
+- [ ] **Step 6: 提交 follow-up 验收记录**
+
+```bash
+git add docs/superpowers/specs/2026-07-11-example-header-safe-area-content-design.md docs/superpowers/plans/2026-07-11-example-header-safe-area-content.md docs/task-list.md
+git commit -m "记录示例 Header 文本间距验收"
+```
+
+## Follow-up Plan Self-Review
+
+- Spec coverage：Task 3 覆盖顶部对齐、固定 8 pt、bottom 安全边界和负 offset；Task 4 覆盖完整验证、文档与自审。
+- Placeholder scan：所有代码、测试、命令和期望结果均已明确，没有延后测试或未定义接口。
+- Type consistency：只复用现有 UILabel、UIStackView、AnchorPager public 配置和测试 helper，不新增生产接口。
+- Scope：最小生产改动只有 `equalTo` → `lessThanOrEqualTo`；不修改框架 Sources 或其他示例页面。
