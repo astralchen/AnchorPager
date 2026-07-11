@@ -310,7 +310,7 @@
 ## v0.3：Scroll Discovery 与 Inset Ownership 版
 
 - [x] 创建 `docs/superpowers/specs/2026-07-11-fixed-paging-viewport-inset-scroll-ownership-design.md`，固定 v0.3–v0.5 几何、inset 和 owner 边界
-- [ ] 创建 v0.3 详细实施计划
+- [x] 创建 v0.3 详细实施计划：`docs/superpowers/plans/2026-07-11-v0-3-fixed-paging-inset-ownership.md`
 - [ ] 固化默认 scroll view lookup 文档
 - [ ] 将 `AnchorPagerBarConfiguration.height` 改为 optional，默认 nil
 - [ ] nil 高度使用 Tabman bar 自适应布局，显式高度约束实际 bar
