@@ -1043,7 +1043,7 @@ Task 5 验证记录：
 - Consumes: Task 1–5 的代码、测试、文档和提交。
 - Produces: 可复核验证记录、自审结论和 v0.3 完成状态。
 
-- [ ] **Step 1: 运行静态与依赖验证**
+- [x] **Step 1: 运行静态与依赖验证**
 
 ```bash
 git diff --check
@@ -1052,7 +1052,7 @@ swift package resolve
 
 Expected: 两者 exit 0，依赖仍解析为 Tabman 4.0.1、Pageboy 5.0.2。
 
-- [ ] **Step 2: 运行 package 完整测试**
+- [x] **Step 2: 运行 package 完整测试**
 
 ```bash
 xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcodebuild-v03-final -parallel-testing-enabled NO -enableCodeCoverage NO test
@@ -1060,7 +1060,7 @@ xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 
 
 Expected: 全部测试通过、0 failures。
 
-- [ ] **Step 3: 运行示例 build 与完整测试**
+- [x] **Step 3: 运行示例 build 与完整测试**
 
 ```bash
 xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'generic/platform=iOS Simulator' -derivedDataPath .build/example-xcodebuild-v03-final build
@@ -1069,12 +1069,12 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExa
 
 Expected: build 成功；示例单元/UI tests 全部通过。
 
-- [ ] **Step 4: 执行源码与架构自审**
+- [x] **Step 4: 执行源码与架构自审**
 
 逐项记录：
 
 1. Public API 只有 `CGFloat?` 变化，没有 Tabman/Pageboy 类型泄漏。
-2. Tabman/Pageboy 只出现在 Paging 层和测试 import。
+2. Tabman/Pageboy import 和类型引用只出现在 Paging 层；其他 internal 层仅允许用注释记录 containment 边界。
 3. adapter containment、Header containment、fallback containment 顺序未破坏。
 4. Pageboy child bounds 在 Header 折叠热路径稳定。
 5. inset coordinator weak ownership、external 合成、归还和 offset 迁移闭环成立。
@@ -1083,11 +1083,11 @@ Expected: build 成功；示例单元/UI tests 全部通过。
 8. v0.4 page state 和 v0.5 handoff 没有被提前实现。
 9. README、architecture、requirements、task-list、spec、plan 状态一致。
 
-- [ ] **Step 5: 更新计划 Self-review / Verification Record**
+- [x] **Step 5: 更新计划 Self-review / Verification Record**
 
 在本文末尾追加实际命令、测试数量、失败修复记录和自审结果。只有完整验证通过后才在 task-list 标记 v0.3 完成。
 
-- [ ] **Step 6: 提交最终验收记录**
+- [x] **Step 6: 提交最终验收记录**
 
 ```bash
 git diff --check
@@ -1102,6 +1102,9 @@ git commit -m "记录 v0.3 固定分页视口验收"
 - Task 1：`AnchorPagerLayoutEngine` 仍为只 import CoreGraphics 的纯计算类型；`pagingFrame.height` 只依赖 bounds、top obstruction 和 collapsed Header height，不依赖 contentOffset、bar height 或 bottom obstruction。旧容器级 managed target 与未落地的 target 日志已移除，Header、Tabman/Pageboy containment、selection 和 scroll discovery 未改变。
 - Task 2：optional height 只作为 internal adapter 请求，尚未提前修改 public configuration；实际 TMBar 仍由 Paging 层创建和持有。nil 不安装高度约束，非 nil 复用单一 constraint；公开 `barInsets` 只在 sanitized value 变化时通过 UIKit `UIEdgeInsets` 回调，未向 Public/Layout 层泄漏 TMBar 或 Pageboy 类型。invalid height 和 barInsets 变化均有 sink 测试。
 - Task 3：`AnchorPagerManagedInsetCoordinator` 与 nested Record 均为 MainActor；record 弱持有 UIScrollView，不阻止页面资源释放。apply/update/release 使用“current - previous managed + new managed”合成 external inset，并按 distance-from-top 迁移 offset；release 恢复原 adjustment behavior。日志只记录 begin/update/skip/end 稳定事件，没有几何或业务数据。
+- Task 4：Public `bar.height` 已切换为 `CGFloat?` 且默认 nil；ViewController 使用 runtime `barInsets.top` 驱动 LayoutEngine 和 managed top。reload 先完成新页面装配再归还 stale ownership，deinit 通过主线程隔离断言同步 `releaseAll()`；fallback 内容高度扣除 managed top/bottom。Tabman/Pageboy page containment 未改。
+- Task 5：示例保持默认 adaptive bar，真实 scroll/fallback 页面均有稳定 UI identifier 和可见性测试。README、architecture、requirements 与 task-list 已同步 v0.3 真实状态；requirements 中遗留的默认 48 契约在最终自审中修正为默认自适应。
+- 最终源码自审：Public API 只有 optional `CGFloat?` 语义变化；第三方 import/类型只存在于 Paging；Header、adapter、fallback containment 顺序未破坏；fixed paging、weak ownership、external 合成、offset 迁移、reload/deinit 归还均有测试。v0.4 page state 与 v0.5 handoff 未提前实现。
 - 计划覆盖 spec 中 v0.3 的 optional bar height、fixed adapter、barInsets callback、managed inset ownership、fallback、日志、文档和 UI test；v0.4/v0.5 只保留接口兼容边界，没有提前实现。
 - Task 1 的 `barHeight` runtime 语义/`pagingFrame`、Task 2 的 `setBarHeight`/`didUpdateBarInsets`、Task 3 的 `Target`/apply/release 与 Task 4 的消费名称保持一致。
 - 每个实现任务都有明确 RED、GREEN、定向命令、自审和中文提交；最终任务包含 package、example build 和 UI tests。
@@ -1120,4 +1123,11 @@ git commit -m "记录 v0.3 固定分页视口验收"
 - Task 3 RED：`xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcodebuild-v03-inset-red -only-testing:AnchorPagerTests/AnchorPagerManagedInsetCoordinatorTests test` 失败，核心错误为找不到 `AnchorPagerManagedInsetCoordinator`，符合测试先行预期。
 - Task 3 初次 GREEN：同一命令通过，但编译器报告 nested Record 读取 MainActor UIKit 属性的隔离警告。
 - Task 3 最终 GREEN：显式标记 nested Record 为 MainActor 后，`xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcodebuild-v03-inset-green -only-testing:AnchorPagerTests/AnchorPagerManagedInsetCoordinatorTests test` 通过且不再出现该 Swift 6 actor warning。
-- 实现验证记录将在各任务完成后按真实结果追加，不提前填写通过状态。
+- Task 4 RED：`AnchorPagerViewControllerTests` 41 项中 6 项按预期失败，覆盖默认高度、fixed viewport、managed inset、reload 与 scroll target collision。
+- Task 4 GREEN：原 41 项控制器测试全部通过；新增 deinit ownership 用例单独通过。首次 package 回归 99 项中 98 项通过，唯一失败为 Public DocC 出现第三方名称；修正后架构守卫定向测试通过。
+- Task 5 UI RED：新增真实 scroll/fallback 可见性用例因缺少两个 identifier 按预期失败。
+- Task 5 UI GREEN：目标用例通过；示例 generic build 通过；完整示例测试 14 项通过、0 failures，测试阶段约 163 秒。
+- 最终静态验证：`git diff --check` 通过。`swift package resolve` 沙箱内首次因用户级 Clang module cache 不可写失败，按授权在沙箱外重跑后通过；`Package.resolved` 保持 Tabman 4.0.1、Pageboy 5.0.2。
+- 最终 package：复用已启动的 `iPhone 17 Pro` 和 `.build/xcodebuild-v03-controller-red` 执行完整测试，99 项通过、0 failures、0 skipped，测试阶段约 35 秒。
+- 最终示例证据：复用 Task 5 当前提交的 `.build/example-xcodebuild-v03-ui`；generic build 成功，完整示例单元/UI tests 14 项通过、0 failures、0 skipped。
+- 最终文档审查：AGENTS 必读索引、README、architecture、requirements、task-list、spec 和 plan 已统一 optional bar height、fixed paging frame、managed inset ownership 与后续版本限制。

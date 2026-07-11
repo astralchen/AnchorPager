@@ -578,6 +578,7 @@
 - [x] v0.2 follow-up：示例 Header 标题栈 bottom 改为 safe area 上限约束，文本组顶部对齐并在下拉中保持固定 8 pt 间距；验证记录见 `docs/superpowers/plans/2026-07-11-example-header-safe-area-content.md`
 - [x] v0.2 Header 与布局稳定版已完成；后续从 v0.3 Scroll Discovery 与 Inset Ownership 版继续
 - [x] v0.3–v0.5 固定分页视口、optional bar height、inset ownership 和纵向 owner 架构已确认；设计见 `docs/superpowers/specs/2026-07-11-fixed-paging-viewport-inset-scroll-ownership-design.md`
+- [x] v0.3 Scroll Discovery 与 Inset Ownership 版已完成；验收记录见 `docs/superpowers/plans/2026-07-11-v0-3-fixed-paging-inset-ownership.md`
 - [x] 实现时遵循测试先行
 - [x] 每个任务完成后运行对应测试
 - [x] 每个任务完成时确认是否需要 UI 测试

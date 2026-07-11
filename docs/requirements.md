@@ -401,7 +401,7 @@ README.md
 
 1. Header 默认使用 automatic height，最小高度为 0，不设置固定最大高度。
 2. Header 默认 topBehavior 为 insideSafeArea。
-3. 分段栏默认高度为 48。
+3. 分段栏高度默认由内部分页适配器自适应；调用方可以通过可选显式高度覆盖。
 4. 默认支持点击分段栏、API 选择、横向滑动切页。
 5. 默认启用 UIViewController.anchorPagerDefaultScrollView 自动查找。
 6. 空页时 selectedIndex 对外保持 0，effectiveSelectedIndex 为 nil。
