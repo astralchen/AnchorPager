@@ -110,3 +110,13 @@ hugging、固定 Header 高度或修改框架布局掩盖问题。
 确认内部间距不变；再增加真实 UI 断言，覆盖 inside → extends 后两段文本仍相邻 8 pt。最小实现只把 bottom 等式
 约束改为 `lessThanOrEqualTo`，随后运行完整框架测试、完整示例测试、generic iOS Simulator build 和
 `git diff --check`。
+
+### Follow-up 实施记录
+
+- 标题栈 bottom 已从 safe area 等式改为 `lessThanOrEqualTo`；top 继续等于 safe area 下方 20 pt，左右继续使用 layout margins。
+- TDD RED 在 extends 模式模拟 `contentOffset.y = -24` 后记录到副标题高度从 18 pt 拉伸到 42 pt，差值 24 pt；使用 0.5 pt frame 容差后仍稳定失败。
+- 真实 UI 测试在静止状态修复前已经满足 8 pt；由于同步 XCUITest 无法在拖拽调用返回前读取“手指仍按住”的 frame，中间态使用同进程 UIKit 负 offset 测试作为稳定替代验证。
+- 最小修改后示例单元测试 4/4、目标 UI 测试 1/1 通过；负 offset 不再改变标题或副标题本地 frame，文本间距保持 8 pt。
+- 框架 Header 外框、safe area 计算、automatic 测量、scroll range、viewport bounce 和日志均未修改。
+- 最终验收继续复用 Booted iPhone 17：框架测试 83/83、示例测试 13/13、generic iOS Simulator build 和 `git diff --check` 全部通过。
+- 最终自审确认没有 Public API、第三方 adapter、containment/lifecycle、并发、scroll/inset、gesture/overscroll、日志或资源边界变化。

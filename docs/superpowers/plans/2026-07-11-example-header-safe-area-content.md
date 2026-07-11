@@ -296,7 +296,7 @@ git commit -m "记录示例 Header 安全区布局验收"
 - Produces: 顶部对齐且 arranged label 保持 intrinsic/fitting height 的示例 Header 文本布局
 - Preserves: safe area 顶部 20 pt、底部至少 20 pt、Header 外框和 viewport bounce
 
-- [ ] **Step 1: 扩展同进程测试以暴露 label 拉伸**
+- [x] **Step 1: 扩展同进程测试以暴露 label 拉伸**
 
 在现有 `headerContentUsesSafeAreaForVerticalPaddingInBothTopBehaviors()` 中找到副标题，并在每种顶部行为布局后加入：
 
@@ -335,7 +335,7 @@ window.layoutIfNeeded()
 pagerViewController.verticalScrollView.contentOffset = .zero
 ```
 
-- [ ] **Step 2: 扩展 UI 测试验证用户可见文本间距**
+- [x] **Step 2: 扩展 UI 测试验证用户可见文本间距**
 
 在现有 `testHeaderContentKeepsTwentyPointTopSafeAreaPaddingWhenSwitchingBehaviors()` 中查询副标题，并在 inside 和 extends 两次断言：
 
@@ -349,7 +349,7 @@ XCTAssertLessThanOrEqual(title.frame.height, 44)
 
 上述两个断言同时覆盖两种可能的 accessibility frame：若 frame 使用拉伸后的 UILabel bounds，则标题高度失败；若 frame 收紧到文字绘制区域，则可见间距失败。
 
-- [ ] **Step 3: 运行目标测试并确认 RED**
+- [x] **Step 3: 运行目标测试并确认 RED**
 
 ```bash
 xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,id=28B089AA-A03D-49CE-A037-D999D84E9606' -derivedDataPath .build/xcodebuild-example-header-text-spacing -parallel-testing-enabled NO -enableCodeCoverage NO -only-testing:AnchorPagerExampleTests test
@@ -358,7 +358,7 @@ xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorP
 
 Expected: 同进程测试至少一个 label 高度断言失败；UI 测试在标题高度或可见 8 pt 间距断言失败。失败必须来自当前 bottom 等式导致的 arranged label 拉伸，不得是元素查找或测试装配错误。
 
-- [ ] **Step 4: 实现最小顶部对齐约束**
+- [x] **Step 4: 实现最小顶部对齐约束**
 
 只修改 `ExampleHeaderView.configure()` 的 bottom 关系：
 
@@ -374,13 +374,13 @@ NSLayoutConstraint.activate([
 ])
 ```
 
-- [ ] **Step 5: 重跑目标测试并确认 GREEN**
+- [x] **Step 5: 重跑目标测试并确认 GREEN**
 
 Run: Step 3 的两个命令。
 
 Expected: 示例单元测试 target 4/4 通过，目标 UI 测试 1/1 通过；标题和副标题相邻 frame 间距为 8 pt，负 offset 不改变内部 frame。
 
-- [ ] **Step 6: 自审并提交 Task 3**
+- [x] **Step 6: 自审并提交 Task 3**
 
 ```bash
 git diff --check
@@ -404,11 +404,11 @@ git commit -m "收紧示例 Header 文本间距"
 - Produces: 固定 8 pt 文本间距的长期验收记录
 - Preserves: v0.2 已完成状态与后续版本职责边界
 
-- [ ] **Step 1: 同步实施记录和任务状态**
+- [x] **Step 1: 同步实施记录和任务状态**
 
 在设计和本计划记录：旧 bottom 等式导致的实际 label 拉伸值、最小实现、目标测试 GREEN 和最终验证结果。在 `docs/task-list.md` v0.2 区域及当前执行入口登记“示例 Header 文本顶部对齐、固定 8 pt 间距”的完成状态。
 
-- [ ] **Step 2: 运行完整框架测试**
+- [x] **Step 2: 运行完整框架测试**
 
 ```bash
 xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,id=28B089AA-A03D-49CE-A037-D999D84E9606' -derivedDataPath .build/xcodebuild-example-header-text-spacing-core -parallel-testing-enabled NO -enableCodeCoverage NO test
@@ -416,7 +416,7 @@ xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,id=28
 
 Expected: 83 tests、0 failures、0 skipped。
 
-- [ ] **Step 3: 运行完整示例测试**
+- [x] **Step 3: 运行完整示例测试**
 
 ```bash
 xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,id=28B089AA-A03D-49CE-A037-D999D84E9606' -derivedDataPath .build/xcodebuild-example-header-text-spacing -parallel-testing-enabled NO -enableCodeCoverage NO test
@@ -424,7 +424,7 @@ xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorP
 
 Expected: 13 tests、0 failures、0 skipped。
 
-- [ ] **Step 4: 运行 generic build 与静态校验**
+- [x] **Step 4: 运行 generic build 与静态校验**
 
 ```bash
 xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'generic/platform=iOS Simulator' -derivedDataPath .build/xcodebuild-example-header-text-spacing-generic build
@@ -436,11 +436,11 @@ git status --short
 
 Expected: build 和 diff check 通过；两个边界扫描无输出；状态只包含 follow-up 文档改动。
 
-- [ ] **Step 5: 完成最终自审**
+- [x] **Step 5: 完成最终自审**
 
 确认 Public API、第三方 adapter、containment/lifecycle、MainActor、Header 测量、scroll discovery、inset ownership、paging、gesture/overscroll、日志与资源策略均未改变；新增测试覆盖真实 UIKit label frame、双顶部行为和负 offset。
 
-- [ ] **Step 6: 提交 follow-up 验收记录**
+- [x] **Step 6: 提交 follow-up 验收记录**
 
 ```bash
 git add docs/superpowers/specs/2026-07-11-example-header-safe-area-content-design.md docs/superpowers/plans/2026-07-11-example-header-safe-area-content.md docs/task-list.md
@@ -453,3 +453,29 @@ git commit -m "记录示例 Header 文本间距验收"
 - Placeholder scan：所有代码、测试、命令和期望结果均已明确，没有延后测试或未定义接口。
 - Type consistency：只复用现有 UILabel、UIStackView、AnchorPager public 配置和测试 helper，不新增生产接口。
 - Scope：最小生产改动只有 `equalTo` → `lessThanOrEqualTo`；不修改框架 Sources 或其他示例页面。
+
+## Follow-up Execution Record
+
+- 复用 Booted iPhone 17 `28B089AA-A03D-49CE-A037-D999D84E9606` 和固定 DerivedData，未 shutdown、reboot、erase 或 clean。
+- 同进程 RED：示例单元测试 4 个中 1 个失败、3 个通过；在 extends 模式设置 `contentOffset.y = -24` 后，副标题高度从 18 pt 变为 42 pt，最终稳定断言记录拉伸差值为 24 pt。
+- 初次 frame 等式比较同时捕获到浮点尾差，测试先改为 0.5 pt 容差后仍因副标题高度增加 24 pt 失败，排除坐标精度造成的伪 RED。
+- UI 测试在静止 inside/extends 状态下修复前已通过；同步 XCUITest 手势调用无法在“手指仍按住”期间读取 frame，因此不将其作为 RED，负 offset 中间态由同进程 UIKit 集成测试稳定替代，UI 测试继续覆盖静止可见 8 pt 间距。
+- 最小实现只把标题栈 bottom 约束从 `equalTo` 改为 `lessThanOrEqualTo`。
+- 目标 GREEN：示例单元测试 target 4/4、目标 UI 测试 1/1 通过；负 offset 下标题和副标题 frame 高度不变，内部间距保持 8 pt。
+- Task 3 自审：diff 只包含一个示例约束关系和相应测试；未修改框架 Sources、Public API、Header 外框、高度测量、safe area、分段栏、scroll range 或 bounce。
+
+## Follow-up Final Verification
+
+- 完整框架测试：`xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,id=28B089AA-A03D-49CE-A037-D999D84E9606' -derivedDataPath .build/xcodebuild-example-header-text-spacing-core -parallel-testing-enabled NO -enableCodeCoverage NO test`，xcresult 为 83 tests、83 passed、0 failed、0 skipped、exit 0。
+- 完整示例测试：`xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,id=28B089AA-A03D-49CE-A037-D999D84E9606' -derivedDataPath .build/xcodebuild-example-header-text-spacing -parallel-testing-enabled NO -enableCodeCoverage NO test`，xcresult 为 13 tests、13 passed、0 failed、0 skipped、exit 0。
+- 示例 generic build：`xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'generic/platform=iOS Simulator' -derivedDataPath .build/xcodebuild-example-header-text-spacing-generic build`，exit 0。
+- `git diff --check` 通过；Public 目录 Tabman/Pageboy、production `print` 和不安全并发绕过扫描均无输出。
+- Xcode 继续提示 Tabman/Pageboy 上游 `PrivacyInfo.xcprivacy` unhandled resource；该既有警告未因 follow-up 增加，不影响本轮测试或 build。
+
+## Follow-up Final Self-Review
+
+- Public API/第三方边界：未修改 `Sources/AnchorPager`，没有 public 符号或 Tabman/Pageboy 边界变化。
+- UIKit/生命周期：只修改示例 Header 内部 bottom 约束，没有 containment、appearance lifecycle、reparent 或 MainActor 变化。
+- Layout/scroll/inset：文本组顶部对齐，label 保持 intrinsic/fitting height；Header 外框、safe area、automatic 测量、分段栏、scroll range、viewport bounce、child inset 和 overscroll owner 均未改变。
+- 日志/资源：没有新增框架状态或日志事件，没有新增资源、observer、Task、KVO 或 display link。
+- 测试/文档：同进程测试稳定覆盖负 offset 中间态；UI 测试覆盖静止 inside/extends 可见 8 pt 间距，并明确记录无法同步读取按住手势期间 frame 的替代验证原因；设计、计划和 task-list 已同步。
