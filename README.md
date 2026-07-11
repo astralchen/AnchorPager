@@ -146,7 +146,7 @@ pager.reloadHeaderLayout(offsetAdjustment: .preserveVisualPosition)
 - `.resetToExpanded`：回到展开位置。
 - `.resetToCollapsed`：移动到当前折叠上限。
 
-child managed top 只等于实际分段栏对页面的遮挡，不包含 Header 或顶部 safe area；Header 和顶部系统遮挡由 adapter frame 处理。managed bottom 等于容器解析到的本地底部遮挡，滚动指示器同步避让底部。
+child managed top 只等于实际分段栏对页面的遮挡，不包含 Header 或顶部 safe area；Header 和顶部系统遮挡由 adapter frame 处理。滚动指示器 top 同步避让实际分段栏，content/indicator bottom 等于容器解析到的本地底部遮挡。
 
 `AnchorPagerLayoutContext` 回调中的 `headerFrame`、`barFrame` 和 `contentFrame` 使用 pager view 的本地实际可见坐标。正常折叠时它们等于 LayoutEngine 的 canonical frame；负 offset bounce 期间会包含 viewport presentation translation，因此实际 Header/paging frame 与 context 始终对齐。`reloadHeaderLayout(offsetAdjustment:)` 仍只使用 canonical 折叠状态，不会把瞬时 bounce 位移写入 Header 高度或折叠进度。
 
@@ -166,7 +166,7 @@ final class ListPageViewController: UIViewController {
 
 显式设置的 `anchorPagerScrollView` 优先级高于默认查找。
 
-AnchorPager 接管目标 scroll view 时会把 `contentInsetAdjustmentBehavior` 设为 `.never`，并在现有外部 inset 上差量叠加 managed top/bottom。页面被 reload 移除或容器释放时，只移除最后一次 managed 部分，并恢复原始 adjustment behavior。调用方运行时修改外部 inset 时，应基于当前总 inset 做增量修改；若直接用不包含 managed 部分的绝对值覆盖整个 `contentInset`，框架无法从 UIKit 单一属性推断调用方意图。
+AnchorPager 接管目标 scroll view 时会把 `contentInsetAdjustmentBehavior` 设为 `.never`、把 `automaticallyAdjustsScrollIndicatorInsets` 设为 `false`，并在现有外部 inset 上差量叠加 managed top/bottom。页面被 reload 移除或容器释放时，只移除最后一次 managed 部分，并恢复两项原始自动调整状态。调用方运行时修改外部 inset 时，应基于当前总 inset 做增量修改；若直接用不包含 managed 部分的绝对值覆盖整个 `contentInset`，框架无法从 UIKit 单一属性推断调用方意图。
 
 ## 无 UIScrollView Child
 

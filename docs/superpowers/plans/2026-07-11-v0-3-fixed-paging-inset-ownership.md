@@ -1097,6 +1097,115 @@ git commit -m "记录 v0.3 固定分页视口验收"
 
 ---
 
+### Task 7: v0.3 Scroll Indicator Ownership 修复
+
+**Files:**
+- Modify: `Sources/AnchorPager/Children/AnchorPagerManagedInsetCoordinator.swift`
+- Modify: `Sources/AnchorPager/Public/AnchorPagerViewController.swift`
+- Modify: `Tests/AnchorPagerTests/AnchorPagerManagedInsetCoordinatorTests.swift`
+- Modify: `Tests/AnchorPagerTests/AnchorPagerViewControllerTests.swift`
+- Modify: `README.md`
+- Modify: `docs/requirements.md`
+- Modify: `docs/architecture.md`
+- Modify: `docs/task-list.md`
+- Modify: `docs/superpowers/specs/2026-07-11-fixed-paging-viewport-inset-scroll-ownership-design.md`
+
+**Interfaces:**
+- Consumes: `resolvedBarInsets.top`、`LayoutEnvironment.obstruction.bottom`、`AnchorPagerManagedInsetCoordinator.Target.indicators`。
+- Produces: indicator top/bottom 单一 owner、`automaticallyAdjustsScrollIndicatorInsets` 同步接管与归还；不扩大 Public API。
+
+- [ ] **Step 1: 写 indicator top 和自动调整所有权失败测试**
+
+在 coordinator 测试中确认接管期间关闭、release 后恢复 UIKit 自动 indicator 调整：
+
+```swift
+scrollView.automaticallyAdjustsScrollIndicatorInsets = true
+coordinator.apply(target, to: scrollView)
+XCTAssertFalse(scrollView.automaticallyAdjustsScrollIndicatorInsets)
+coordinator.release(scrollView)
+XCTAssertTrue(scrollView.automaticallyAdjustsScrollIndicatorInsets)
+```
+
+在真实 window 的 ViewController 测试中给 child 设置 external indicator top/bottom，并断言：
+
+```swift
+XCTAssertEqual(child.scrollView.verticalScrollIndicatorInsets.top, 2 + 56, accuracy: 0.5)
+XCTAssertEqual(
+    child.scrollView.verticalScrollIndicatorInsets.bottom,
+    5 + pager.view.safeAreaInsets.bottom,
+    accuracy: 0.5
+)
+XCTAssertFalse(child.scrollView.automaticallyAdjustsScrollIndicatorInsets)
+```
+
+reload 替换页面后，旧 child 必须恢复 external indicator insets 和原始自动调整状态。
+
+- [ ] **Step 2: 运行 Task 7 RED**
+
+```bash
+xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcodebuild-v03-indicator -parallel-testing-enabled NO -enableCodeCoverage NO -only-testing:AnchorPagerTests/AnchorPagerManagedInsetCoordinatorTests -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testManagedScrollIndicatorInsetsUseBarAndBottomObstruction -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testReloadReleasesStaleInsetOwnershipAndManagesReplacement test
+```
+
+Expected: FAIL；当前 indicator top 仍为 external top，且 `automaticallyAdjustsScrollIndicatorInsets` 仍为 true。
+
+- [ ] **Step 3: 实现 indicator 完整 ownership**
+
+Coordinator record 增加：
+
+```swift
+let originalAutomaticallyAdjustsScrollIndicatorInsets: Bool
+```
+
+`apply` 的幂等条件同时检查自动 indicator 调整已关闭；写入 managed insets 前设置：
+
+```swift
+scrollView.contentInsetAdjustmentBehavior = .never
+scrollView.automaticallyAdjustsScrollIndicatorInsets = false
+```
+
+`release` 在移除最后一次 managed indicator inset 后恢复原值。ViewController target 改为：
+
+```swift
+indicators: UIEdgeInsets(
+    top: resolvedBarInsets.top,
+    left: 0,
+    bottom: environment.obstruction.bottom,
+    right: 0
+)
+```
+
+- [ ] **Step 4: 运行 Task 7 GREEN 与 package 回归**
+
+先运行 Step 2 同一命令，Expected: PASS。再运行：
+
+```bash
+xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcodebuild-v03-indicator -parallel-testing-enabled NO -enableCodeCoverage NO test
+```
+
+Expected: package 全部测试通过、0 failures。
+
+- [ ] **Step 5: 运行示例可视回归**
+
+UIKit 没有稳定 public API 暴露 indicator 私有 view frame，XCUITest 也不保证把滚动指示器作为 accessibility element；因此以真实 window 集成测试验证决定实际轨道的 top/bottom property 和自动调整 owner，再运行现有示例 UI 流程作为可视回归：
+
+```bash
+xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/example-xcodebuild-v03-indicator -parallel-testing-enabled NO -enableCodeCoverage NO test
+```
+
+Expected: 示例单元/UI tests 全部通过。
+
+- [ ] **Step 6: 自审、更新状态并提交**
+
+检查 indicator top 不越过 bar bottom、bottom 不重复 safe area、external indicator insets 保留、reload/deinit 恢复自动状态、滚动热路径不写 inset、Public API 和 containment 均未变化。验证完成后勾选 task-list 两项修复状态并追加真实命令记录。
+
+```bash
+git diff --check
+git add Sources/AnchorPager/Children/AnchorPagerManagedInsetCoordinator.swift Sources/AnchorPager/Public/AnchorPagerViewController.swift Tests/AnchorPagerTests/AnchorPagerManagedInsetCoordinatorTests.swift Tests/AnchorPagerTests/AnchorPagerViewControllerTests.swift README.md docs/requirements.md docs/architecture.md docs/task-list.md docs/superpowers/specs/2026-07-11-fixed-paging-viewport-inset-scroll-ownership-design.md docs/superpowers/plans/2026-07-11-v0-3-fixed-paging-inset-ownership.md
+git commit -m "修复滚动指示器安全区避让"
+```
+
+---
+
 ## Self-review Record
 
 - Task 1：`AnchorPagerLayoutEngine` 仍为只 import CoreGraphics 的纯计算类型；`pagingFrame.height` 只依赖 bounds、top obstruction 和 collapsed Header height，不依赖 contentOffset、bar height 或 bottom obstruction。旧容器级 managed target 与未落地的 target 日志已移除，Header、Tabman/Pageboy containment、selection 和 scroll discovery 未改变。
