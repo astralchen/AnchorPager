@@ -75,7 +75,8 @@ open class AnchorPagerViewController: UIViewController {
 ```
 
 `verticalScrollView` 的实例只读暴露，供接入方读取容器滚动状态；其 `delegate` 由 AnchorPager
-内部保留，用于驱动 Header/bar 可见几何和 collapse progress，调用方不得替换。
+内部保留，用于驱动 Header/bar 可见几何和 collapse progress，调用方不得替换。主容器 scroll range
+只表示 Header 折叠距离，横纵滚动指示器必须隐藏；用户可见滚动进度只由当前 child/fallback 表达。
 
 数据源协议：
 

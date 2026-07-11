@@ -34,6 +34,7 @@ Pageboy child 的 bar 属于 child 局部 top obstruction。继续把 Header 或
 3. child managed top 只表达 Tabman adapter 内的真实 bar obstruction。
 4. 允许 bar 高度由 Tabman 自适应，也允许调用方显式覆盖高度。
 5. AnchorPager 独立管理 child content inset、indicator inset 和 UIKit 自动 inset 策略。
+6. AnchorPager 主容器的 scroll range 只表达 Header 折叠，横纵指示器保持隐藏；当前 child/fallback 是唯一用户可见 indicator owner。
 6. 外部 inset 与 managed inset 使用可逆的差量所有权，不覆盖调用方已有额外 inset。
 7. page state、inset ownership、滚动 owner 和 Tabman/Pageboy adapter 保持单向职责。
 8. 为 v0.5 建立 container 先折叠、child 后滚动的唯一 owner 不变量。

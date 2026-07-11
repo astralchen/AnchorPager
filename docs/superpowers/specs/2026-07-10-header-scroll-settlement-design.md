@@ -255,8 +255,10 @@ Public API 没有承诺调用方拥有该 delegate；README、DocC 和 architect
 本次不实现主容器与 child 的手势 owner 仲裁。`topOverscrollHandlingMode` 默认仍为 `.none`。
 
 负 offset 时 LayoutEngine 将 collapse offset clamp 为 `0`，viewport 中的 Header 保持展开 frame；
-scroll indicator 仍可表现 UIKit bounce，但不会再通过 content 坐标把 Header 永久推离安全区域。v0.6
-如需 `.container` 或 `.child` 的额外视觉/事件语义，应在独立 overscroll coordinator 中实现。
+UIKit bounce 继续通过 viewport presentation translation 表达。`verticalScrollView` 的 scroll range 只表示
+Header 折叠距离，不代表页面内容进度，因此主容器的横纵滚动指示器必须隐藏；用户可见滚动指示器只由
+当前 child/fallback scroll view 提供。v0.6 如需 `.container` 或 `.child` 的额外视觉/事件语义，
+应在独立 overscroll coordinator 中实现，不重新显示主容器指示器。
 
 ## 影响范围
 
