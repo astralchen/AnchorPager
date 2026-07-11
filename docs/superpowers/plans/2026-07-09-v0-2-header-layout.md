@@ -325,6 +325,7 @@ v0.2 的 navigation bar、tab bar、toolbar、additionalSafeAreaInsets 几何行
 - 历史 Follow-up（已废止）：曾通过在 Header host content 约束中补偿当前 `contentOffset.y` 对齐可见坐标。后续复现证明该方案会让 Header/paging 约束反向参与 `contentSize`，形成 `offset → constraint → contentSize → offset` 闭环；现已由独立 scroll range/fixed viewport 架构取代，不得恢复该补偿。
 - Follow-up：`.extendsUnderTopSafeArea` 下 Header 可视 frame 高度至少覆盖本地顶部遮挡，保持 `barFrame.minY == headerFrame.maxY`。改动不新增 public API，不改变 Header containment、Tabman/Pageboy adapter、scroll discovery 或 child managed inset ownership。`resolvedHeaderHeight`、collapse offset/progress 和 managed inset target 仍按 Header 内容高度计算；`AnchorPagerLayoutContext.headerFrame.height` 文档化为布局后的可视 frame 高度。
 - Follow-up：主容器现以 `scrollRangeView` 单独定义 `viewport height + collapsibleDistance`，Header/paging 位于 `frameLayoutGuide` viewport 并直接使用 LayoutEngine 可见坐标。私有 weak-owner delegate proxy 未扩大 public conformance，Header controller 与 page containment 保持原职责；scroll discovery、child inset、gesture/overscroll 和 v0.5 owner 协调均未提前实现。滚动热路径只复用缓存测量并更新可见几何、layout context 和变化后的 progress，不修改 range、不写普通日志；额外强制 `layoutIfNeeded()` 的回归测试确认后续布局周期也不会重新产生测量或布局日志。
+- Follow-up：双 Header top behavior 继续保留；resolved height/collapsible distance 只表示纯内容高度。inside frame 位于顶部遮挡下方，extends frame 从 bounds 顶部开始并包含“顶部遮挡 + 可见内容高度”，因此两种模式共享 bar/content baseline。automatic/ranged Header 在顶部遮挡下方中立测量；负 offset 只通过 viewport transform 恢复可见 bounce，canonical output 和 range 不受 presentation 位移污染。完整设计与验证见 `2026-07-11-dual-header-top-behavior-bounce-stability.md`。
 
 ## Verification Record
 

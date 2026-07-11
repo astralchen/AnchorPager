@@ -73,7 +73,7 @@ Public API source scan 测试会检查 `Sources/AnchorPager/Public/` 不包含 `
 4. Header view `intrinsicContentSize.height`
 5. 无有效结果时为 `0`
 
-负数或非有限测量会触发内部断言，并在 `layout` category 记录 `header.measure.invalid` 事件，运行时降级为 `0`。`AnchorPagerViewController` 会在主容器内安装 Header host，并把测量后的 Header 高度交给 LayoutEngine 解析。
+负数或非有限测量会触发内部断言，并在 `layout` category 记录 `header.measure.invalid` 事件，运行时降级为 `0`。结构性布局会先清除 viewport presentation transform，把 Header host 临时放到顶部遮挡下方，并使用最近一次有效纯内容高度建立中立测量几何；首次没有缓存时使用 `0`。同步 layout 后再执行 fitting，避免最终 top behavior、safe area/layout margins 或 bounce translation 被重复计入内容高度。临时几何不更新 layout context、progress、range 或状态日志缓存。
 
 Header host 只负责 Header 内容和 containment。它可以接收内部 top offset 约束更新，但不计算 safe area、折叠进度、bar frame 或 child inset。
 
@@ -102,9 +102,9 @@ Header host 只负责 Header 内容和 containment。它可以接收内部 top o
 
 AnchorPager 自有主容器 `verticalScrollView` 的 `contentInsetAdjustmentBehavior` 固定为 `.never`。safe area、navigation bar、tab bar 和 toolbar 遮挡已经被转换为 LayoutEngine 的本地 obstruction；如果继续使用 UIKit 自动 content inset，Header 实际 frame 会比 `AnchorPagerLayoutContext.headerFrame` 多叠一层 top inset。这个约束只属于主容器，不代表 v0.3 的 child managed inset 写入已完成。
 
-主容器使用两个互不反向约束的内部层：`scrollRangeView` 约束到 `contentLayoutGuide`，高度固定为 viewport 高度加 resolved Header 可折叠距离，只负责定义 `contentSize`；`viewportView` 约束到 `frameLayoutGuide`，只承载 Header host 和 paging adapter。Header/paging 的可见约束不会参与 scroll range 反算，当前 `contentOffset` 也不会改变 `contentSize`。`verticalScrollView.delegate` 由内部私有 proxy 管理，调用方不得替换。
+主容器使用两个互不反向约束的内部层：`scrollRangeView` 约束到 `contentLayoutGuide`，高度固定为 viewport 高度加纯内容可折叠距离，只负责定义 `contentSize`；`viewportView` 约束到 `frameLayoutGuide`，只承载 Header host 和 paging adapter。Header/paging 的可见约束不会参与 scroll range 反算，当前 `contentOffset` 也不会改变 `contentSize`。负 offset 时，私有 delegate proxy 把 `max(0, -contentOffset.y)` 应用为整个 viewport 的 presentation translation，由 UIKit 自身 bounce 动画驱动恢复；transform 不参与 Auto Layout 或 range 计算。`verticalScrollView.delegate` 由内部私有 proxy 管理，调用方不得替换。
 
-`insideSafeArea` 会让 Header frame 从顶部 obstruction 下方开始。`extendsUnderTopSafeArea` 会让 Header frame 从 bounds 顶部开始；当当前 Header 内容高度小于顶部 obstruction 时，LayoutEngine 会将 Header 可视 frame 高度提升到顶部 obstruction 高度，并保持 `barFrame.minY == headerFrame.maxY`。`AnchorPagerLayoutContext.headerFrame.height` 表示布局后的可视 frame 高度，可能大于 `AnchorPagerHeaderHeightMode` 解析出的当前 Header 内容高度。paging adapter 的 top spacing 和高度跟随 engine 输出，使实际分段栏/页面区域与 layout context 保持一致。content frame 默认延伸到容器 `bounds.maxY`，在全屏容器中即物理屏幕最底部；bottom obstruction 不裁剪横向区域，只进入 `managedInsetTarget.bottom`，供 v0.3 的 child inset ownership 使用。
+LayoutEngine 的 resolved expanded/collapsed height 始终表示纯内容高度，top obstruction 不进入 collapsible distance。`insideSafeArea` 让 Header frame 从顶部 obstruction 下方开始，高度为当前可见内容高度；`extendsUnderTopSafeArea` 让 Header frame 从 bounds 顶部开始，高度为顶部 obstruction 加当前可见内容高度。两种模式统一使用 `bounds.minY + topObstruction + visibleContentHeight` 作为 bar baseline，因此切换只改变 Header 外框是否延伸，不移动分段栏和 child 内容基线。paging adapter 的 top spacing 和高度跟随 engine output。content frame 默认延伸到容器 `bounds.maxY`；bottom obstruction 不裁剪横向区域，只进入 `managedInsetTarget.bottom`。
 
 v0.2 只计算 managed inset target 并记录日志，不写入外部 child scroll view 的 managed content inset；完整 inset ownership 在 v0.3 实现。AnchorPager 自有主容器和内部 fallback scroll host 会禁用 UIKit 自动 content inset，避免系统 inset 与 LayoutEngine 的本地遮挡计算重复作用。
 
@@ -120,7 +120,7 @@ v0.2 只计算 managed inset target 并记录日志，不写入外部 child scro
 
 v0.2 会在基础布局更新和 `reloadHeaderLayout()` 时发送 `AnchorPagerLayoutContext`。当前 context 覆盖有效 selectedIndex、Header frame、bar frame 和内容 frame，用于调试和接入验证。
 
-`AnchorPagerLayoutContext` 中的 frame 使用 `AnchorPagerViewController.view` 的本地可见坐标。Header host 和 paging adapter 位于固定 viewport，直接应用 LayoutEngine 的可见坐标，不再执行 `visibleY + contentOffset.y` 的 content 坐标补偿。`scrollViewDidScroll` 复用最近一次有效 Header 测量结果，只更新 Header/bar 可见几何、layout context 和 collapse progress；它不重新测量 Header、不修改 scroll range，也不输出逐帧普通日志。完整 child scroll owner 与 offset 转移仍属于 v0.5。
+`AnchorPagerLayoutContext` 中的 frame 使用 `AnchorPagerViewController.view` 的本地实际可见坐标。LayoutEngine output 和 `lastLayoutOutput` 保持 canonical geometry；负 offset 期间生成 context 时同步加入 viewport presentation translation，使实际 Header/paging frame 与 context 对齐。`scrollViewDidScroll` 复用最近一次有效纯内容测量，只更新 canonical output、presentation transform、layout context 和 collapse progress；它不重新测量 Header、不修改 scroll range，也不输出逐帧普通日志。完整 child scroll owner 与 offset 转移仍属于 v0.5。
 
 `reloadHeaderLayout(offsetAdjustment:)` 会重新测量 Header，并按策略迁移 `verticalScrollView.contentOffset.y`：
 

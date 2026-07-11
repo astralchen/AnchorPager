@@ -99,11 +99,10 @@ public enum AnchorPagerHeaderTopBehavior: Sendable, Equatable {
 
     /// Header 从容器 bounds 顶部开始布局。
     ///
-    /// 当当前 Header 内容高度小于本地顶部遮挡高度时，AnchorPager 会将
-    /// `headerFrame.height` 提升到顶部遮挡高度，并保持
-    /// `barFrame.minY == headerFrame.maxY`。因此
-    /// `AnchorPagerLayoutContext.headerFrame.height` 表示布局后的可视 frame 高度，
-    /// 可能大于 `AnchorPagerHeaderHeightMode` 解析出的当前 Header 内容高度。
+    /// `headerFrame.height` 等于本地顶部遮挡加当前可见纯内容高度，
+    /// 并保持 `barFrame.minY == headerFrame.maxY`。因此该模式与
+    /// `insideSafeArea` 使用相同的分段栏和 child 内容基线，只改变
+    /// Header 外框是否延伸到顶部系统区域。
     case extendsUnderTopSafeArea
 }
 

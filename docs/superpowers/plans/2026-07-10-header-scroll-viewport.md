@@ -481,3 +481,11 @@ Expected: 所有命令 exit 0；记录实际测试数量和失败数量。
 - 日志与性能：滚动入口复用 `lastMeasuredHeaderHeight`，不更新 range、不调用 `header.measure`、不写布局/inset普通日志；测试在滚动后追加 `layoutIfNeeded()`，确认下一布局周期也不产生这些热路径事件。初次布局不误报 progress，相同 progress 不重复通知。
 - 测试/示例/文档：核心几何、range、delegate、progress、日志和真实菜单/回弹 UI 路径均有自动化覆盖；README、architecture、requirements、task-list、v0.2 计划、本计划和设计说明已同步。没有发现 Critical 或 Important 级问题。
 - 已知非阻塞项：Xcode/SwiftPM 仍报告 Tabman、Pageboy 上游 `PrivacyInfo.xcprivacy` unhandled resource 提示，本次未改依赖版本或资源规则，不属于本修复引入。
+
+## 2026-07-11 Follow-up
+
+本计划建立的稳定 `scrollRangeView`/固定 `viewportView` 边界继续保留。后续真实示例证明固定 viewport 会让
+负 offset 失去可见 bounce，并且结构布局直接测量最终展示中的 Header 会污染 automatic 高度。修订方案不把
+Header/paging 放回 `contentLayoutGuide`，而是用 viewport presentation translation 恢复可见 bounce，并在
+顶部遮挡下方执行中立测量；两种 top behavior 同时收敛为相同 bar/content baseline。详细 RED/GREEN 和最终
+验收见 `docs/superpowers/plans/2026-07-11-dual-header-top-behavior-bounce-stability.md`。

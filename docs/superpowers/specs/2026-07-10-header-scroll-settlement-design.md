@@ -421,3 +421,11 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExa
 - 完整核心测试 80 个、示例测试 11 个，均 0 失败；示例 generic build、SwiftPM resolve 和 `git diff --check` 通过。
 - 最终自审确认未扩大 Public API 或泄漏 Tabman/Pageboy 类型，Header/page containment 与 lifecycle 未变，child scroll/inset/gesture/overscroll 职责未提前实现。私有 delegate proxy 不形成 retain cycle；滚动后强制下一次 `layoutIfNeeded()` 的测试仍未出现 Header 重新测量或普通布局日志。
 - 现有依赖会提示 Tabman/Pageboy 的 `PrivacyInfo.xcprivacy` 为 unhandled resource；该上游提示不是本次变更引入，不影响构建和测试结果。
+
+## 2026-07-11 双顶部行为稳定性修订
+
+固定 viewport/range 解耦继续有效，但“负 offset 不需要可见位移”的旧假设已被
+`2026-07-11-dual-header-top-behavior-bounce-stability-design.md` 修订：负 offset 现在通过
+viewport presentation translation 恢复 Header、分段栏和页面的 UIKit bounce，同时不让 transform 参与
+content size。Header automatic/ranged 高度在顶部遮挡下方的中立几何中测量，两种 top behavior 使用相同
+bar/content baseline；本设计中与此冲突的旧描述只保留为历史实施证据。

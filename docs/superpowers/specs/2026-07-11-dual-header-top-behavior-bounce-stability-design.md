@@ -412,3 +412,14 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExa
 8. 不改变 Header/page containment、selection、scroll discovery 和 child inset ownership。
 9. 核心测试、示例测试、UI 回归、generic build、SwiftPM resolve 和 `git diff --check` 有新鲜证据。
 10. 文档、实施记录和代码自审同步完成。
+
+## 实施记录
+
+- Public API 保留 `AnchorPagerHeaderTopBehavior` 和两个现有 case，没有新增兼容状态。
+- LayoutEngine 已将 resolved height 固定为纯内容高度；extends frame 使用“顶部遮挡 + 可见内容高度”，两种模式共享 bar/content baseline。
+- 结构性布局先清除 transform，把 Header host 放到顶部遮挡下方并同步 layout，再执行 fitting measurement；临时几何不更新 range、context、progress 或状态日志缓存。
+- 固定 `scrollRangeView`/`viewportView` 架构继续保留；负 offset 只通过 viewport presentation translation 恢复可见 bounce。
+- `lastLayoutOutput` 与结构日志保持 canonical geometry；`AnchorPagerLayoutContext` 在 bounce 期间包含实际 translation。
+- TDD RED：LayoutEngine 10 个测试中 6 个预期几何失败；负 offset 同进程测试实际 Header `minY` 为 `62`、预期 `86`；强化后的真实示例 UI test 因分段栏无法返回初始 `minY` 超时失败。
+- TDD GREEN：LayoutEngine 定向测试、两个 Task 2 目标测试、35 个控制器测试和真实示例 UI 回归均已通过。
+- 最终完整核心测试 83/83、完整示例测试 11/11、generic build 和 SwiftPM resolve 已通过；命令、首次旧示例断言失败及最终自审记录在对应实施计划中。

@@ -219,16 +219,18 @@ extension UIViewController {
 2. Header 使用 UIViewController 时，必须通过标准 UIKit containment 管理。
 3. Header 默认显示在安全区域内。
 4. Header 默认使用 automatic height，最小高度为 0，不设置固定最大高度。
-5. automatic 高度根据 Header 内容测量结果决定。
+5. automatic 高度根据 Header 纯内容测量结果决定，测量不得包含 Header 当前展示位置带来的顶部 safe area 或 layout margins 增量。
 6. Header 是 UIView 时，默认使用 Auto Layout fitting size、当前 bounds 或 intrinsicContentSize 计算高度。
 7. Header 是 UIViewController 时，默认使用其 view 的 Auto Layout fitting size 或 preferredContentSize 作为测量来源。
 8. Header heightMode 必须支持 automatic、fixed、ranged 三种模式。
-9. insideSafeArea 模式下，Header 顶部从 navigation bar bottom 或 safeArea.top 开始。
-10. extendsUnderTopSafeArea 模式下，Header 可从容器 view 顶部开始绘制。
-11. 沉浸式 Header 只影响 Header 视觉 frame，不改变分段栏吸顶基线和 child 内容安全区域。
-12. Header frame 和 height 可以运行时变化。
-13. `reloadHeaderLayout` 必须支持重新测量、重新布局，并按 offsetAdjustment 保持视觉状态。
-14. Header 视觉迁移不能反复 add/remove header view controller。
+9. insideSafeArea 模式下，Header 顶部从 navigation bar bottom 或 safeArea.top 开始，frame 高度为当前可见纯内容高度。
+10. extendsUnderTopSafeArea 模式下，Header 从容器 view 顶部开始绘制，frame 高度为本地顶部遮挡加当前可见纯内容高度。
+11. 两种顶部行为只改变 Header 外框是否延伸到顶部系统区域，不改变分段栏吸顶基线和 child 内容安全区域。
+12. Header height mode 和可折叠距离只表示纯内容高度，本地顶部遮挡不得进入可折叠距离。
+13. automatic/ranged Header 必须在顶部遮挡下方的中立几何中测量，不能让最终 top behavior 或负 offset presentation 污染测量结果。
+14. Header frame 和 height 可以运行时变化。
+15. `reloadHeaderLayout` 必须支持重新测量、重新布局，并按 offsetAdjustment 保持视觉状态。
+16. Header 视觉迁移不能反复 add/remove header view controller。
 
 ## 8. 安全区域要求
 

@@ -268,7 +268,10 @@
 - [x] 实现 ranged height clamp
 - [x] 实现 insideSafeArea 布局
 - [x] 实现 extendsUnderTopSafeArea 布局
-- [x] `extendsUnderTopSafeArea` 下 Header 可视 frame 至少覆盖本地顶部遮挡，并保持 `barFrame.minY == headerFrame.maxY`
+- [x] `extendsUnderTopSafeArea` 下 Header frame 高度等于顶部遮挡加可见纯内容高度，并保持 `barFrame.minY == headerFrame.maxY`
+- [x] 两种 Header top behavior 保持相同分段栏和 child 内容基线
+- [x] Header height mode 与可折叠距离只表示纯内容高度，不包含顶部遮挡
+- [x] automatic/ranged Header 在顶部遮挡下方的中立几何中测量，避免 safe area/layout margins 污染
 - [x] 实现 Header runtime frame 变化
 - [x] 实现 `reloadHeaderLayout(.preserveVisualPosition)`
 - [x] 实现 `reloadHeaderLayout(.preserveCollapseProgress)`
@@ -282,9 +285,11 @@
 - [x] 示例工程导航栏支持切换 `AnchorPagerHeaderTopBehavior`、显示当前配置，并使用 `.preserveVisualPosition` 刷新布局
 - [x] 主容器使用独立 `scrollRangeView` 固定 content range，滚动范围不依赖当前 `contentOffset`
 - [x] Header 和 paging adapter 位于 `frameLayoutGuide` viewport，不参与 `contentSize` 反算
+- [x] 负主容器 offset 通过 viewport presentation translation 恢复 Header、分段栏和页面的可见 UIKit bounce
+- [x] bounce 期间 layout context 使用实际可见坐标，canonical output 不受 presentation translation 污染
 - [x] 主容器内部 delegate proxy 驱动 Header/bar 可见几何和 collapse progress，且不扩大 Public API
 - [x] 滚动热路径复用 Header 测量结果，不重复测量或逐帧输出普通布局日志
-- [x] 测试顶部行为双向切换并下拉回弹后 Header 返回安全区域顶部
+- [x] 测试顶部行为双向切换并下拉回弹后 Header 高度和分段栏基线恢复
 - [x] 为 Header 测量结果加入 layout 日志
 - [x] 为 Header frame 变化加入 layout 日志
 - [x] 为 bar frame 变化加入 layout 日志
@@ -547,6 +552,7 @@
 - [x] v0.2 历史 follow-up（已被主容器架构修订取代）：曾在 Header host 写入 scroll content 约束前补偿 `contentOffset.y`；该方案后来确认会形成 offset/constraint/contentSize 反馈闭环，现已移除且不得恢复；历史验证见 `docs/superpowers/plans/2026-07-09-v0-2-header-layout.md`
 - [x] v0.2 follow-up：`extendsUnderTopSafeArea` 下 Header 可视 frame 高度至少覆盖本地顶部遮挡，修复当前 Header 内容高度小于顶部遮挡时 Header 与分段栏之间出现空隙的问题；验证记录见 `docs/superpowers/plans/2026-07-09-v0-2-header-layout.md`
 - [x] v0.2 follow-up：主容器 scroll range 与 Header/paging viewport 已解耦，移除 `visibleY + contentOffset` 约束反馈闭环，修复顶部行为切换后下拉回弹残留空白；验证记录见 `docs/superpowers/plans/2026-07-10-header-scroll-viewport.md`
+- [x] v0.2 follow-up：保留 Header 双顶部行为并统一分段栏基线；automatic Header 使用中立测量，负 offset 使用 viewport presentation translation，修复视觉 bounce 消失和回弹后高度增长；验证记录见 `docs/superpowers/plans/2026-07-11-dual-header-top-behavior-bounce-stability.md`
 - [x] v0.2 Header 与布局稳定版已完成；后续从 v0.3 Scroll Discovery 与 Inset Ownership 版继续
 - [x] 实现时遵循测试先行
 - [x] 每个任务完成后运行对应测试
