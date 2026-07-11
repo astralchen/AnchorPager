@@ -29,6 +29,7 @@ xcuserdata/
 # Swift Package Manager 构建产物和本地工作区状态
 .build/
 .swiftpm/
+.worktrees/
 
 # 保留依赖解析文件，便于锁定已验证依赖版本
 !Package.resolved
