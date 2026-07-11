@@ -1,5 +1,10 @@
 # Header 主容器视口与滚动范围解耦设计
 
+> 后续修订：本文记录 v0.2 主容器 viewport/range 解耦。本文中的 `managed inset target` 是
+> v0.2 容器级历史输出，不代表 v0.3 child inset 语义。v0.3 起的固定高度 Tabman adapter、
+> optional bar height 和 child 局部 inset 以
+> `2026-07-11-fixed-paging-viewport-inset-scroll-ownership-design.md` 为准。
+
 ## 背景
 
 AnchorPager v0.2 支持在运行时切换 `AnchorPagerHeaderTopBehavior`，示例工程通过

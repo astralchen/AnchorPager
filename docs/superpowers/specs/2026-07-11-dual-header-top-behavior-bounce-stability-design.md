@@ -1,5 +1,10 @@
 # Header 双顶部行为、稳定测量与可见回弹设计
 
+> 后续修订：本文记录 v0.2 Header/bounce 稳定契约。本文中的 `managedInsetTarget.top`
+> 保持 v0.2 容器级总预留输出，仅用于当时布局与日志回归，不得在 v0.3 直接写入 child。
+> v0.3 起 child managed top 只表达 Tabman bar 的局部 obstruction，详细设计见
+> `2026-07-11-fixed-paging-viewport-inset-scroll-ownership-design.md`。
+
 ## 背景
 
 AnchorPager v0.2 支持在运行时切换 `AnchorPagerHeaderTopBehavior`：
@@ -134,7 +139,7 @@ barFrame.minY = bounds.minY + topObstruction + visibleContentHeight
 因此切换只改变 Header 外框是否延伸到顶部系统区域，不改变分段栏和 child 内容的可见基线。使用 safe area
 或 layout margins 的 Header 内容会自动避让；有意忽略 safe area 的内容可绘制到顶部系统区域。
 
-`managedInsetTarget.top` 继续等于：
+作为 v0.2 容器级历史输出，`managedInsetTarget.top` 继续等于：
 
 ```text
 topObstruction + expandedContentHeight + barHeight
@@ -319,7 +324,7 @@ delegate proxy 继续使用，不产生 retain cycle。
 2. extends Header 高度等于 `topObstruction + visibleContentHeight`。
 3. top obstruction 不进入 collapsible distance。
 4. expanded、partial、collapsed 状态均保持上述关系。
-5. managed inset target 保持既有总预留语义。
+5. v0.2 容器级 managed inset target 保持既有总预留语义；该断言不验证 v0.3 child inset。
 
 ### 中立测量集成测试
 

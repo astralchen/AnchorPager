@@ -144,7 +144,15 @@ public struct AnchorPagerHeaderConfiguration: Sendable, Equatable {
     public var heightMode: AnchorPagerHeaderHeightMode
     public var topBehavior: AnchorPagerHeaderTopBehavior
 }
+
+public struct AnchorPagerBarConfiguration: Sendable, Equatable {
+    public var height: CGFloat?
+}
 ```
+
+`AnchorPagerBarConfiguration.height` 默认为 `nil`，表示由 Tabman bar 自适应决定高度；显式非 nil
+值由 internal paging adapter 约束到实际 bar。最终 bar 几何以 Tabman 布局后的 `barInsets.top`
+为准，Tabman 类型不得进入 public API。
 
 Header 高度模式：
 
@@ -238,11 +246,13 @@ extension UIViewController {
 2. 布局计算不能假设 AnchorPagerViewController 是 window root。
 3. 可见顶部和底部遮挡必须转换到 AnchorPagerViewController.view 本地坐标系后参与布局。
 4. 分段栏吸顶基线必须基于当前可见顶部遮挡计算，不固定使用 view.safeAreaInsets.top。
-5. child managed contentInset.top 表达 Header + 分段栏预留空间。
-6. child managed contentInset.bottom 和 scrollIndicatorInsets.bottom 避让底部 safe area、tab bar、toolbar 或其他可见底部遮挡。
-7. 框架必须区分自身 managed inset 和外部追加 inset，不覆盖调用方已有额外 contentInset。
-8. 框架接管的 scroll view 建议设置 `contentInsetAdjustmentBehavior = .never`，并在文档说明。
-9. safe area、bar 显隐、横竖屏、Split View、Stage Manager 尺寸变化后必须重新计算布局，并尽量保持 selectedIndex、Header 折叠进度和当前 child 可见位置。
+5. Tabman adapter 的 top 跟随 Header bottom，高度固定为 Header 完全折叠时的最大可见高度；普通 Header 折叠滚动只移动 adapter，不改变 Pageboy child bounds。
+6. child managed contentInset.top 只表达 Tabman adapter 内实际覆盖 Pageboy child 的 bar obstruction，不包含 Header 高度或容器顶部遮挡。
+7. child managed contentInset.bottom 和 scrollIndicatorInsets.bottom 避让底部 safe area、tab bar、toolbar 或其他可见底部遮挡。
+8. 框架必须区分自身 managed inset 和外部追加 inset，不覆盖调用方已有额外 contentInset。
+9. 框架接管的 scroll view 设置 `contentInsetAdjustmentBehavior = .never`；ownership 结束时只移除最后一次 managed 部分并恢复原始 adjustment behavior。
+10. child top offset 迁移使用相对顶部距离，bar 高度变化不能让当前 child 可见内容跳动。
+11. safe area、bar 显隐、横竖屏、Split View、Stage Manager 尺寸变化后必须重新计算布局，并尽量保持 selectedIndex、Header 折叠进度和当前 child 可见位置。
 
 ## 9. Child 生命周期与缓存要求
 
@@ -316,6 +326,7 @@ extension UIViewController {
 14. 不假设 UIKit 回调顺序固定；必须处理缺失、重复或乱序的边界回调。
 15. 系统返回手势、横向分页手势、child 横向 content scroll 手势之间必须有明确优先级；第一页 leading-edge 返回手势不应被吞掉。
 16. 所有 internal state 命名要便于测试定位，但不得暴露到 public API。
+17. v0.5 的 container/当前 child 连续纵向 handoff 可以使用受限 simultaneous recognition；完整横向、返回手势和交互状态机仍由后续手势层统一管理。
 
 ## 15. Accessibility 与 Layout Direction 要求
 

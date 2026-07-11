@@ -309,16 +309,28 @@
 
 ## v0.3：Scroll Discovery 与 Inset Ownership 版
 
+- [x] 创建 `docs/superpowers/specs/2026-07-11-fixed-paging-viewport-inset-scroll-ownership-design.md`，固定 v0.3–v0.5 几何、inset 和 owner 边界
+- [ ] 创建 v0.3 详细实施计划
 - [ ] 固化默认 scroll view lookup 文档
+- [ ] 将 `AnchorPagerBarConfiguration.height` 改为 optional，默认 nil
+- [ ] nil 高度使用 Tabman bar 自适应布局，显式高度约束实际 bar
+- [ ] Paging adapter 在布局后通过 public `barInsets` 回报实际 bar obstruction
+- [ ] Tabman adapter 使用 collapsed-state fixed height，滚动热路径只移动 top
+- [ ] 测试 Header 折叠期间 adapter height 和 Pageboy child bounds 不变
 - [ ] 实现 managed inset 数据结构
 - [ ] 区分 managed inset 和外部 contentInset
 - [ ] 设置接管 scroll view 的 `contentInsetAdjustmentBehavior = .never`
+- [ ] ownership 结束时移除最后一次 managed inset 并恢复原始 adjustment behavior
 - [ ] 实现 child managed contentInset.top
 - [ ] 实现 child managed contentInset.bottom
 - [ ] 实现 scrollIndicatorInsets.bottom 避让
+- [ ] bar 高度变化时按 child distance-from-top 保持可见内容
 - [ ] 测试 managed inset 不覆盖外部 contentInset
 - [ ] 测试 contentInsetAdjustmentBehavior 策略
 - [ ] 测试 fallback page scroll host inset
+- [ ] 测试 optional bar height、自适应 barInsets 和显式高度
+- [ ] 测试 ownership 归还、重复 target 跳过和 scroll target 冲突降级
+- [ ] 示例工程真实列表页和 fallback 页 UI test
 - [ ] 更新 README 的 scroll 接入说明
 - [ ] 更新 `docs/architecture.md` 的 inset ownership 章节
 - [ ] 为 managed inset 写入加入 inset 日志
@@ -359,6 +371,10 @@
 - [ ] 处理 Header 折叠阈值附近抖动
 - [ ] 处理 child top boundary rubber-band 抖动
 - [ ] 实现 guarded contentOffset update
+- [ ] 当前 container 与当前 child 支持受限纵向 simultaneous recognition
+- [ ] 同一 pan 在 container/child 边界转移剩余 delta
+- [ ] container 未完全折叠时当前 child 保持顶部
+- [ ] child 离开顶部时 container 保持完全折叠
 - [ ] 避免 contentSize 变化重复写 managed inset
 - [ ] 为 Header 完全展开加入 scroll 日志
 - [ ] 为 Header 完全折叠加入 scroll 日志
@@ -370,6 +386,8 @@
 - [ ] 测试 child top boundary 抖动
 - [ ] 测试不同 contentSize child 切换
 - [ ] 测试 guarded update 防重入
+- [ ] 测试向上和向下 handoff 不丢失剩余 delta
+- [ ] 测试 Header 折叠热路径不改变 Pageboy child bounds
 - [ ] 测试 contentSize 变化不震荡
 
 ## v0.6：顶部 Overscroll 事件处理版
@@ -399,6 +417,7 @@
 
 ## v0.7：手势与交互状态机版
 
+- [ ] 复用 v0.5 已建立的 current container/current child 最小纵向 simultaneous recognition，不重复建立第二套纵向 handoff
 - [ ] 创建 `Sources/AnchorPager/Gesture/AnchorPagerInteractionState.swift`
 - [ ] 创建 `Sources/AnchorPager/Gesture/AnchorPagerGestureCoordinator.swift`
 - [ ] 定义 idle
@@ -558,6 +577,7 @@
 - [x] v0.2 follow-up：示例 Header 蓝色背景保持顶部行为语义，标题栈上下改用 safe area 并保留 20 pt 间距；验证记录见 `docs/superpowers/plans/2026-07-11-example-header-safe-area-content.md`
 - [x] v0.2 follow-up：示例 Header 标题栈 bottom 改为 safe area 上限约束，文本组顶部对齐并在下拉中保持固定 8 pt 间距；验证记录见 `docs/superpowers/plans/2026-07-11-example-header-safe-area-content.md`
 - [x] v0.2 Header 与布局稳定版已完成；后续从 v0.3 Scroll Discovery 与 Inset Ownership 版继续
+- [x] v0.3–v0.5 固定分页视口、optional bar height、inset ownership 和纵向 owner 架构已确认；设计见 `docs/superpowers/specs/2026-07-11-fixed-paging-viewport-inset-scroll-ownership-design.md`
 - [x] 实现时遵循测试先行
 - [x] 每个任务完成后运行对应测试
 - [x] 每个任务完成时确认是否需要 UI 测试
