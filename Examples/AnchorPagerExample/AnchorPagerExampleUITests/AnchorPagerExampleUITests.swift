@@ -45,6 +45,27 @@ final class AnchorPagerExampleUITests: XCTestCase {
     }
 
     @MainActor
+    func testHeaderContentKeepsTwentyPointTopSafeAreaPaddingWhenSwitchingBehaviors() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        let navigationBar = app.navigationBars["AnchorPager"]
+        let title = app.staticTexts["AnchorPager Example"]
+        let behaviorButton = navigationBar.buttons["Header 顶部行为"]
+        XCTAssertTrue(navigationBar.waitForExistence(timeout: 3))
+        XCTAssertTrue(title.waitForExistence(timeout: 3))
+        XCTAssertTrue(behaviorButton.waitForExistence(timeout: 3))
+        XCTAssertEqual(title.frame.minY, navigationBar.frame.maxY + 20, accuracy: 1)
+
+        behaviorButton.tap()
+        let extendedAction = app.buttons["延伸到顶部"]
+        XCTAssertTrue(extendedAction.waitForExistence(timeout: 3))
+        extendedAction.tap()
+
+        XCTAssertEqual(title.frame.minY, navigationBar.frame.maxY + 20, accuracy: 1)
+    }
+
+    @MainActor
     func testHeaderReturnsAfterTopBehaviorSwitchAndPullDown() throws {
         let app = XCUIApplication()
         app.launch()

@@ -80,6 +80,50 @@ struct AnchorPagerExampleTests {
         #expect(abs(switchedContext.barFrame.minY - switchedContext.headerFrame.maxY) < 0.5)
         #expect(abs(switchedContext.barFrame.minY - collapsedContext.barFrame.minY) < 0.5)
     }
+
+    @Test func headerContentUsesSafeAreaForVerticalPaddingInBothTopBehaviors() throws {
+        let viewController = ExamplePagerViewController()
+        let navigationController = UINavigationController(rootViewController: viewController)
+        let tabBarController = UITabBarController()
+        tabBarController.viewControllers = [navigationController]
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = tabBarController
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+
+        viewController.loadViewIfNeeded()
+        window.layoutIfNeeded()
+        let pagerViewController = try #require(
+            viewController.children.compactMap { $0 as? AnchorPagerViewController }.first
+        )
+        let titleLabel = try #require(
+            firstSubview(in: pagerViewController.view, as: UILabel.self) {
+                $0.text == "AnchorPager Example"
+            }
+        )
+        let stackView = try #require(titleLabel.superview as? UIStackView)
+        let headerView = try #require(stackView.superview)
+        let layoutProbe = LayoutProbe()
+        pagerViewController.delegate = layoutProbe
+
+        for behavior in [
+            AnchorPagerHeaderTopBehavior.insideSafeArea,
+            .extendsUnderTopSafeArea
+        ] {
+            pagerViewController.configuration.header.topBehavior = behavior
+            pagerViewController.reloadHeaderLayout(offsetAdjustment: .resetToExpanded)
+            window.layoutIfNeeded()
+
+            let safeAreaFrame = headerView.safeAreaLayoutGuide.layoutFrame
+            #expect(abs(stackView.frame.minY - (safeAreaFrame.minY + 20)) < 0.5)
+            #expect(abs(stackView.frame.maxY - (safeAreaFrame.maxY - 20)) < 0.5)
+
+            if behavior == .extendsUnderTopSafeArea {
+                let context = try #require(layoutProbe.layoutContexts.last)
+                #expect(abs(context.headerFrame.minY) < 0.5)
+            }
+        }
+    }
 }
 
 @MainActor
@@ -102,4 +146,21 @@ private final class LayoutProbe: AnchorPagerViewControllerDelegate {
     ) {
         layoutContexts.append(context)
     }
+}
+
+@MainActor
+private func firstSubview<T: UIView>(
+    in rootView: UIView,
+    as type: T.Type,
+    matching predicate: (T) -> Bool
+) -> T? {
+    if let rootView = rootView as? T, predicate(rootView) {
+        return rootView
+    }
+    for subview in rootView.subviews {
+        if let match = firstSubview(in: subview, as: type, matching: predicate) {
+            return match
+        }
+    }
+    return nil
 }
