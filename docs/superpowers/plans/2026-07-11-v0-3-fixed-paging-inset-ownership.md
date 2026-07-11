@@ -1222,7 +1222,7 @@ git commit -m "修复滚动指示器安全区避让"
 - Consumes: AnchorPager 自有 `verticalScrollView` 安装路径。
 - Produces: 主容器横纵 indicator 永久隐藏；当前 child/fallback 保持唯一用户可见 indicator owner；不改变 Public API、滚动范围或 bounce。
 
-- [ ] **Step 1: 写主容器 indicator 失败测试**
+- [x] **Step 1: 写主容器 indicator 失败测试**
 
 ```swift
 @MainActor
@@ -1235,7 +1235,7 @@ func testVerticalContainerHidesScrollIndicators() {
 }
 ```
 
-- [ ] **Step 2: 运行 Task 8 RED**
+- [x] **Step 2: 运行 Task 8 RED**
 
 ```bash
 xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/xcodebuild-v03-indicator -parallel-testing-enabled NO -enableCodeCoverage NO -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testVerticalContainerHidesScrollIndicators test
@@ -1243,7 +1243,7 @@ xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=
 
 Expected: FAIL；UIScrollView 默认仍显示横纵 indicator。
 
-- [ ] **Step 3: 写最小实现**
+- [x] **Step 3: 写最小实现**
 
 在 `installVerticalScrollViewIfNeeded()` 初次安装路径增加：
 
@@ -1254,7 +1254,7 @@ verticalScrollView.showsHorizontalScrollIndicator = false
 
 不得按页面类型或折叠状态动态切换，不影响 child/fallback indicator。
 
-- [ ] **Step 4: 运行 GREEN 与 package 回归**
+- [x] **Step 4: 运行 GREEN 与 package 回归**
 
 先运行 Step 2 同一命令，Expected: PASS。再运行：
 
@@ -1264,7 +1264,7 @@ xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=
 
 Expected: package 全部测试通过、0 failures。
 
-- [ ] **Step 5: 运行示例 UI 回归**
+- [x] **Step 5: 运行示例 UI 回归**
 
 ```bash
 xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .build/example-xcodebuild-v03-indicator -parallel-testing-enabled NO -enableCodeCoverage NO test
@@ -1272,7 +1272,7 @@ xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorP
 
 Expected: 示例单元/UI tests 全部通过；Header 折叠、child 分页和 fallback 可视路径不回归。
 
-- [ ] **Step 6: 自审、更新记录并提交**
+- [x] **Step 6: 自审、更新记录并提交**
 
 检查主容器 indicator 隐藏不改变 `alwaysBounceVertical`、content range、delegate、scroll-to-top 后续 owner、child indicator ownership 或 containment。更新 task-list 和验证记录后：
 
@@ -1323,3 +1323,8 @@ git commit -m "隐藏主容器滚动指示器"
 - Task 7 package 回归：复用 `iPhone 17 Pro` 与 `.build/xcodebuild-v03-indicator`，101 项通过、0 failures、0 skipped，测试阶段约 43 秒。
 - Task 7 示例回归：复用同一模拟器与 `.build/example-xcodebuild-v03-indicator`，示例单元/UI tests 14 项通过、0 failures、0 skipped，测试阶段约 211 秒。
 - Task 7 自审：Public API、Tabman/Pageboy containment、Header/fallback containment 和 scroll discovery 未变化；indicator external 四边差量保留，上下 managed target 只有 AnchorPager 一个 owner；reload/deinit 使用既有 release/releaseAll 同步归还；滚动热路径不写 inset。
+- Task 8 RED：`testVerticalContainerHidesScrollIndicators` 因 UIScrollView 默认显示主容器 indicator 按预期失败；截图中跨越 Header/bar 的长 indicator 已定位为 `verticalScrollView`，不是 child indicator。
+- Task 8 GREEN：初次安装主容器时固定关闭横纵 indicator，定向测试通过；没有按页面或折叠状态动态切换。
+- Task 8 package 回归：复用 `iPhone 17 Pro` 与 `.build/xcodebuild-v03-indicator`，102 项通过、0 failures、0 skipped，测试阶段约 93 秒。
+- Task 8 示例回归：复用同一模拟器与 `.build/example-xcodebuild-v03-indicator`，示例单元/UI tests 14 项通过、0 failures、0 skipped，测试阶段约 274 秒。
+- Task 8 自审：`alwaysBounceVertical`、content range、内部 delegate、Header collapse/bounce、后续 scroll-to-top owner、child/fallback indicator ownership、Tabman/Pageboy 与 UIKit containment 均未变化；Public API 未扩大。

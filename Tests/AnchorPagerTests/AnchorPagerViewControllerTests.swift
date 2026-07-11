@@ -14,6 +14,15 @@ final class AnchorPagerViewControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testVerticalContainerHidesScrollIndicators() {
+        let pager = AnchorPagerViewController()
+        pager.loadViewIfNeeded()
+
+        XCTAssertFalse(pager.verticalScrollView.showsVerticalScrollIndicator)
+        XCTAssertFalse(pager.verticalScrollView.showsHorizontalScrollIndicator)
+    }
+
+    @MainActor
     func testReloadDataKeepsEmptyPageSelectionAtZero() {
         let pager = AnchorPagerViewController()
         let dataSource = StubDataSource(count: 0)

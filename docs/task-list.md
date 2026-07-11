@@ -326,7 +326,7 @@
 - [x] 实现 scrollIndicatorInsets.bottom 避让
 - [x] 修复 scrollIndicatorInsets.top 越过实际 bar 底部
 - [x] 接管并归还 `automaticallyAdjustsScrollIndicatorInsets`，避免底部 safe area 重复避让
-- [ ] 隐藏 AnchorPager 主容器横纵滚动指示器，避免与 child indicator 重复或误导
+- [x] 隐藏 AnchorPager 主容器横纵滚动指示器，避免与 child indicator 重复或误导
 - [x] bar 高度变化时按 child distance-from-top 保持可见内容
 - [x] 测试 managed inset 不覆盖外部 contentInset
 - [x] 测试 contentInsetAdjustmentBehavior 策略

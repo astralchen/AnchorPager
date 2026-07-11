@@ -195,6 +195,8 @@ open class AnchorPagerViewController: UIViewController {
         guard verticalScrollView.superview == nil else { return }
 
         verticalScrollView.alwaysBounceVertical = true
+        verticalScrollView.showsVerticalScrollIndicator = false
+        verticalScrollView.showsHorizontalScrollIndicator = false
         verticalScrollView.contentInsetAdjustmentBehavior = .never
         verticalScrollView.delegate = verticalScrollDelegate
         verticalScrollView.translatesAutoresizingMaskIntoConstraints = false
