@@ -344,7 +344,7 @@
 
 ## v0.4：Child 生命周期与缓存版
 
-设计基线：`docs/superpowers/specs/2026-07-12-v0-4-child-lifecycle-cache-design.md`。主体实现及 reload terminal 修复完整验收已通过，最终独立复审完成前不启动 v0.5；修复设计见 `docs/superpowers/specs/2026-07-12-v0-4-reload-terminal-repair-design.md`。
+设计基线：`docs/superpowers/specs/2026-07-12-v0-4-child-lifecycle-cache-design.md`。主体实现及 reload terminal 修复完整验收已通过，但最终独立复审发现 deferred reload 代际原子性和跨 generation 可变 PageState 共享问题；修复设计见 `docs/superpowers/specs/2026-07-12-v0-4-generation-atomicity-repair-design.md`。修复和再次复审完成前不启动 v0.5。
 
 - [x] 实现 page state store
 - [x] 移除 `AnchorPagerChildViewControllerStore`，避免与 Tabman/Pageboy 双重 containment
