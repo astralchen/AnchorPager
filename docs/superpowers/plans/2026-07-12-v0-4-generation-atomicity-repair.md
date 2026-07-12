@@ -313,6 +313,8 @@ git commit -m "隔离页面代际 retention 与 ownership"
 - Removes Task 1 为旧 ViewController 暂留的无 request identifier Host/Adapter reload 与 terminal bridge。
 - Extends the internal matching terminal with its request-scoped final bar insets；active reload 内的 bar callback 只暂存，
   非 reload 期间继续即时发布。
+- Terminal delegate returns a Bool acknowledgement；Host 只在 ViewController 实际提交 matching snapshot 后更新
+  committed bar baseline，superseded terminal 不得污染后续 request。
 
 - [ ] **Step 1: 写 deferred 端到端 RED 测试**
 
@@ -392,9 +394,11 @@ func pagingHost(
 - [ ] **Step 6: 实现匹配 terminal 原子 commit**
 
 Host 在 active request 内暂存 adapter bar insets，empty 明确暂存 `.zero`，不得提前调用 ViewController 的即时 bar 更新。
-terminal 必须同时携带 active ID、最终 bar insets并匹配 staged snapshot。顺序：Store commit → publish snapshot fields 与
+terminal 必须同时携带 active ID、最终 bar insets并匹配 staged snapshot；ViewController 匹配并提交后返回 true，stale 或
+superseded 时返回 false。顺序：Store commit → publish snapshot fields 与
 bar insets → page terminal index 收敛 Store committed current → 安装 Header/更新布局 → 按 ID 清 active/staged。empty
-保持 selectedIndex 0/effective nil。
+保持 selectedIndex 0/effective nil。Host 只在 acknowledgement 为 true 时更新 committed bar baseline，然后清 active 并
+推进 pending；false 时保留旧 baseline。
 
 迟到或不匹配 terminal 记录 `paging.reload.stale` 并 no-op，不能提交 latest snapshot。
 

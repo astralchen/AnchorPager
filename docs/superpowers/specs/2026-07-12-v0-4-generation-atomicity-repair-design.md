@@ -134,6 +134,9 @@ active request：已调用 willPerform、等待 page/empty terminal 的唯一 re
 9. active reload 期间产生的 bar insets（包括 empty 的 `.zero`）属于该 request 的 staged geometry，不得先通过
    `didUpdateBarInsets` 写入旧 committed scroll；Host 必须在 matching terminal 中携带最终 bar insets，非 reload 期间的
    bar insets 变化才允许即时发布。
+10. ViewController 的 request-aware terminal delegate 必须返回是否实际提交；只有 active ID 与 latest staged snapshot
+    同时匹配并完成 Store/public commit 才返回 true。Host 只有收到 true acknowledgement 才更新 committed bar baseline；
+    superseded terminal 返回 false 后必须保留旧 baseline，再推进 latest pending request，避免旧 empty `.zero` 污染新页。
 
 ### ViewController 激活与提交
 
