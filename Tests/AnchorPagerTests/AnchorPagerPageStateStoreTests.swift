@@ -152,6 +152,286 @@ final class AnchorPagerPageStateStoreTests: XCTestCase {
             event: "children.page.dataSourceMissing"
         )))
     }
+
+    func testDefaultRetentionKeepsOnlyCurrentPage() {
+        let coordinator = AnchorPagerManagedInsetCoordinator()
+        let store = AnchorPagerPageStateStore(managedInsetCoordinator: coordinator)
+        var first: PageStateScrollViewController? = PageStateScrollViewController()
+        var current: PageStateScrollViewController? = PageStateScrollViewController()
+        var last: PageStateScrollViewController? = PageStateScrollViewController()
+        weak let weakFirst = first
+        weak let weakCurrent = current
+        weak let weakLast = last
+        store.beginReload(
+            generation: 1,
+            pageCount: 3,
+            selectedIndex: 1,
+            keepsAdjacentPagesLoaded: false
+        )
+
+        _ = store.pageViewController(at: 0, context: .testZero) { first }
+        _ = store.pageViewController(at: 1, context: .testZero) { current }
+        _ = store.pageViewController(at: 2, context: .testZero) { last }
+        first = nil
+        current = nil
+        last = nil
+
+        XCTAssertNil(weakFirst)
+        XCTAssertNotNil(weakCurrent)
+        XCTAssertNil(weakLast)
+        XCTAssertEqual(store.retentionReasons(at: 1), [.current])
+    }
+
+    func testAdjacentRetentionOnlyKeepsAlreadyLoadedNeighborsAndCanBeDisabled() {
+        let coordinator = AnchorPagerManagedInsetCoordinator()
+        let store = AnchorPagerPageStateStore(managedInsetCoordinator: coordinator)
+        var first: PageStateScrollViewController? = PageStateScrollViewController()
+        var current: PageStateScrollViewController? = PageStateScrollViewController()
+        var last: PageStateScrollViewController? = PageStateScrollViewController()
+        weak let weakFirst = first
+        weak let weakCurrent = current
+        weak let weakLast = last
+        store.beginReload(
+            generation: 1,
+            pageCount: 100,
+            selectedIndex: 1,
+            keepsAdjacentPagesLoaded: false
+        )
+        _ = store.pageViewController(at: 0, context: .testZero) { first }
+        _ = store.pageViewController(at: 1, context: .testZero) { current }
+        _ = store.pageViewController(at: 2, context: .testZero) { last }
+
+        store.setKeepsAdjacentPagesLoaded(true)
+        first = nil
+        current = nil
+        last = nil
+
+        XCTAssertNotNil(weakFirst)
+        XCTAssertNotNil(weakCurrent)
+        XCTAssertNotNil(weakLast)
+        XCTAssertEqual(store.retentionReasons(at: 0), [.configuredAdjacent])
+        XCTAssertEqual(store.retentionReasons(at: 2), [.configuredAdjacent])
+
+        store.setKeepsAdjacentPagesLoaded(false)
+
+        XCTAssertNotNil(weakCurrent)
+        XCTAssertEqual(store.retentionReasons(at: 0), [])
+        XCTAssertEqual(store.retentionReasons(at: 1), [.current])
+        XCTAssertEqual(store.retentionReasons(at: 2), [])
+    }
+
+    func testTransitionPinsSourceAndTargetThenCommitsTarget() {
+        let coordinator = AnchorPagerManagedInsetCoordinator()
+        let store = AnchorPagerPageStateStore(managedInsetCoordinator: coordinator)
+        let source = PageStateScrollViewController()
+        let target = PageStateScrollViewController()
+        store.beginReload(
+            generation: 1,
+            pageCount: 2,
+            selectedIndex: 0,
+            keepsAdjacentPagesLoaded: false
+        )
+        _ = store.pageViewController(at: 0, context: .testZero) { source }
+        _ = store.pageViewController(at: 1, context: .testZero) { target }
+
+        store.willSelect(from: 0, to: 1, context: .testZero)
+
+        XCTAssertEqual(store.retentionReasons(at: 0), [.current, .transitionSource])
+        XCTAssertEqual(store.retentionReasons(at: 1), [.transitionTarget])
+
+        store.didSelect(1, context: .testZero)
+
+        XCTAssertEqual(store.retentionReasons(at: 0), [])
+        XCTAssertEqual(store.retentionReasons(at: 1), [.current])
+    }
+
+    func testCancelledTransitionRestoresSourceWindow() {
+        let coordinator = AnchorPagerManagedInsetCoordinator()
+        let store = AnchorPagerPageStateStore(managedInsetCoordinator: coordinator)
+        let source = PageStateScrollViewController()
+        let target = PageStateScrollViewController()
+        store.beginReload(
+            generation: 1,
+            pageCount: 2,
+            selectedIndex: 0,
+            keepsAdjacentPagesLoaded: false
+        )
+        _ = store.pageViewController(at: 0, context: .testZero) { source }
+        _ = store.pageViewController(at: 1, context: .testZero) { target }
+        store.willSelect(from: 0, to: 1, context: .testZero)
+
+        store.didCancelSelection(
+            at: 1,
+            returningTo: 0,
+            context: .testZero
+        )
+
+        XCTAssertEqual(store.retentionReasons(at: 0), [.current])
+        XCTAssertEqual(store.retentionReasons(at: 1), [])
+    }
+
+    func testCollapsedContainerRestoresSavedChildDistanceWhenSelectingPageAgain() {
+        let coordinator = AnchorPagerManagedInsetCoordinator()
+        let store = AnchorPagerPageStateStore(managedInsetCoordinator: coordinator)
+        let source = PageStateScrollViewController()
+        let target = PageStateScrollViewController()
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+        let expandedContext = AnchorPagerPageStateStore.AccessContext(
+            managedInsetTarget: .init(
+                content: UIEdgeInsets(top: 20, left: 0, bottom: 30, right: 0),
+                indicators: UIEdgeInsets(top: 20, left: 0, bottom: 30, right: 0)
+            ),
+            containerIsCollapsed: false
+        )
+        var collapsedContext = expandedContext
+        collapsedContext.containerIsCollapsed = true
+        store.beginReload(
+            generation: 1,
+            pageCount: 2,
+            selectedIndex: 0,
+            keepsAdjacentPagesLoaded: false
+        )
+        _ = store.pageViewController(at: 0, context: expandedContext) { source }
+        _ = store.pageViewController(at: 1, context: expandedContext) { target }
+        source.scrollView.contentOffset.y = -source.scrollView.contentInset.top + 120
+        store.willSelect(from: 0, to: 1, context: collapsedContext)
+        store.didSelect(1, context: collapsedContext)
+        source.scrollView.contentOffset.y = -source.scrollView.contentInset.top
+
+        store.willSelect(from: 1, to: 0, context: collapsedContext)
+
+        XCTAssertEqual(store.childDistanceFromTop(at: 0), 120, accuracy: 0.5)
+        XCTAssertEqual(
+            source.scrollView.contentOffset.y + source.scrollView.contentInset.top,
+            120,
+            accuracy: 0.5
+        )
+        XCTAssertTrue(events.contains(.init(
+            category: .children,
+            level: .debug,
+            event: "children.page.snapshot.save"
+        )))
+        XCTAssertTrue(events.contains(.init(
+            category: .children,
+            level: .debug,
+            event: "children.page.snapshot.restore"
+        )))
+    }
+
+    func testExpandedContainerResetsSavedChildDistanceWhenSelectingPageAgain() {
+        let coordinator = AnchorPagerManagedInsetCoordinator()
+        let store = AnchorPagerPageStateStore(managedInsetCoordinator: coordinator)
+        let source = PageStateScrollViewController()
+        let target = PageStateScrollViewController()
+        let context = AnchorPagerPageStateStore.AccessContext(
+            managedInsetTarget: .init(
+                content: UIEdgeInsets(top: 20, left: 0, bottom: 30, right: 0),
+                indicators: UIEdgeInsets(top: 20, left: 0, bottom: 30, right: 0)
+            ),
+            containerIsCollapsed: false
+        )
+        store.beginReload(
+            generation: 1,
+            pageCount: 2,
+            selectedIndex: 0,
+            keepsAdjacentPagesLoaded: false
+        )
+        _ = store.pageViewController(at: 0, context: context) { source }
+        _ = store.pageViewController(at: 1, context: context) { target }
+        source.scrollView.contentOffset.y = -source.scrollView.contentInset.top + 120
+        store.willSelect(from: 0, to: 1, context: context)
+        store.didSelect(1, context: context)
+
+        store.willSelect(from: 1, to: 0, context: context)
+
+        XCTAssertEqual(store.childDistanceFromTop(at: 0), 0, accuracy: 0.5)
+        XCTAssertEqual(
+            source.scrollView.contentOffset.y,
+            -source.scrollView.contentInset.top,
+            accuracy: 0.5
+        )
+    }
+
+    func testManagedInsetUpdatesOnlyVisitActiveRetentionWindow() {
+        let coordinator = AnchorPagerManagedInsetCoordinator()
+        let store = AnchorPagerPageStateStore(managedInsetCoordinator: coordinator)
+        let pages = (0..<10).map { _ in PageStateScrollViewController() }
+        store.beginReload(
+            generation: 1,
+            pageCount: 1_000,
+            selectedIndex: 5,
+            keepsAdjacentPagesLoaded: true
+        )
+        for (index, page) in pages.enumerated() {
+            _ = store.pageViewController(at: index, context: .testZero) { page }
+        }
+
+        store.updateManagedInsets(
+            .init(
+                content: UIEdgeInsets(top: 12, left: 0, bottom: 34, right: 0),
+                indicators: UIEdgeInsets(top: 12, left: 0, bottom: 34, right: 0)
+            ),
+            logsChanges: false
+        )
+
+        XCTAssertEqual(store.lastManagedUpdateCount, 3)
+        XCTAssertEqual(pages[4].scrollView.contentInset.top, 12)
+        XCTAssertEqual(pages[5].scrollView.contentInset.top, 12)
+        XCTAssertEqual(pages[6].scrollView.contentInset.top, 12)
+        XCTAssertEqual(pages[3].scrollView.contentInset.top, 0)
+    }
+
+    func testReleasedPageIsRecreatedAndRestoresItsSavedDistance() {
+        let coordinator = AnchorPagerManagedInsetCoordinator()
+        let store = AnchorPagerPageStateStore(managedInsetCoordinator: coordinator)
+        var source: PageStateScrollViewController? = PageStateScrollViewController()
+        let target = PageStateScrollViewController()
+        weak let weakSource = source
+        let context = AnchorPagerPageStateStore.AccessContext(
+            managedInsetTarget: .init(
+                content: UIEdgeInsets(top: 20, left: 0, bottom: 30, right: 0),
+                indicators: UIEdgeInsets(top: 20, left: 0, bottom: 30, right: 0)
+            ),
+            containerIsCollapsed: true
+        )
+        store.beginReload(
+            generation: 1,
+            pageCount: 2,
+            selectedIndex: 0,
+            keepsAdjacentPagesLoaded: false
+        )
+        _ = store.pageViewController(at: 0, context: context) { source }
+        _ = store.pageViewController(at: 1, context: context) { target }
+        source?.scrollView.contentOffset.y = -(source?.scrollView.contentInset.top ?? 0) + 120
+        store.willSelect(from: 0, to: 1, context: context)
+        store.didSelect(1, context: context)
+        source = nil
+        XCTAssertNil(weakSource)
+        let recreated = PageStateScrollViewController()
+        var providerCalls = 0
+
+        let actual = store.pageViewController(at: 0, context: context) {
+            providerCalls += 1
+            return recreated
+        }
+        store.willSelect(from: 1, to: 0, context: context)
+
+        XCTAssertTrue(actual === recreated)
+        XCTAssertEqual(providerCalls, 1)
+        XCTAssertEqual(
+            recreated.scrollView.contentOffset.y + recreated.scrollView.contentInset.top,
+            120,
+            accuracy: 0.5
+        )
+    }
+}
+
+private extension AnchorPagerPageStateStore.AccessContext {
+    static var testZero: Self {
+        .init(managedInsetTarget: .zero, containerIsCollapsed: false)
+    }
 }
 
 @MainActor
