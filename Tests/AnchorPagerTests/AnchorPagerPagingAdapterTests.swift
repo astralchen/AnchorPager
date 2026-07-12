@@ -5,7 +5,10 @@ import UIKit
 import XCTest
 @testable import AnchorPager
 
+@MainActor
 final class AnchorPagerPagingAdapterTests: XCTestCase {
+    private var retainedPageProvider: RecordingPageProvider?
+
     @MainActor
     func testAdapterDisablesTabmanAutomaticChildInsetsBeforeViewDidLoad() {
         let adapter = AnchorPagerPagingAdapter()
@@ -22,7 +25,8 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
         AnchorPagerLogger.sink = { events.append($0) }
         defer { AnchorPagerLogger.sink = nil }
         adapter.setBarHeight(64)
-        adapter.reload(
+        reload(
+            adapter,
             titles: ["First"],
             viewControllers: [UIViewController()],
             selectedIndex: 0
@@ -47,7 +51,8 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
     func testNilBarHeightUsesAdaptiveTabmanHeight() {
         let adapter = AnchorPagerPagingAdapter()
         adapter.setBarHeight(nil)
-        adapter.reload(
+        reload(
+            adapter,
             titles: ["First"],
             viewControllers: [UIViewController()],
             selectedIndex: 0
@@ -85,7 +90,12 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
         let first = UIViewController()
         let second = UIViewController()
 
-        adapter.reload(titles: ["First", "Second"], viewControllers: [first, second], selectedIndex: 1)
+        reload(
+            adapter,
+            titles: ["First", "Second"],
+            viewControllers: [first, second],
+            selectedIndex: 1
+        )
 
         XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 2)
         XCTAssertTrue(adapter.viewController(for: adapter, at: 0) === first)
@@ -103,11 +113,27 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
     }
 
     @MainActor
+    func testAdapterRequestsPagesByIndexWithoutOwningControllerArray() {
+        let adapter = AnchorPagerPagingAdapter()
+        let first = UIViewController()
+        let provider = RecordingPageProvider(pages: [0: first])
+        adapter.pageProvider = provider
+
+        adapter.reload(titles: ["First", "Second"], pageCount: 2, selectedIndex: 1)
+
+        XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 2)
+        XCTAssertTrue(adapter.viewController(for: adapter, at: 0) === first)
+        XCTAssertNil(adapter.viewController(for: adapter, at: 1))
+        XCTAssertEqual(Array(provider.requestedIndexes.suffix(2)), [0, 1])
+    }
+
+    @MainActor
     func testAdapterForwardsPageboyEventsWithoutLeakingPageboyTypes() {
         let adapter = AnchorPagerPagingAdapter()
         let delegate = RecordingPagingDelegate()
         adapter.eventDelegate = delegate
-        adapter.reload(
+        reload(
+            adapter,
             titles: ["First", "Second"],
             viewControllers: [UIViewController(), UIViewController()],
             selectedIndex: 0
@@ -116,8 +142,13 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
         adapter.pageboyViewController(adapter, willScrollToPageAt: 1, direction: .forward, animated: true)
         adapter.pageboyViewController(adapter, didScrollToPageAt: 1, direction: .forward, animated: true)
         adapter.pageboyViewController(adapter, didCancelScrollToPageAt: 1, returnToPageAt: 0)
+        let current = adapter.viewController(for: adapter, at: 0)!
+        adapter.pageboyViewController(adapter, didReloadWith: current, currentPageIndex: 0)
 
-        XCTAssertEqual(delegate.events, [.willSelect(1, true), .didSelect(1, true), .didCancel(1, 0)])
+        XCTAssertEqual(
+            delegate.events,
+            [.willSelect(1, true), .didSelect(1, true), .didCancel(1, 0), .didReload(0)]
+        )
     }
 
     @MainActor
@@ -126,7 +157,8 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
         let delegate = RecordingPagingDelegate()
         adapter.eventDelegate = delegate
         adapter.loadViewIfNeeded()
-        adapter.reload(
+        reload(
+            adapter,
             titles: ["First", "Second"],
             viewControllers: [UIViewController(), UIViewController()],
             selectedIndex: 0
@@ -145,7 +177,8 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
     @MainActor
     func testSetSelectedIndexOutOfRangeReturnsFalseAndWritesLog() {
         let adapter = AnchorPagerPagingAdapter()
-        adapter.reload(
+        reload(
+            adapter,
             titles: ["First"],
             viewControllers: [UIViewController()],
             selectedIndex: 0
@@ -166,7 +199,8 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
         let delegate = RecordingPagingDelegate()
         adapter.eventDelegate = delegate
         adapter.loadViewIfNeeded()
-        adapter.reload(
+        reload(
+            adapter,
             titles: ["First", "Second", "Third"],
             viewControllers: [UIViewController(), UIViewController(), UIViewController()],
             selectedIndex: 0
@@ -187,7 +221,8 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
     @MainActor
     func testAdapterLogsMissingDuplicateAndOutOfOrderPageboyCallbacks() {
         let adapter = AnchorPagerPagingAdapter()
-        adapter.reload(
+        reload(
+            adapter,
             titles: ["First", "Second"],
             viewControllers: [UIViewController(), UIViewController()],
             selectedIndex: 0
@@ -231,6 +266,41 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
         }
         throw CocoaError(.fileNoSuchFile)
     }
+
+    private func reload(
+        _ adapter: AnchorPagerPagingAdapter,
+        titles: [String],
+        viewControllers: [UIViewController],
+        selectedIndex: Int
+    ) {
+        let provider = RecordingPageProvider(
+            pages: Dictionary(
+                uniqueKeysWithValues: viewControllers.enumerated().map { ($0.offset, $0.element) }
+            )
+        )
+        retainedPageProvider = provider
+        adapter.pageProvider = provider
+        adapter.reload(
+            titles: titles,
+            pageCount: viewControllers.count,
+            selectedIndex: selectedIndex
+        )
+    }
+}
+
+@MainActor
+private final class RecordingPageProvider: AnchorPagerPageProviding {
+    var pages: [Int: UIViewController]
+    var requestedIndexes: [Int] = []
+
+    init(pages: [Int: UIViewController]) {
+        self.pages = pages
+    }
+
+    func pageViewController(at index: Int) -> UIViewController? {
+        requestedIndexes.append(index)
+        return pages[index]
+    }
 }
 
 @MainActor
@@ -239,6 +309,7 @@ private final class RecordingPagingDelegate: AnchorPagerPagingAdapterDelegate {
         case willSelect(Int, Bool)
         case didSelect(Int, Bool)
         case didCancel(Int, Int)
+        case didReload(Int)
     }
 
     var events: [Event] = []
@@ -273,6 +344,10 @@ private final class RecordingPagingDelegate: AnchorPagerPagingAdapterDelegate {
         returningTo previousIndex: Int
     ) {
         events.append(.didCancel(index, previousIndex))
+    }
+
+    func pagingAdapter(_ adapter: AnchorPagerPagingAdapter, didReloadAt index: Int) {
+        events.append(.didReload(index))
     }
 }
 

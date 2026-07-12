@@ -237,6 +237,7 @@ open class AnchorPagerViewController: UIViewController {
 
     private func configurePagingAdapter() {
         pagingAdapter.eventDelegate = self
+        pagingAdapter.pageProvider = self
     }
 
     private func reloadVisibleContentIfNeeded() {
@@ -248,7 +249,7 @@ open class AnchorPagerViewController: UIViewController {
         updateVisibleLayout()
         pagingAdapter.reload(
             titles: currentTitles,
-            viewControllers: currentViewControllers,
+            pageCount: pageCount,
             selectedIndex: selectedIndex
         )
     }
@@ -665,6 +666,13 @@ open class AnchorPagerViewController: UIViewController {
         return staleIdentifiers.compactMap { identifier in
             fallbackPageHosts.removeValue(forKey: identifier)
         }
+    }
+}
+
+extension AnchorPagerViewController: AnchorPagerPageProviding {
+    func pageViewController(at index: Int) -> UIViewController? {
+        guard currentViewControllers.indices.contains(index) else { return nil }
+        return currentViewControllers[index]
     }
 }
 

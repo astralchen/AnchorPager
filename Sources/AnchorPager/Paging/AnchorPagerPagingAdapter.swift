@@ -3,6 +3,11 @@ import Tabman
 import UIKit
 
 @MainActor
+protocol AnchorPagerPageProviding: AnyObject {
+    func pageViewController(at index: Int) -> UIViewController?
+}
+
+@MainActor
 protocol AnchorPagerPagingAdapterDelegate: AnyObject {
     func pagingAdapter(_ adapter: AnchorPagerPagingAdapter, willSelect index: Int, animated: Bool)
     func pagingAdapter(_ adapter: AnchorPagerPagingAdapter, didSelect index: Int, animated: Bool)
@@ -15,6 +20,7 @@ protocol AnchorPagerPagingAdapterDelegate: AnyObject {
         _ adapter: AnchorPagerPagingAdapter,
         didUpdateBarInsets barInsets: UIEdgeInsets
     )
+    func pagingAdapter(_ adapter: AnchorPagerPagingAdapter, didReloadAt index: Int)
 }
 
 extension AnchorPagerPagingAdapterDelegate {
@@ -22,14 +28,17 @@ extension AnchorPagerPagingAdapterDelegate {
         _ adapter: AnchorPagerPagingAdapter,
         didUpdateBarInsets barInsets: UIEdgeInsets
     ) {}
+
+    func pagingAdapter(_ adapter: AnchorPagerPagingAdapter, didReloadAt index: Int) {}
 }
 
 @MainActor
 final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControllerDataSource, TMBarDataSource {
     weak var eventDelegate: AnchorPagerPagingAdapterDelegate?
+    weak var pageProvider: AnchorPagerPageProviding?
 
     private var titles: [String] = []
-    private var viewControllers: [UIViewController] = []
+    private var configuredPageCount = 0
     private var defaultSelectedIndex = 0
     private var committedSelectedIndex = 0
     private var pendingPageboySelectionIndex: Int?
@@ -93,12 +102,12 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
 
     func reload(
         titles: [String],
-        viewControllers: [UIViewController],
+        pageCount: Int,
         selectedIndex: Int
     ) {
         self.titles = titles
-        self.viewControllers = viewControllers
-        if viewControllers.indices.contains(selectedIndex) {
+        configuredPageCount = Swift.max(0, pageCount)
+        if (0..<configuredPageCount).contains(selectedIndex) {
             defaultSelectedIndex = selectedIndex
         } else {
             defaultSelectedIndex = 0
@@ -111,8 +120,8 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
         if isViewLoaded {
             reloadData()
             bars.forEach { bar in
-                if !viewControllers.isEmpty {
-                    bar.reloadData(at: 0...viewControllers.count - 1, context: .full)
+                if configuredPageCount > 0 {
+                    bar.reloadData(at: 0...configuredPageCount - 1, context: .full)
                 }
             }
         }
@@ -121,7 +130,7 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
 
     @discardableResult
     func setSelectedIndex(_ index: Int, animated: Bool) -> Bool {
-        guard viewControllers.indices.contains(index) else {
+        guard (0..<configuredPageCount).contains(index) else {
             AnchorPagerLogger.log(.debug, category: .paging, event: "paging.setSelectedIndex.outOfRange")
             return false
         }
@@ -146,19 +155,19 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
     }
 
     func numberOfViewControllers(in pageboyViewController: PageboyViewController) -> Int {
-        viewControllers.count
+        configuredPageCount
     }
 
     func viewController(
         for pageboyViewController: PageboyViewController,
         at index: PageboyViewController.PageIndex
     ) -> UIViewController? {
-        guard viewControllers.indices.contains(index) else { return nil }
-        return viewControllers[index]
+        guard (0..<configuredPageCount).contains(index) else { return nil }
+        return pageProvider?.pageViewController(at: index)
     }
 
     func defaultPage(for pageboyViewController: PageboyViewController) -> PageboyViewController.Page? {
-        guard viewControllers.indices.contains(defaultSelectedIndex) else { return nil }
+        guard (0..<configuredPageCount).contains(defaultSelectedIndex) else { return nil }
         return .at(index: defaultSelectedIndex)
     }
 
@@ -223,6 +232,19 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
                 returningTo: previousIndex
             )
         }
+    }
+
+    override func pageboyViewController(
+        _ pageboyViewController: PageboyViewController,
+        didReloadWith currentViewController: UIViewController,
+        currentPageIndex: PageIndex
+    ) {
+        super.pageboyViewController(
+            pageboyViewController,
+            didReloadWith: currentViewController,
+            currentPageIndex: currentPageIndex
+        )
+        eventDelegate?.pagingAdapter(self, didReloadAt: currentPageIndex)
     }
 
     private func configure() {
