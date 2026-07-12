@@ -191,6 +191,56 @@ final class AnchorPagerViewControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testReloadDataNegativeCountHeaderReentryCancelsBeforePublishingInvalidCount() throws {
+        let outerHeader = UIView()
+        let latestHeader = UIView()
+        let latestChild = ScrollChildViewController()
+        let outerDataSource = StubDataSource(
+            count: -1,
+            titles: [],
+            viewControllers: [],
+            headerContent: .view(outerHeader)
+        )
+        let latestDataSource = StubDataSource(
+            count: 1,
+            titles: ["Latest"],
+            viewControllers: [latestChild],
+            headerContent: .view(latestHeader)
+        )
+        let pager = AnchorPagerViewController()
+        pager.dataSource = outerDataSource
+        pager.loadViewIfNeeded()
+        outerDataSource.onHeaderContent = {
+            pager.dataSource = latestDataSource
+            pager.reloadData()
+        }
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+
+        pager.reloadData()
+
+        let adapter = try XCTUnwrap(installedAdapter(in: pager))
+        XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 1)
+        XCTAssertEqual(adapter.barItem(for: TMBarView.ButtonBar(), at: 0).title, "Latest")
+        XCTAssertTrue(adapter.viewController(for: adapter, at: 0) === latestChild)
+        XCTAssertTrue(latestHeader.isDescendant(of: pager.view))
+        XCTAssertFalse(outerHeader.isDescendant(of: pager.view))
+        XCTAssertEqual(outerDataSource.numberOfViewControllersCallCount, 1)
+        XCTAssertEqual(outerDataSource.headerContentCallCount, 1)
+        XCTAssertEqual(outerDataSource.requestedTitleIndexes, [])
+        XCTAssertEqual(latestDataSource.numberOfViewControllersCallCount, 1)
+        XCTAssertEqual(latestDataSource.headerContentCallCount, 1)
+        XCTAssertEqual(latestDataSource.requestedTitleIndexes, [0])
+        XCTAssertFalse(events.contains { $0.event == "children.page.invalidCount" })
+        XCTAssertEqual(events.filter { $0.event == "lifecycle.reloadData.cancelled" }.count, 1)
+        XCTAssertEqual(events.filter { $0.event == "reloadData.begin" }.count, 1)
+        XCTAssertEqual(events.filter { $0.event == "children.page.generation.begin" }.count, 1)
+        XCTAssertEqual(events.filter { $0.event == "paging.reload" }.count, 1)
+        XCTAssertEqual(events.filter { $0.event == "reloadData.end" }.count, 1)
+    }
+
+    @MainActor
     func testReloadDataRequestsOnlyVisiblePageWindowInsteadOfAllPages() {
         let pager = AnchorPagerViewController()
         let dataSource = StubDataSource(

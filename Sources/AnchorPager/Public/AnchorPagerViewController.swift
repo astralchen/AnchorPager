@@ -133,18 +133,8 @@ open class AnchorPagerViewController: UIViewController {
         let requestedCount = reloadDataSource?.numberOfViewControllers(in: self) ?? 0
         guard isCurrentReloadTransaction(transactionIdentifier) else { return }
 
-        let resolvedPageCount: Int
-        if requestedCount < 0 {
-            AnchorPagerAssertions.failure("AnchorPager page count must not be negative.")
-            AnchorPagerLogger.log(
-                .error,
-                category: .children,
-                event: "children.page.invalidCount"
-            )
-            resolvedPageCount = 0
-        } else {
-            resolvedPageCount = requestedCount
-        }
+        let hasInvalidPageCount = requestedCount < 0
+        let resolvedPageCount = Swift.max(0, requestedCount)
 
         let resolvedHeaderContent = reloadDataSource?.headerContent(in: self)
         guard isCurrentReloadTransaction(transactionIdentifier) else { return }
@@ -159,6 +149,7 @@ open class AnchorPagerViewController: UIViewController {
             guard isCurrentReloadTransaction(transactionIdentifier) else { return }
             resolvedTitles.append(title)
         }
+        guard isCurrentReloadTransaction(transactionIdentifier) else { return }
 
         let resolvedSelectedIndex: Int
         if resolvedPageCount == 0 {
@@ -167,6 +158,14 @@ open class AnchorPagerViewController: UIViewController {
             resolvedSelectedIndex = Swift.min(selectedIndex, resolvedPageCount - 1)
         }
 
+        if hasInvalidPageCount {
+            AnchorPagerAssertions.failure("AnchorPager page count must not be negative.")
+            AnchorPagerLogger.log(
+                .error,
+                category: .children,
+                event: "children.page.invalidCount"
+            )
+        }
         AnchorPagerLogger.log(.info, category: .lifecycle, event: "reloadData.begin")
         pageCount = resolvedPageCount
         selectedIndex = resolvedSelectedIndex
