@@ -28,8 +28,6 @@ extension AnchorPagerPagingAdapterDelegate {
         _ adapter: AnchorPagerPagingAdapter,
         didUpdateBarInsets barInsets: UIEdgeInsets
     ) {}
-
-    func pagingAdapter(_ adapter: AnchorPagerPagingAdapter, didReloadAt index: Int) {}
 }
 
 @MainActor
