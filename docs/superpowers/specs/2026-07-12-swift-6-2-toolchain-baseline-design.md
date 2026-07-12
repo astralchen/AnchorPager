@@ -27,8 +27,10 @@ SwiftPM 的 tools version 与 Swift language mode 是两个不同维度：
 1. AnchorPager 的最低开发和构建工具链调整为 Swift 6.2。
 2. `Package.swift` 保持 `// swift-tools-version: 6.2`。
 3. `swiftLanguageModes: [.v6]` 保持不变，继续启用 Swift 6 language mode 和严格并发语义。
-4. `AnchorPagerViewController` 的 MainActor 资源归还改用 Swift 6.2 `isolated deinit`，替代
-   `MainActor.assumeIsolated`；析构仍同步归还 Store 和 managed inset，不引入异步 Task。
+4. `AnchorPagerViewController` 暂时保留已验证的 `deinit + MainActor.assumeIsolated` 同步资源归还。验证环境
+   Xcode 26.3 / Swift 6.2.4 / x86_64 iPhone 17 Simulator 中，改用 `isolated deinit` 会在 lifecycle deinit 后稳定触发
+   allocator `pointer being freed was not allocated` 崩溃；恢复现有实现后同一析构测试通过。不得提交该崩溃路径，
+   也不得用条件编译、异步 Task 或 unsafe 标记掩盖。
 5. Minimum OS 继续为 iOS 14；UIKit、Tabman 4.0.1、Pageboy 5.0.2 基线不变。
 6. AGENTS、requirements、task-list、roadmap、architecture、README 和当前有效实施计划使用统一表述：
    “最低工具链 Swift 6.2，语言模式 Swift 6”。
@@ -43,6 +45,8 @@ SwiftPM 的 tools version 与 Swift language mode 是两个不同维度：
 4. Framework 全量测试、Example generic build 和 Example 全量测试使用 Swift 6.2+ 工具链通过。
 5. 文档不得把 `.v6` language mode 误写为最低工具链仍是 Swift 6.0，也不得发明不存在的 `.v6_2` language mode。
 6. deinit 资源归还测试继续证明 Store、fallback 和 managed inset 在控制器析构时同步清理。
+7. 工具链升级不要求生产源码出现 `isolated deinit`；后续 Xcode/Swift 升级时必须以同一资源析构测试单独复验，
+   通过前不得替换 `MainActor.assumeIsolated`。
 
 ## 对后续版本的影响
 
@@ -50,3 +54,4 @@ SwiftPM 的 tools version 与 Swift language mode 是两个不同维度：
 2. Swift 6.2 新增或收紧的并发诊断必须从 actor/ownership 根因修复，不使用 unsafe 标记压制。
 3. CI 或贡献文档后续新增工具链矩阵时，不再要求 Swift 6.0/6.1 兼容。
 4. 该调整不扩大 AnchorPager public API，也不改变运行时最低 iOS 版本。
+5. `isolated deinit` 作为已知工具链限制留在后续兼容验证清单，不阻塞 Swift 6.2 最低 tools version 本身。

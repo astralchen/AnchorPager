@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 将 AnchorPager 的最低 SwiftPM/编译器工具链提升到 Swift 6.2，同时保持 Swift 6 language mode、iOS 14 运行基线和同步 MainActor 资源析构。
+**Goal:** 将 AnchorPager 的最低 SwiftPM/编译器工具链提升到 Swift 6.2，同时保持 Swift 6 language mode、iOS 14 运行基线和已验证的同步 MainActor 资源析构。
 
-**Architecture:** Package manifest 以 `swift-tools-version: 6.2` 建立最低工具链门禁，target 继续使用 `.v6` language mode。UIKit 容器使用 Swift 6.2 `isolated deinit` 同步归还 Store 和 managed inset；源码契约测试锁定 manifest/deinit，当前有效文档统一描述工具链与语言模式。
+**Architecture:** Package manifest 以 `swift-tools-version: 6.2` 建立最低工具链门禁，target 继续使用 `.v6` language mode。UIKit 容器保留经资源析构测试验证的 `deinit + MainActor.assumeIsolated`；`isolated deinit` 的 Swift 6.2.4/x86_64 allocator crash 作为工具链限制记录，当前有效文档统一描述工具链与语言模式。
 
 **Tech Stack:** Swift 6.2+ toolchain、Swift 6 language mode、Xcode 26.3、UIKit、Swift Package Manager、iOS 14+、XCTest、Tabman 4.0.1、Pageboy 5.0.2
 
@@ -13,7 +13,8 @@
 - Package 最低 tools version 必须为 6.2。
 - `swiftLanguageModes: [.v6]` 保持不变，不使用不存在的 `.v6_2`。
 - Minimum OS 保持 iOS 14。
-- `AnchorPagerViewController` deinit 必须同步归还 Store/inset ownership，不使用 Task 或 delay。
+- `AnchorPagerViewController` deinit 必须同步归还 Store/inset ownership；当前保留 `MainActor.assumeIsolated`，不使用
+  `isolated deinit`、Task 或 delay，直到后续工具链复验通过。
 - 不使用 `nonisolated(unsafe)`、`@unchecked Sendable` 或 `@preconcurrency` 压制 Swift 6.2 并发诊断。
 - 不修改 AnchorPager public API，不改变 Tabman 4.0.1/Pageboy 5.0.2 依赖边界。
 - 当前有效基线文档统一写为“最低工具链 Swift 6.2，语言模式 Swift 6”。
@@ -22,7 +23,7 @@
 
 ---
 
-### Task 1: Manifest 与 isolated deinit 工具链门禁
+### Task 1: Manifest 与同步 deinit 工具链门禁
 
 **Files:**
 - Modify: `Package.swift`
@@ -32,11 +33,11 @@
 **Interfaces:**
 - Produces manifest contract `// swift-tools-version: 6.2`。
 - Keeps `swiftLanguageModes: [.v6]`。
-- Produces `isolated deinit` for synchronous MainActor cleanup。
+- Keeps verified `deinit + MainActor.assumeIsolated` for synchronous MainActor cleanup。
 
 - [ ] **Step 1: 恢复工作区中尚未经过 TDD 的工具链改动**
 
-仅用 `apply_patch` 把本任务开始前未提交的两处改动恢复到当前 HEAD 语义：
+仅用 `apply_patch` 把本任务开始前未提交的工具链实验恢复到当前 HEAD 语义：
 
 ```swift
 // swift-tools-version: 6.0
@@ -52,7 +53,7 @@ deinit {
 }
 ```
 
-不得触碰同时存在的 PagingHost Task 1 未提交文件。
+不得触碰同时存在的 PagingHost Task 1 文件。
 
 - [ ] **Step 2: 写工具链源码契约 RED 测试**
 
@@ -68,13 +69,13 @@ final class AnchorPagerSwiftToolchainBaselineTests: XCTestCase {
         XCTAssertTrue(manifest.contains("swiftLanguageModes: [.v6]"))
     }
 
-    func testPagerUsesIsolatedDeinitWithoutAssumeIsolatedEscape() throws {
+    func testPagerKeepsVerifiedSynchronousMainActorDeinit() throws {
         let source = try String(
             contentsOf: packageRoot()
                 .appendingPathComponent("Sources/AnchorPager/Public/AnchorPagerViewController.swift")
         )
-        XCTAssertTrue(source.contains("isolated deinit"))
-        XCTAssertFalse(source.contains("MainActor.assumeIsolated"))
+        XCTAssertTrue(source.contains("MainActor.assumeIsolated"))
+        XCTAssertFalse(source.contains("isolated deinit"))
     }
 
     private func packageRoot() throws -> URL {
@@ -99,9 +100,9 @@ xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 
   -only-testing:AnchorPagerTests/AnchorPagerSwiftToolchainBaselineTests test
 ```
 
-Expected: 2 个断言失败，分别证明 manifest 仍为 6.0、ViewController 仍使用 `MainActor.assumeIsolated`。
+Expected: manifest tools version 断言失败；deinit 契约保持通过，证明工具链升级没有混入已知崩溃路径。
 
-- [ ] **Step 4: 提升 manifest 并采用 isolated deinit**
+- [ ] **Step 4: 提升 manifest 并保持已验证 deinit**
 
 ```swift
 // swift-tools-version: 6.2
@@ -113,12 +114,14 @@ Expected: 2 个断言失败，分别证明 manifest 仍为 6.0、ViewController 
 swiftLanguageModes: [.v6]
 ```
 
-ViewController 改为：
+ViewController 保持：
 
 ```swift
-isolated deinit {
-    pageStateStore.releaseAll()
-    managedInsetCoordinator.releaseAll()
+deinit {
+    MainActor.assumeIsolated {
+        pageStateStore.releaseAll()
+        managedInsetCoordinator.releaseAll()
+    }
     AnchorPagerLogger.log(.info, category: .lifecycle, event: "deinit")
 }
 ```
@@ -173,7 +176,8 @@ Language mode：Swift 6
 Minimum OS：iOS 14
 ```
 
-README 增加构建要求；architecture 把 `MainActor.assumeIsolated` 析构说明更新为 Swift 6.2 `isolated deinit`。
+README 增加构建要求；architecture 记录 Swift 6.2.4/x86_64 `isolated deinit` allocator crash，并保留
+`MainActor.assumeIsolated` 的 UIKit 主线程析构约束。
 
 - [ ] **Step 2: 审查历史与当前文档边界**
 
@@ -188,7 +192,8 @@ rg -n "Minimum toolchain|最低工具链|swift-tools-version|swiftLanguageModes|
 git diff --check
 ```
 
-Expected: 当前规范全部指向 Swift 6.2；生产源码不再包含 `MainActor.assumeIsolated`；历史记录未被错误改写。
+Expected: 当前规范全部指向 Swift 6.2；生产源码保留 `MainActor.assumeIsolated` 且不包含 `isolated deinit`；历史记录
+未被错误改写。
 
 - [ ] **Step 4: 运行完整 Swift 6.2 验收**
 
@@ -205,7 +210,8 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExa
 
 - [ ] **Step 5: 自审并提交文档**
 
-自审 Package/public API、iOS floor、Swift language mode、isolated deinit、并发 unsafe 标记、历史文档和当前计划。
+自审 Package/public API、iOS floor、Swift language mode、deinit 同步资源归还、已知 isolated deinit 工具链限制、
+并发 unsafe 标记、历史文档和当前计划。
 
 ```bash
 git add AGENTS.md README.md docs
@@ -216,13 +222,13 @@ git commit -m "同步 Swift 6.2 工具链文档基线"
 
 ## 实施检查点
 
-1. Task 1 独立复审 manifest、language mode 和 deinit 同步清理。
+1. Task 1 独立复审 manifest、language mode、deinit 同步清理和 isolated deinit crash 规避边界。
 2. Task 2 完整验收通过后，恢复 v0.4 generation atomicity Task 1 GREEN。
 3. Swift 6.2 变更不得混入 PagingHost request 实现提交。
 
 ## 计划自审
 
-- 设计覆盖：manifest、language mode、isolated deinit、文档和完整验收均有明确任务。
+- 设计覆盖：manifest、language mode、已验证 deinit、已知 isolated deinit 限制、文档和完整验收均有明确任务。
 - 类型一致：`.v6` 只表示 language mode；最低工具链只由 tools version 和文档表达。
 - 范围：不修改 public API、iOS floor 或第三方版本。
 - 占位符扫描：未发现未决项、空白步骤或模糊后续描述。
