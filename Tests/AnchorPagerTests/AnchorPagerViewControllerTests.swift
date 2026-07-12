@@ -35,6 +35,42 @@ final class AnchorPagerViewControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testReloadDataRequestsOnlyVisiblePageWindowInsteadOfAllPages() {
+        let pager = AnchorPagerViewController()
+        let dataSource = StubDataSource(
+            count: 100,
+            viewControllers: (0..<100).map { _ in ScrollChildViewController() }
+        )
+        pager.dataSource = dataSource
+        pager.loadViewIfNeeded()
+        dataSource.requestedViewControllerIndexes.removeAll()
+
+        pager.reloadData()
+
+        XCTAssertLessThanOrEqual(dataSource.requestedViewControllerIndexes.count, 2)
+        XCTAssertFalse(dataSource.requestedViewControllerIndexes.contains(99))
+    }
+
+    @MainActor
+    func testRepeatedAdapterRequestReusesLivePageWithoutCallingDataSourceAgain() throws {
+        let child = ScrollChildViewController()
+        let pager = AnchorPagerViewController()
+        let dataSource = StubDataSource(count: 1, viewControllers: [child])
+        pager.dataSource = dataSource
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+        let adapter = try XCTUnwrap(installedAdapter(in: pager))
+        let requestCount = dataSource.requestedViewControllerIndexes.count
+
+        let first = adapter.viewController(for: adapter, at: 0)
+        let second = adapter.viewController(for: adapter, at: 0)
+
+        XCTAssertTrue(first === child)
+        XCTAssertTrue(second === child)
+        XCTAssertEqual(dataSource.requestedViewControllerIndexes.count, requestCount)
+    }
+
+    @MainActor
     func testSetSelectedIndexCommitsValidSelectionAndNotifiesDelegate() {
         let pager = AnchorPagerViewController()
         let dataSource = StubDataSource(count: 3)
@@ -1279,9 +1315,15 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         }
 
         let adapter = try XCTUnwrap(installedAdapter(in: pager))
-        XCTAssertTrue(adapter.viewController(for: adapter, at: 0) === first)
+        let pages = AnchorPagerAssertions.$isEnabled.withValue(false) {
+            (
+                adapter.viewController(for: adapter, at: 0),
+                adapter.viewController(for: adapter, at: 1)
+            )
+        }
+        XCTAssertTrue(pages.0 === first)
         XCTAssertTrue(
-            adapter.viewController(for: adapter, at: 1) is AnchorPagerPageScrollHostViewController
+            pages.1 is AnchorPagerPageScrollHostViewController
         )
         XCTAssertTrue(events.contains(.init(category: .inset, level: .debug, event: "inset.targetCollision")))
     }
@@ -1414,6 +1456,7 @@ private final class StubDataSource: AnchorPagerViewControllerDataSource {
     var titles: [String]
     var viewControllers: [UIViewController]
     var headerContent: AnchorPagerHeaderContent
+    var requestedViewControllerIndexes: [Int] = []
 
     init(
         count: Int,
@@ -1442,7 +1485,8 @@ private final class StubDataSource: AnchorPagerViewControllerDataSource {
         _ pagerViewController: AnchorPagerViewController,
         viewControllerAt index: Int
     ) -> UIViewController {
-        viewControllers.indices.contains(index) ? viewControllers[index] : UIViewController()
+        requestedViewControllerIndexes.append(index)
+        return viewControllers.indices.contains(index) ? viewControllers[index] : UIViewController()
     }
 
     func headerContent(in pagerViewController: AnchorPagerViewController) -> AnchorPagerHeaderContent {

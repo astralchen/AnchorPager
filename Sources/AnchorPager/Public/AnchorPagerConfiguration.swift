@@ -70,7 +70,9 @@ public struct AnchorPagerBarConfiguration: Sendable, Equatable {
 
 /// 横向分页基础配置。
 public struct AnchorPagerPagingConfiguration: Sendable, Equatable {
-    /// 是否保留相邻页面。v0.1 默认只保证当前页面基础路径。
+    /// 是否额外强保留当前页两侧已经按需加载的相邻页面。
+    ///
+    /// 开启不会主动创建尚未请求的页面；关闭时仍会保留当前页和切页事务中的来源页、目标页。
     public var keepsAdjacentPagesLoaded: Bool
 
     /// 默认分页配置。

@@ -25,7 +25,19 @@ open class AnchorPagerViewController: UIViewController {
     public weak var delegate: AnchorPagerViewControllerDelegate?
 
     /// 容器配置。
-    public var configuration: AnchorPagerConfiguration
+    public var configuration: AnchorPagerConfiguration {
+        didSet {
+            guard isViewLoaded else { return }
+            pageStateStore.setKeepsAdjacentPagesLoaded(
+                configuration.paging.keepsAdjacentPagesLoaded
+            )
+            pageStateStore.updateManagedInsets(
+                currentManagedInsetTarget,
+                logsChanges: false
+            )
+            view.setNeedsLayout()
+        }
+    }
 
     /// 当前选中索引。空页时保持 0。
     public private(set) var selectedIndex: Int = 0
@@ -55,12 +67,13 @@ open class AnchorPagerViewController: UIViewController {
     private lazy var verticalScrollDelegate = VerticalScrollDelegate(owner: self)
     private var currentHeaderContent: AnchorPagerHeaderContent?
     private var currentTitles: [String] = []
-    private var currentViewControllers: [UIViewController] = []
-    private var activePageScrollViews: [UIScrollView] = []
-    private var fallbackPageHosts: [ObjectIdentifier: AnchorPagerPageScrollHostViewController] = [:]
     private var resolvedBarInsets: UIEdgeInsets = .zero
-    private var lastManagedInsetTarget: AnchorPagerManagedInsetCoordinator.Target?
-    private var lastManagedScrollViewIdentifiers: [ObjectIdentifier] = []
+    private var currentManagedInsetTarget: AnchorPagerManagedInsetCoordinator.Target = .zero
+    private lazy var pageStateStore = AnchorPagerPageStateStore(
+        managedInsetCoordinator: managedInsetCoordinator
+    )
+    private var reloadGeneration = 0
+    private var pendingReloadGeneration: Int?
     private var lastLayoutContext: AnchorPagerLayoutContext?
     private var lastLayoutOutput: AnchorPagerLayoutEngine.Output?
     private var lastLoggedResolvedHeaderHeight: AnchorPagerLayoutEngine.ResolvedHeaderHeight?
@@ -88,6 +101,7 @@ open class AnchorPagerViewController: UIViewController {
 
     deinit {
         MainActor.assumeIsolated {
+            pageStateStore.releaseAll()
             managedInsetCoordinator.releaseAll()
         }
         AnchorPagerLogger.log(.info, category: .lifecycle, event: "deinit")
@@ -112,7 +126,6 @@ open class AnchorPagerViewController: UIViewController {
     /// 重新加载页面、标题和 Header 数据。
     public func reloadData() {
         AnchorPagerLogger.log(.info, category: .lifecycle, event: "reloadData.begin")
-        let previouslyActiveScrollViews = activePageScrollViews
 
         let requestedCount = dataSource?.numberOfViewControllers(in: self) ?? 0
         if requestedCount < 0 {
@@ -125,8 +138,6 @@ open class AnchorPagerViewController: UIViewController {
         if pageCount == 0 {
             selectedIndex = 0
             currentTitles = []
-            currentViewControllers = []
-            activePageScrollViews = []
         } else if selectedIndex >= pageCount {
             selectedIndex = pageCount - 1
         }
@@ -135,27 +146,20 @@ open class AnchorPagerViewController: UIViewController {
         currentTitles = (0..<pageCount).map { index in
             dataSource?.pagerViewController(self, titleForViewControllerAt: index) ?? ""
         }
-        var claimedScrollViews = Set<ObjectIdentifier>()
-        var activeFallbackHostIdentifiers = Set<ObjectIdentifier>()
-        let preparedPages = (0..<pageCount).map { index in
-            preparePage(
-                for: dataSource?.pagerViewController(self, viewControllerAt: index) ?? UIViewController(),
-                claimedScrollViews: &claimedScrollViews,
-                activeFallbackHostIdentifiers: &activeFallbackHostIdentifiers
-            )
-        }
-        currentViewControllers = preparedPages.map(\.viewController)
-        activePageScrollViews = preparedPages.map(\.scrollView)
-        let staleFallbackHosts = removeStaleFallbackPageHosts(
-            keeping: activeFallbackHostIdentifiers
+        reloadGeneration &+= 1
+        pendingReloadGeneration = reloadGeneration
+        pageStateStore.beginReload(
+            generation: reloadGeneration,
+            pageCount: pageCount,
+            selectedIndex: selectedIndex,
+            keepsAdjacentPagesLoaded: configuration.paging.keepsAdjacentPagesLoaded
         )
 
         reloadVisibleContentIfNeeded()
-        let activeIdentifiers = Set(activePageScrollViews.map(ObjectIdentifier.init))
-        previouslyActiveScrollViews
-            .filter { !activeIdentifiers.contains(ObjectIdentifier($0)) }
-            .forEach(managedInsetCoordinator.release)
-        staleFallbackHosts.forEach { $0.removeContentForReloadData() }
+        if pageCount == 0, let pendingReloadGeneration {
+            pageStateStore.commitReload(generation: pendingReloadGeneration)
+            self.pendingReloadGeneration = nil
+        }
         AnchorPagerLogger.log(.info, category: .lifecycle, event: "reloadData.end")
     }
 
@@ -172,6 +176,7 @@ open class AnchorPagerViewController: UIViewController {
         guard selectedIndex != self.selectedIndex else { return }
 
         if !isViewLoaded || pagingAdapter.parent == nil {
+            pageStateStore.didSelect(selectedIndex, context: pageAccessContext)
             commitSelectedIndex(selectedIndex, animated: animated)
             return
         }
@@ -562,68 +567,6 @@ open class AnchorPagerViewController: UIViewController {
         delegate?.pagerViewController(self, didSelectViewControllerAt: index)
     }
 
-    private struct PreparedPage {
-        let viewController: UIViewController
-        let scrollView: UIScrollView
-    }
-
-    private func fallbackPageHost(
-        for childViewController: UIViewController,
-        activeFallbackHostIdentifiers: inout Set<ObjectIdentifier>
-    ) -> AnchorPagerPageScrollHostViewController {
-        let childIdentifier = ObjectIdentifier(childViewController)
-        activeFallbackHostIdentifiers.insert(childIdentifier)
-
-        if let existingHost = fallbackPageHosts[childIdentifier] {
-            return existingHost
-        }
-
-        let fallbackHost = AnchorPagerPageScrollHostViewController(
-            contentViewController: childViewController
-        )
-        fallbackPageHosts[childIdentifier] = fallbackHost
-        return fallbackHost
-    }
-
-    private func preparePage(
-        for childViewController: UIViewController,
-        claimedScrollViews: inout Set<ObjectIdentifier>,
-        activeFallbackHostIdentifiers: inout Set<ObjectIdentifier>
-    ) -> PreparedPage {
-        childViewController.loadViewIfNeeded()
-
-        if let resolvedScrollView = childViewController.anchorPagerScrollView,
-           claimedScrollViews.insert(ObjectIdentifier(resolvedScrollView)).inserted {
-            return PreparedPage(
-                viewController: childViewController,
-                scrollView: resolvedScrollView
-            )
-        }
-
-        if childViewController.anchorPagerScrollView != nil {
-            AnchorPagerAssertions.failure("AnchorPager pages must not share a scroll view.")
-            AnchorPagerLogger.log(.debug, category: .inset, event: "inset.targetCollision")
-            if let defaultScrollView = childViewController.anchorPagerDefaultScrollView,
-               claimedScrollViews.insert(ObjectIdentifier(defaultScrollView)).inserted {
-                return PreparedPage(
-                    viewController: childViewController,
-                    scrollView: defaultScrollView
-                )
-            }
-        }
-
-        let fallbackHost = fallbackPageHost(
-            for: childViewController,
-            activeFallbackHostIdentifiers: &activeFallbackHostIdentifiers
-        )
-        fallbackHost.loadViewIfNeeded()
-        claimedScrollViews.insert(ObjectIdentifier(fallbackHost.scrollView))
-        return PreparedPage(
-            viewController: fallbackHost,
-            scrollView: fallbackHost.scrollView
-        )
-    }
-
     private func applyManagedInsets(
         output: AnchorPagerLayoutEngine.Output,
         logsChanges: Bool
@@ -642,37 +585,37 @@ open class AnchorPagerViewController: UIViewController {
                 right: 0
             )
         )
-        let identifiers = activePageScrollViews.map(ObjectIdentifier.init)
-        guard target != lastManagedInsetTarget
-                || identifiers != lastManagedScrollViewIdentifiers else { return }
-
-        for (viewController, scrollView) in zip(currentViewControllers, activePageScrollViews) {
-            if let fallbackHost = viewController as? AnchorPagerPageScrollHostViewController {
-                fallbackHost.setManagedContentInsets(target.content)
-            }
-            managedInsetCoordinator.apply(target, to: scrollView, logsChanges: logsChanges)
-        }
-        lastManagedInsetTarget = target
-        lastManagedScrollViewIdentifiers = identifiers
+        currentManagedInsetTarget = target
+        pageStateStore.setKeepsAdjacentPagesLoaded(
+            configuration.paging.keepsAdjacentPagesLoaded
+        )
+        pageStateStore.updateManagedInsets(target, logsChanges: logsChanges)
     }
 
-    private func removeStaleFallbackPageHosts(
-        keeping activeFallbackHostIdentifiers: Set<ObjectIdentifier>
-    ) -> [AnchorPagerPageScrollHostViewController] {
-        let staleIdentifiers = fallbackPageHosts.keys.filter {
-            !activeFallbackHostIdentifiers.contains($0)
-        }
+    private var pageAccessContext: AnchorPagerPageStateStore.AccessContext {
+        AnchorPagerPageStateStore.AccessContext(
+            managedInsetTarget: currentManagedInsetTarget,
+            containerIsCollapsed: isContainerCollapsed
+        )
+    }
 
-        return staleIdentifiers.compactMap { identifier in
-            fallbackPageHosts.removeValue(forKey: identifier)
-        }
+    private var isContainerCollapsed: Bool {
+        guard let output = lastLayoutOutput else { return false }
+        let collapsibleDistance = output.resolvedHeaderHeight.collapsibleDistance
+        return collapsibleDistance <= 0.5
+            || output.collapseOffset >= collapsibleDistance - 0.5
     }
 }
 
 extension AnchorPagerViewController: AnchorPagerPageProviding {
     func pageViewController(at index: Int) -> UIViewController? {
-        guard currentViewControllers.indices.contains(index) else { return nil }
-        return currentViewControllers[index]
+        pageStateStore.pageViewController(
+            at: index,
+            context: pageAccessContext
+        ) { [weak self] in
+            guard let self, let dataSource = self.dataSource else { return nil }
+            return dataSource.pagerViewController(self, viewControllerAt: index)
+        }
     }
 }
 
@@ -689,10 +632,17 @@ extension AnchorPagerViewController: AnchorPagerPagingAdapterDelegate {
         }
     }
 
-    func pagingAdapter(_ adapter: AnchorPagerPagingAdapter, willSelect index: Int, animated: Bool) {}
+    func pagingAdapter(_ adapter: AnchorPagerPagingAdapter, willSelect index: Int, animated: Bool) {
+        pageStateStore.willSelect(
+            from: selectedIndex,
+            to: index,
+            context: pageAccessContext
+        )
+    }
 
     func pagingAdapter(_ adapter: AnchorPagerPagingAdapter, didSelect index: Int, animated: Bool) {
         guard index >= 0, index < pageCount else { return }
+        pageStateStore.didSelect(index, context: pageAccessContext)
         commitSelectedIndex(index, animated: animated)
     }
 
@@ -702,6 +652,20 @@ extension AnchorPagerViewController: AnchorPagerPagingAdapterDelegate {
         returningTo previousIndex: Int
     ) {
         guard previousIndex >= 0, previousIndex < pageCount else { return }
+        pageStateStore.didCancelSelection(
+            at: index,
+            returningTo: previousIndex,
+            context: pageAccessContext
+        )
         AnchorPagerLogger.log(.debug, category: .paging, event: "setSelectedIndex.cancel")
+    }
+
+    func pagingAdapter(_ adapter: AnchorPagerPagingAdapter, didReloadAt index: Int) {
+        guard let pendingReloadGeneration else { return }
+        pageStateStore.commitReload(generation: pendingReloadGeneration)
+        self.pendingReloadGeneration = nil
+        if index >= 0, index < pageCount {
+            pageStateStore.didSelect(index, context: pageAccessContext)
+        }
     }
 }
