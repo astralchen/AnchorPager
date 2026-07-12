@@ -4,7 +4,7 @@
 
 **Goal:** 修复非空到空 reload 的旧 Pageboy 内容残留，建立统一 page/empty terminal、public reload 重入保护，并补齐 v0.4 appearance cancel 和文档验收。
 
-**Architecture:** viewport 长期 contain `AnchorPagerPagingHostViewController`，host 按空/非空状态 contain 或移除 `AnchorPagerPagingAdapter`，并向主控制器发送领域无关 reload terminal。`AnchorPagerViewController.reloadData()` 使用 transaction token 采集局部数据快照，只有最新事务才能发布并开始 Store generation。
+**Architecture:** viewport 长期 contain `AnchorPagerPagingHostViewController`，host 按空/非空状态 contain 或移除 `AnchorPagerPagingAdapter`，并向主控制器发送领域无关 reload terminal。移除前由 adapter 的集中 Pageboy 5.0.2 兼容 shim 通过第三方 public reconfiguration 让 Pageboy 自己清空内部页面 containment。`AnchorPagerViewController.reloadData()` 使用 transaction token 采集局部数据快照，只有最新事务才能发布并开始 Store generation。
 
 **Tech Stack:** Swift 6、UIKit、Swift Package Manager、XCTest、XCUITest、Tabman 4.0.1、Pageboy 5.0.2、iOS 14+
 
@@ -17,6 +17,7 @@
 - Store 只在 paging host 的 page/empty terminal 后提交 pending generation。
 - 所有 data source、UIKit、paging host、Store 和 coordinator 操作保持 `@MainActor`。
 - 不使用 timer、异步延迟、sentinel page、手工 appearance forwarding 或第三方 internal API。
+- Pageboy 5.0.2 空态 teardown 只能封装在 adapter 的单一兼容入口；依赖升级必须重审对应源码契约与回归测试。
 - 每项行为严格执行 RED → GREEN → REFACTOR。
 - 复用当前 `iPhone 17` simulator，不执行无必要 boot/shutdown。
 
@@ -120,7 +121,11 @@ git commit -m "修复空分页 reload terminal"
 ### Task 2: 主控制器接入 Host 与空 generation 收敛
 
 **Files:**
+- Modify: `Sources/AnchorPager/Paging/AnchorPagerPagingAdapter.swift`
+- Modify: `Sources/AnchorPager/Paging/AnchorPagerPagingHostViewController.swift`
 - Modify: `Sources/AnchorPager/Public/AnchorPagerViewController.swift`
+- Modify: `Tests/AnchorPagerTests/AnchorPagerPagingAdapterTests.swift`
+- Modify: `Tests/AnchorPagerTests/AnchorPagerPagingHostViewControllerTests.swift`
 - Modify: `Tests/AnchorPagerTests/AnchorPagerViewControllerTests.swift`
 
 **Interfaces:**
@@ -148,12 +153,24 @@ xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 
 
 Expected: 旧 adapter/page 仍存在，RED 失败。
 
-- [ ] **Step 3: 把根布局 containment 改为稳定 Host**
+- [ ] **Step 3: 写 adapter teardown 兼容 RED 并实现集中 shim**
+
+先在真实 Pageboy containment 中断言：旧 scroll/fallback page 的 `parent`/view superview 被同步清空，且清理过程
+不发送 page/selection terminal。然后实现 adapter internal `prepareForRemoval()`：先清空自身 count/titles/pending
+selection，再以 `interPageSpacing = interPageSpacing` 调用 Pageboy 5.0.2 public reconfiguration。不得访问第三方
+internal `pageViewController`，不得由 AnchorPager 手拆业务 page。
+
+- [ ] **Step 4: Host 清理必须先执行 adapter teardown**
+
+Host 只能在 `prepareForRemoval()` 返回后执行 adapter `willMove(nil)`、移除 view、`removeFromParent()`、barInsets
+归零和 `.empty` terminal。测试在 terminal 快照中同时断言 active adapter、Host children、旧业务 page parent 均为空。
+
+- [ ] **Step 5: 把根布局 containment 改为稳定 Host**
 
 用 `private let pagingHost = AnchorPagerPagingHostViewController()` 替换直接 adapter 属性。Header 下方约束对象改为
 host view；`setBarHeight`、reload、selection 和 barInsets 均经 host 转发。
 
-- [ ] **Step 4: 消费 page/empty terminal**
+- [ ] **Step 6: 消费 page/empty terminal**
 
 统一实现：
 
@@ -173,24 +190,24 @@ func pagingHost(
 
 删除 `pageCount == 0` 直接 commit 特例。
 
-- [ ] **Step 5: 补空到非空、空到空和非空替换测试**
+- [ ] **Step 7: 补空到非空、空到空和非空替换测试**
 
 断言新 adapter 只在非空时存在，旧 adapter 已释放，现有非空 generation terminal 行为保持不变。
 
-- [ ] **Step 6: 迁移既有测试的 adapter 查找**
+- [ ] **Step 8: 迁移既有测试的 adapter 查找**
 
 测试通过 `pagingHost.activeAdapter` 获取 adapter，不改变 production 可见性；不得重新让主控制器直接 contain adapter。
 
-- [ ] **Step 7: 运行 ViewController、Store、Host 全量测试**
+- [ ] **Step 9: 运行 Adapter、Host、ViewController、Store 全量测试**
 
 ```bash
-xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests -only-testing:AnchorPagerTests/AnchorPagerPageStateStoreTests -only-testing:AnchorPagerTests/AnchorPagerPagingHostViewControllerTests test
+xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:AnchorPagerTests/AnchorPagerPagingAdapterTests -only-testing:AnchorPagerTests/AnchorPagerPagingHostViewControllerTests -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests -only-testing:AnchorPagerTests/AnchorPagerPageStateStoreTests test
 ```
 
-- [ ] **Step 8: 提交主控制器空状态闭环**
+- [ ] **Step 10: 提交主控制器空状态闭环**
 
 ```bash
-git add Sources/AnchorPager/Public/AnchorPagerViewController.swift Tests/AnchorPagerTests/AnchorPagerViewControllerTests.swift
+git add Sources/AnchorPager/Paging Sources/AnchorPager/Public/AnchorPagerViewController.swift Tests/AnchorPagerTests
 git commit -m "接入稳定分页 Host 空状态"
 ```
 
