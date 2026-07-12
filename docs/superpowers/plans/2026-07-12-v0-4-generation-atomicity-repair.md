@@ -504,8 +504,9 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExa
 - Example generic simulator build 通过，墙钟 15.71 秒。
 - Example 5 项单元测试 + 16 项 UI 测试，0 fail、0 skip；xcresult 区间约 272.20 秒，墙钟 277.97 秒。
 - Pageboy 5.0.2 与 Tabman 4.0.1 持续输出 `PrivacyInfo.xcprivacy` unhandled resource 提示；未观察到本修复新增生产 warning。
+- 测试窗口夹具 follow-up 后再次复用同一 iPhone 17 运行 Example 全量：16 项 UI 测试 204.338 秒、5 项单元测试 0.625 秒，全部通过；命令总区间 257.960 秒，未再出现 appearance transition 不平衡。剩余为第三方 privacy resource 和模拟器字体/启动测量环境提示。
 
-- [ ] **Step 5: 最终自审与独立复审**
+- [x] **Step 5: 最终自审与独立复审**
 
 自审 public API、第三方边界、containment/appearance、request identity、provider/visible generation、migration、
 ownership、pre-load、MainActor、日志、测试和文档。独立复审比较 `e5447a5` 或本修复设计前基线到 HEAD；
@@ -514,8 +515,7 @@ Critical/Important 必须清零。
 当前状态：Task 4 自审已完成，未发现新的 Critical/Important：public API 无新增、第三方类型未泄漏；Host 只拥有
 request/selection 串行与 adapter containment；Pageboy/UIKit 继续执行普通页面 containment/appearance；Store 仍是
 payload/generation lease/snapshot/ownership owner；ViewController matching terminal 原子提交 public/provider/bar；pre-load
-不加载 paging view；UIKit/coordinator 保持 MainActor；日志、测试和文档契约一致。最终独立复审 checkbox 保持 pending，
-在该复审清零 Critical/Important 前，不恢复 v0.4 Ready 状态，也不开放 v0.5。
+不加载 paging view；UIKit/coordinator 保持 MainActor；日志、测试和文档契约一致。terminal bar 几何 follow-up 修复后，最终独立复审重新检查完整变更，Critical、Important、Minor 均为零；v0.4 恢复 Ready，v0.5 入口开放。
 
 - [x] **Step 6: 提交验收文档**
 

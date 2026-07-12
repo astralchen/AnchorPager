@@ -8,7 +8,7 @@
 
 **Tech Stack:** Swift 6、UIKit、Swift Package Manager、XCTest、Tabman 4.0.1、Pageboy 5.0.2、iOS 14+
 
-**Current Status:** 主体实现与原验收已完成；后续审查发现的空数据 reload terminal、public reload 重入和 appearance cancel 缺口已按 repair plan 修复。2026-07-12 新鲜完整验收通过；最终独立复审通过前不启动 v0.5。
+**Current Status:** 主体实现与原验收已完成；后续审查发现的空数据 reload terminal、public reload 重入、appearance cancel 和 generation atomicity 缺口均已按 repair plan 修复。2026-07-12 新鲜完整验收与最终独立复审均通过；v0.4 可合并并允许启动 v0.5。
 
 ## Global Constraints
 
@@ -873,3 +873,5 @@ git commit -m "完成 v0.4 页面生命周期与缓存验收"
 - Swift package resolve 提升权限后 exit 0，6.444 秒；git diff --check exit 0。
 - warning：框架编译有 2 条测试局部 weak variable 未变更提示；框架测试、Example build/test 均有 Pageboy/Tabman PrivacyInfo.xcprivacy unhandled resource 上游提示。没有 Swift 6、框架源码或 Example 源码 warning。
 - 最终自审确认 public API 未扩大、Public 目录无 Tabman/Pageboy、普通业务页没有双重 containment 或手工 appearance、fallback host 只有一条 containment、Store generation/identity/snapshot/ownership 单向、MainActor/deinit 归还路径未绕过、日志与测试覆盖同步。v0.5 入口只允许消费稳定 Host、Store committed current child/scroll target 和标准化 terminal。
+- 最终独立复审在 terminal bar 几何修复后重新检查整段 v0.4 diff，Critical、Important、Minor 均为零，结论为 v0.4 Ready、v0.5 Ready。随后只修正示例单元测试临时窗口夹具：保留真实 tab/nav/window/safe-area 层级，等待初始分页 terminal，并以结构化异步清理闭合 UIKit appearance；未修改框架或生产生命周期职责。
+- 测试夹具 follow-up 后复用同一 iPhone 17 运行 Example 全量：16 项 UI 测试 204.338 秒、5 项单元测试 0.625 秒，全部 0 fail、0 skip；命令总区间 257.960 秒，完整日志没有 `Unbalanced calls to begin/end appearance transitions`。

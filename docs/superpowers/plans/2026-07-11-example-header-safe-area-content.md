@@ -264,6 +264,7 @@ git commit -m "记录示例 Header 安全区布局验收"
 - Unit RED：示例单元测试 4 个中 1 个失败、3 个通过；新增测试实际顶部间距比 `safeAreaFrame.minY + 20` 多 `8pt`。
 - UI RED：目标 UI 测试 1 个失败；标题 `minY == 144`，期望的导航栏底部加 20 pt 为 `136`，差值同为 `8pt`。
 - GREEN：只把标题栈上下约束从 `layoutMarginsGuide` 改为 `safeAreaLayoutGuide`；示例单元测试 target 4/4 通过，目标 UI 测试 1/1 通过。
+- 2026-07-12 生命周期验收 follow-up：真实 tab/nav/window 层级继续保留，但临时窗口不再抢占宿主 key window；用例异步等待初始分页 terminal，结构化清理成功与抛错路径。示例单元测试 5/5 通过，且不再输出 `UITabBarController` appearance transition 不平衡警告。
 - Task 1 自审：diff 只包含示例 view、示例单元测试和示例 UI 测试；未修改框架 Sources、Public API、Header 外框、scroll range 或 bounce。
 
 ## Final Verification

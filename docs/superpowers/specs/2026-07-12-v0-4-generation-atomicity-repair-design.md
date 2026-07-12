@@ -2,7 +2,7 @@
 
 **日期：** 2026-07-12
 
-**状态：** Task 1–3 已实现并通过聚焦复审与完整验收；最终独立复审待完成
+**状态：** 已实现；Task 1–3、完整验收和最终独立复审均通过，v0.4 Ready、v0.5 入口已开放
 
 **适用范围：** v0.4 最终复审发现的 deferred reload 代际不一致、跨 generation 可变 PageState 共享，以及 v0.5 committed current child/scroll target 启动门禁
 
@@ -312,7 +312,7 @@ childDistanceFromTop
 2. Task 2 完成 `PageIdentityPayload` 与 `GenerationPageState` 分离、generation-specific ownership lease、严格 committed-current 入口，以及 commit/cancel/releaseAll 前强捕获 `CleanupPlan`。
 3. Task 3 完成 ViewController staged public/provider/Header/bar terminal、ack=false baseline 保留、真实 superseded request 跨层推进和 pre-load latest-wins；四套聚焦组合 144 项通过、0 fail、0 skip。
 4. 最终复审曾发现的两个 Important 均有 RED/GREEN：deferred reload 的跨层 public/provider/bar 原子性由 Task 1/3 覆盖；跨 generation 可变 PageState/ownership cleanup 由 Task 2 覆盖。
-5. 上述结果不替代 Task 4 的新鲜完整验收与最终独立复审；后者完成前不得把 v0.4 标记为 Ready 或启动 v0.5。
+5. Task 4 新鲜完整验收与最终独立复审均已完成；最终结论 Critical、Important、Minor 为零，v0.4 已恢复 Ready 并开放 v0.5。
 
 ### Task 4 完整验收
 
@@ -321,7 +321,8 @@ childDistanceFromTop
 - Example generic simulator build：通过，墙钟 15.71 秒。
 - Example：同一 iPhone 17，5 项单元测试与 16 项 UI 测试通过，0 fail、0 skip；xcresult 区间约 272.20 秒，命令墙钟 277.97 秒。
 - warnings：Pageboy 5.0.2 与 Tabman 4.0.1 的 `PrivacyInfo.xcprivacy` unhandled resource 提示；未观察到本修复新增生产 warning。
-- `git diff --check` 通过。最终独立复审仍保持 pending。
+- `git diff --check` 通过；最终独立复审清零 Critical、Important、Minor，结论为 v0.4 Ready、v0.5 Ready。
+- 示例临时窗口夹具 follow-up 后，Example 全量 21/21 复验通过，完整日志不再出现 `UITabBarController` appearance transition 不平衡；框架 production containment/appearance 无修改。
 
 ## 完成定义
 

@@ -120,3 +120,4 @@ hugging、固定 Header 高度或修改框架布局掩盖问题。
 - 框架 Header 外框、safe area 计算、automatic 测量、scroll range、viewport bounce 和日志均未修改。
 - 最终验收继续复用 Booted iPhone 17：框架测试 83/83、示例测试 13/13、generic iOS Simulator build 和 `git diff --check` 全部通过。
 - 最终自审确认没有 Public API、第三方 adapter、containment/lifecycle、并发、scroll/inset、gesture/overscroll、日志或资源边界变化。
+- 2026-07-12 最终验收发现同进程测试通过 `makeKeyAndVisible()` 创建并立即销毁第二个 tab 根窗口，会与测试宿主 key window 的 appearance transition 交错。测试夹具现使用非 key 可见窗口保留真实 safe area，等待初始 Pageboy selection terminal，并在成功或抛错后结构化异步隐藏、让出 MainActor、解除 root；不修改生产 containment 或 appearance forwarding。

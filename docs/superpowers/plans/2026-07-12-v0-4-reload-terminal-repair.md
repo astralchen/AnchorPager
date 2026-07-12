@@ -368,7 +368,7 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExa
 检查 public API、第三方边界、双重 containment、appearance、空状态、generation、ownership、重入、MainActor、日志、
 测试、示例、文档和工作区解释。
 
-- [ ] **Step 5: 独立代码复审**
+- [x] **Step 5: 独立代码复审**
 
 比较修复前 commit `a4cef4c` 到修复 HEAD；Critical/Important 必须清零后才恢复 v0.4 完成状态。
 
@@ -411,7 +411,14 @@ git commit -m "完成 v0.4 reload terminal 修复验收"
 7. UIKit/data source/Store/adapter 均保持 MainActor；日志门面未整体绑定 MainActor，未新增不安全并发逃逸。
 8. 日志、单元/集成/UI 测试、README、architecture、task-list、roadmap、原设计/计划与 repair 设计/计划已同步。
 9. 工作区唯一无关项为用户已有未跟踪 .superpowers/，未读取、未修改、未提交。
-10. v0.5 当前不可启动；必须等待最终独立复审清零 Critical/Important。之后只能依赖稳定 Host、Store committed current child/scroll target 和标准化 reload/selection terminal，不能缓存 adapter 或复制 identity/cache/generation。
+10. 最终独立复审已清零 Critical/Important，v0.5 可以启动；它只能依赖稳定 Host、Store committed current child/scroll target 和标准化 reload/selection terminal，不能缓存 adapter 或复制 identity/cache/generation。
+
+## 最终独立复审结论
+
+- terminal bar 几何 follow-up 修复后，独立审查重新比较完整 v0.4 变更；Critical、Important、Minor 均为零。
+- v0.4 结论为 Ready，可合并；v0.5 入口已开放，但仍必须遵守 committed current 与标准 terminal 的单向依赖边界。
+- 最终全量测试发现的 `UITabBarController` appearance 不平衡来自示例单元测试临时 key window 夹具，而非框架 page containment。测试已改为非 key 真实 tab/window、等待分页 terminal，并在成功与抛错路径结构化异步清理；框架生产代码未增加 appearance forwarding。
+- follow-up 后 Example 全量复验 21/21 通过：UI 16 项 204.338 秒、单元 5 项 0.625 秒，命令总区间 257.960 秒；不再输出 appearance transition 不平衡。剩余日志只有锁定第三方 privacy resource 与模拟器字体/启动测量环境提示。
 
 ## 实施检查点
 

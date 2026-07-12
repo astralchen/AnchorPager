@@ -2,7 +2,7 @@
 
 **日期：** 2026-07-12
 
-**状态：** reload terminal 修复、后续 generation atomicity Task 1–3 与完整验收已完成，最终独立复审仍待执行
+**状态：** reload terminal 修复、后续 generation atomicity Task 1–3、完整验收与最终独立复审均已完成；v0.4 Ready，v0.5 入口已开放
 
 **最新验收：** Swift 6.2.4；Framework 193 项、Example 5 项单元 + 16 项 UI，均 0 fail、0 skip；resolve / Framework / Example build / Example test 墙钟分别为 1.34 / 53.81 / 15.71 / 277.97 秒；warning 仅为 Pageboy/Tabman `PrivacyInfo.xcprivacy` unhandled resource 提示。
 

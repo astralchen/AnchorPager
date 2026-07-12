@@ -221,7 +221,7 @@ log stream --predicate 'subsystem == "com.anchorpager.AnchorPager"'
 
 ## 当前限制
 
-v0.4 当前已交付固定分页 viewport、optional bar height、child/fallback managed inset ownership、按需页面身份、generation-specific cache lease/snapshot、稳定 paging host 和 request-aware page/empty terminal；最终独立复审仍待完成。完整纵向嵌套滚动协调、顶部 overscroll owner、状态栏点击顶滚、尺寸变化恢复和完整手势状态机仍在后续版本。v0.5 只能只读 Store 已提交的 current child/scroll target（空态为 nil），并在 reload/selection terminal 后重新绑定；不能缓存 Host/adapter/provider、读取 provider pending 或重复管理 page identity/cache/generation。Tabman/Pageboy 仅出现在 internal adapter 层，Public API 不暴露第三方类型。
+v0.4 当前已交付固定分页 viewport、optional bar height、child/fallback managed inset ownership、按需页面身份、generation-specific cache lease/snapshot、稳定 paging host 和 request-aware page/empty terminal；最终独立复审已清零 Critical/Important/Minor，v0.4 Ready 并开放 v0.5 开发入口。完整纵向嵌套滚动协调、顶部 overscroll owner、状态栏点击顶滚、尺寸变化恢复和完整手势状态机仍在后续版本。v0.5 只能只读 Store 已提交的 current child/scroll target（空态为 nil），并在 reload/selection terminal 后重新绑定；不能缓存 Host/adapter/provider、读取 provider pending 或重复管理 page identity/cache/generation。Tabman/Pageboy 仅出现在 internal adapter 层，Public API 不暴露第三方类型。
 
 在 Xcode 26.3 / Swift 6.2.4 的 x86_64 iPhone 17 Simulator 验证中，把控制器同步析构改为
 `isolated deinit` 会在生命周期析构后稳定触发 allocator `pointer being freed was not allocated` 崩溃。

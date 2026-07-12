@@ -346,7 +346,7 @@
 
 ## v0.4：Child 生命周期与缓存版
 
-设计基线：`docs/superpowers/specs/2026-07-12-v0-4-child-lifecycle-cache-design.md`。主体实现、reload terminal 修复及 generation atomicity Task 1–3 已完成；最终独立复审仍待执行，完成前不启动 v0.5。
+设计基线：`docs/superpowers/specs/2026-07-12-v0-4-child-lifecycle-cache-design.md`。主体实现、reload terminal 修复及 generation atomicity Task 1–3 已完成；最终独立复审已清零 Critical/Important，v0.4 达到可合并状态并开放 v0.5 开发入口。
 
 - [x] 实现 page state store
 - [x] 移除 `AnchorPagerChildViewControllerStore`，避免与 Tabman/Pageboy 双重 containment
@@ -383,12 +383,12 @@
 - [x] commit/cancel/releaseAll 在释放最后 strong lease 前强捕获 CleanupPlan，显式清理 unique fallback/scroll 资源
 - [x] ViewController staged public metadata/Header/provider generation，matching terminal 原子提交 Store/public/bar 几何
 - [x] 首次 pre-load reload 保持 public metadata/selection 语义且不加载 paging view，首次 terminal 复用同一 request
-- [x] Swift 6.2.4 generation atomicity 完整验收：框架 193 项、Example 5 项单测与 16 项 UI 测试通过，均为 0 fail、0 skip；resolve 1.34 秒、框架墙钟 53.81 秒、Example generic build 15.71 秒、Example 全量墙钟 277.97 秒；warning 仅为 Pageboy/Tabman `PrivacyInfo.xcprivacy` unhandled resource 提示
-- [ ] 最终独立代码复审清零 Critical/Important 后确认 v0.4 可合并并开放 v0.5 入口
+- [x] Swift 6.2.4 generation atomicity 完整验收：框架 193 项、Example 5 项单测与 16 项 UI 测试通过，均为 0 fail、0 skip；resolve 1.34 秒、框架墙钟 53.81 秒、Example generic build 15.71 秒；测试窗口夹具 follow-up 后 Example 全量复验 257.960 秒，其中 UI 16 项 204.338 秒、单元 5 项 0.625 秒，未再出现 appearance transition 不平衡；剩余提示仅为 Pageboy/Tabman `PrivacyInfo.xcprivacy` 和模拟器字体/启动测量环境提示
+- [x] 最终独立代码复审清零 Critical/Important；v0.4 可合并并开放 v0.5 入口
 
 ## v0.5：纵向嵌套滚动协调版
 
-启动门禁：当前不可启动。必须先完成 v0.4 最终独立复审并清零 Critical/Important；ScrollCoordinator 只读 Store committed current page/scroll target，empty 时两者为 nil，并在 matching reload/selection terminal 后重新绑定。不得缓存 Host/adapter/provider、读取 provider pending，或复制 page identity/cache/generation 职责。
+启动门禁：已满足，可以开始开发。ScrollCoordinator 只读 Store committed current page/scroll target，empty 时两者为 nil，并在 matching reload/selection terminal 后重新绑定。不得缓存 Host/adapter/provider、读取 provider pending，或复制 page identity/cache/generation 职责。
 
 - [ ] 创建 `Sources/AnchorPager/Core/AnchorPagerScrollCoordinator.swift`
 - [ ] Header 未完全折叠时优先响应向上滚动
@@ -620,7 +620,7 @@
 - [x] v0.4 generation atomicity Task 2：payload/generation lease、committed current 与强 CleanupPlan 已完成
 - [x] v0.4 generation atomicity Task 3：staged public/provider/bar terminal、pre-load 与跨层 superseded request 已完成
 - [x] 最低工具链已提升为 Swift 6.2，语言模式保持 Swift 6，iOS 14 运行基线不变
-- [ ] v0.4 最终独立复审完成前不开始 v0.5
+- [x] v0.4 最终独立复审已完成，Critical/Important/Minor 均为零；允许开始 v0.5
 - [x] 实现时遵循测试先行
 - [x] 每个任务完成后运行对应测试
 - [x] 每个任务完成时确认是否需要 UI 测试
