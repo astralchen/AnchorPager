@@ -214,6 +214,8 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
 
         AnchorPagerLogger.log(.info, category: .paging, event: "paging.setSelectedIndex.request")
         let previousProgrammaticSelection = pendingProgrammaticSelection
+        let previousProgrammaticTransitionCompletionPending =
+            isProgrammaticTransitionCompletionPending
         let requestedSelection = ProgrammaticSelection(
             index: index,
             previousIndex: committedSelectedIndex,
@@ -227,7 +229,8 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
         }
         if !didStartScroll {
             pendingProgrammaticSelection = previousProgrammaticSelection
-            isProgrammaticTransitionCompletionPending = false
+            isProgrammaticTransitionCompletionPending =
+                previousProgrammaticTransitionCompletionPending
             AnchorPagerLogger.log(.debug, category: .paging, event: "paging.setSelectedIndex.rejected")
         }
         return didStartScroll

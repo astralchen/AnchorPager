@@ -274,6 +274,38 @@ final class AnchorPagerPagingHostViewControllerTests: XCTestCase {
         XCTAssertFalse(delegate.events.contains(.didSelect(1, true)))
     }
 
+    func testRejectedSecondProgrammaticSelectionKeepsFirstCompletionBusyUntilReloadCanAdvance() throws {
+        let host = AnchorPagerPagingHostViewController()
+        let provider = RecordingHostPageProvider()
+        host.pageProvider = provider
+        let delegate = RecordingPagingHostDelegate()
+        host.eventDelegate = delegate
+        host.reload(titles: ["First", "Second", "Third"], pageCount: 3, selectedIndex: 0)
+        let adapter = try XCTUnwrap(host.activeAdapter)
+        XCTAssertTrue(host.setSelectedIndex(1, animated: true))
+        XCTAssertFalse(host.setSelectedIndex(2, animated: true))
+        delegate.events.removeAll()
+        delegate.terminalSnapshots.removeAll()
+
+        host.reload(titles: ["Replacement"], pageCount: 1, selectedIndex: 0)
+        adapter.pageboyViewController(
+            adapter,
+            didScrollToPageAt: 1,
+            direction: .forward,
+            animated: true
+        )
+
+        XCTAssertTrue(host.activeAdapter === adapter)
+        XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 3)
+        XCTAssertFalse(delegate.events.contains(.reload(.page(index: 0))))
+        XCTAssertFalse(delegate.events.contains(.didSelect(1, true)))
+
+        adapter.finishProgrammaticTransition(at: 1, finished: true)
+
+        XCTAssertTrue(host.activeAdapter === adapter)
+        XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 1)
+    }
+
     func testLatestEmptyReloadWinsAfterInteractiveCancel() throws {
         let host = AnchorPagerPagingHostViewController()
         let provider = RecordingHostPageProvider()
