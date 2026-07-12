@@ -103,6 +103,12 @@ enum AnchorPagerPagingReloadTerminal: Equatable {
 6. 空 reload 先移除旧 adapter，再把 barInsets 收敛为 `.zero`，最后同步发送 `.empty`；
 7. host 不持有业务页面、不决定 generation、不管理 inset 或 snapshot。
 
+Host 还维护一个 latest-wins 的 internal pending reload request，只保存 titles、page count 和 selected index，不保存
+Store generation。当 adapter 正在用户/程序化 selection transaction 中时，Pageboy 5.0.2 不能安全执行
+`reloadData()` 或 delete-last-page；Host 不调用第三方更新，而是暂存最新 reload。selection 的 did/cancel terminal
+到达后，Host 丢弃该旧 selection 对上层的提交事件并立即执行最新 pending reload。后续 reload 覆盖先前 pending
+request；pending 期间程序化 selection 返回拒绝。不得用 timer、主队列 delay 或猜测动画时长推进 pending reload。
+
 host view 是 Header 下方固定分页 viewport 的约束对象。adapter 替换不会改变 AnchorPager 根布局约束。
 
 ### AnchorPagerPagingAdapter
@@ -135,6 +141,11 @@ AnchorPager 创建、不向 data source 报告、不形成公开或稳定的 sen
 4. 此时旧业务页已经由 Pageboy 解除 parent/view hierarchy。adapter 才能对自身剩余 direct-child plumbing 子树
    执行 post-order 标准 UIKit teardown；不得识别第三方类型、访问 internal 属性或递归触碰原业务页；
 5. 方法返回后，PagingHost 移除 adapter、归零 barInsets 并发送 `.empty`。
+
+adapter 同时提供只读 internal reload readiness。它只能由 adapter 已有的 pending will/did/cancel、programmatic
+selection 和 Pageboy public tracking/dragging/decelerating 状态计算；preflight 为 false 时不得先修改 count、titles、
+selection 或 Pageboy 状态。Host 必须先做 preflight，再决定立即 reload 或暂存 latest pending request，不能通过调用
+`prepareForRemoval()` 的失败副作用判断是否繁忙。
 
 UIKit/Pageboy 对已移除 adapter、inner page controller 和 reset placeholder 的析构允许延迟到后续 main run-loop；
 `.empty` 的同步契约是“业务 page parent/view、Host children 和 active adapter 已为空”，不是所有 UIKit 对象已经
@@ -201,6 +212,19 @@ PagingHost reload
 空到空重复 reload 仍发送当前 transaction 的 `.empty` terminal，但不重复 containment removal。空到非空先创建
 adapter、安装 containment，再执行普通非空 reload，只有 Pageboy `didReloadWith` 后才 commit。
 
+### Selection 中 reload 顺序
+
+若 animated/programmatic/interactive selection 尚未 terminal 时收到 reload：
+
+1. ViewController 可以建立新的 pending Store generation，但旧 committed generation 继续持有实际页面和 ownership；
+2. Host 发现 adapter reload readiness 为 false，只保存最新 reload request，不调用 Pageboy reload/delete；
+3. 旧 selection did/cancel terminal 到达时，adapter 先完成自己的 pending selection 状态；
+4. Host 若仍有 pending reload，不把这个过期 selection terminal 转发成 public selection commit；
+5. Host 立即执行最新 pending reload：非空走正常 Pageboy reload，空态走 `prepareForRemoval()`；
+6. 只有新的 `.page`/`.empty` reload terminal 才提交最新 Store generation；旧 transition retention 随旧 generation
+   释放；
+7. 若 terminal 永不到达，pending 保持，不用 timer 猜测。后续更新的 reload 只替换 pending request。
+
 ## 错误处理与日志
 
 1. data source 返回负 count：主控制器 Debug assertion、Release 归零，并记录
@@ -235,11 +259,13 @@ UI 测试执行不足完成阈值的横向拖动并释放，验证：
 3. adapter `prepareForRemoval()`：旧 scroll/fallback page 的 parent 和 view superview 同步清空，不发送
    page/selection terminal，零态 guard 成立，正常非空 reload 与用户/程序化 selection 不受影响；terminal 后若干
    main-queue turns 内 adapter/inner/reset placeholder 的 weak 引用归零。
-4. 空到非空：创建新 adapter，Pageboy terminal 后提交新 generation。
-5. 空到空：幂等 terminal，无旧内容复现。
-6. count/title/Header 回调分别重入 reload：新事务获胜，旧事务不发布。
-7. public 负 count 路径发出 `children.page.invalidCount`。
-8. 交互取消及空态 teardown 的 appearance 序列和 public selection/cache 收敛。
+4. animated/interactive selection 中 reload 空或非空：第三方更新延迟到 did/cancel terminal，latest request 获胜，
+   旧 selection 不提前提交 pending generation，不触发 assertion 或假 terminal。
+5. 空到非空：创建新 adapter，Pageboy terminal 后提交新 generation。
+6. 空到空：幂等 terminal，无旧内容复现。
+7. count/title/Header 回调分别重入 reload：新事务获胜，旧事务不发布。
+8. public 负 count 路径发出 `children.page.invalidCount`。
+9. 交互取消及空态 teardown 的 appearance 序列和 public selection/cache 收敛。
 
 ### 完整验收
 
