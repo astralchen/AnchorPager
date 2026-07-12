@@ -12,8 +12,54 @@ final class AnchorPagerSwiftToolchainBaselineTests: XCTestCase {
             contentsOf: packageRoot()
                 .appendingPathComponent("Sources/AnchorPager/Public/AnchorPagerViewController.swift")
         )
-        XCTAssertTrue(source.contains("MainActor.assumeIsolated"))
-        XCTAssertFalse(source.contains("isolated deinit"))
+        XCTAssertTrue(hasVerifiedSynchronousMainActorDeinit(in: source))
+    }
+
+    func testDeinitContractRejectsInvalidSourceShapes() {
+        let invalidSources = [
+            """
+            func cleanup() { MainActor.assumeIsolated {} }
+            deinit {
+                pageStateStore.releaseAll()
+                managedInsetCoordinator.releaseAll()
+            }
+            """,
+            """
+            deinit {
+                MainActor.assumeIsolated {
+                    managedInsetCoordinator.releaseAll()
+                }
+            }
+            """,
+            """
+            deinit {
+                MainActor.assumeIsolated {
+                    pageStateStore.releaseAll()
+                }
+            }
+            """,
+            """
+            deinit {
+                MainActor.assumeIsolated {
+                    pageStateStore.releaseAll()
+                    managedInsetCoordinator.releaseAll()
+                }
+                Task {}
+            }
+            """,
+            """
+            isolated deinit {
+                MainActor.assumeIsolated {
+                    pageStateStore.releaseAll()
+                    managedInsetCoordinator.releaseAll()
+                }
+            }
+            """,
+        ]
+
+        for source in invalidSources {
+            XCTAssertFalse(hasVerifiedSynchronousMainActorDeinit(in: source))
+        }
     }
 
     private func packageRoot() throws -> URL {
@@ -28,4 +74,42 @@ final class AnchorPagerSwiftToolchainBaselineTests: XCTestCase {
         }
         throw CocoaError(.fileNoSuchFile)
     }
+}
+
+private func hasVerifiedSynchronousMainActorDeinit(in source: String) -> Bool {
+    guard !source.contains("isolated deinit"),
+          let deinitBlock = ordinaryDeinitBlock(in: source) else {
+        return false
+    }
+
+    return deinitBlock.contains("MainActor.assumeIsolated") &&
+        deinitBlock.contains("pageStateStore.releaseAll()") &&
+        deinitBlock.contains("managedInsetCoordinator.releaseAll()") &&
+        !deinitBlock.contains("Task")
+}
+
+private func ordinaryDeinitBlock(in source: String) -> Substring? {
+    guard let signature = source.range(
+        of: #"(?m)^[\t ]*deinit[\t ]*\{"#,
+        options: .regularExpression
+    ),
+    let openingBrace = source[signature].firstIndex(of: "{") else {
+        return nil
+    }
+
+    var depth = 0
+    for index in source[openingBrace...].indices {
+        switch source[index] {
+        case "{":
+            depth += 1
+        case "}":
+            depth -= 1
+            if depth == 0 {
+                return source[openingBrace...index]
+            }
+        default:
+            break
+        }
+    }
+    return nil
 }
