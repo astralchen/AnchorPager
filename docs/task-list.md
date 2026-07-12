@@ -346,7 +346,7 @@
 
 ## v0.4：Child 生命周期与缓存版
 
-设计基线：`docs/superpowers/specs/2026-07-12-v0-4-child-lifecycle-cache-design.md`。主体实现及 reload terminal 修复完整验收已通过，但最终独立复审发现 deferred reload 代际原子性和跨 generation 可变 PageState 共享问题；修复设计见 `docs/superpowers/specs/2026-07-12-v0-4-generation-atomicity-repair-design.md`。修复和再次复审完成前不启动 v0.5。
+设计基线：`docs/superpowers/specs/2026-07-12-v0-4-child-lifecycle-cache-design.md`。主体实现、reload terminal 修复及 generation atomicity Task 1–3 已完成；最终独立复审仍待执行，完成前不启动 v0.5。
 
 - [x] 实现 page state store
 - [x] 移除 `AnchorPagerChildViewControllerStore`，避免与 Tabman/Pageboy 双重 containment
@@ -376,12 +376,19 @@
 - [x] Pageboy 5.0.2 空态 teardown shim 集中在 Paging adapter，并建立依赖升级源码复审与回归门禁
 - [x] selection 活跃期间 latest pending reload 由 did/cancel 语义 terminal 驱动，不使用 timer/delay
 - [x] public reload transaction 覆盖 count、Header、每个 title 回调重入，过期事务零发布
-- [x] Swift 6.2.4 完整验收：框架 182 项、Example 5 项单测与 16 项 UI 测试通过，均为 0 fail、0 skip
+- [x] Host 使用 request identifier 串行 pending/active reload，terminal 重入或迟到 callback 不串扰后续 request
+- [x] active reload 的 bar inset 按 request staged，只有 matching terminal 被 ViewController acknowledgement 后更新 committed baseline
+- [x] Store 将 live identity payload 与 generation-specific retention/strong lease/snapshot/ownership lease 分离
+- [x] Store 提供严格只读 committed current index/page/scroll 入口，empty 或没有 committed generation 时返回 nil
+- [x] commit/cancel/releaseAll 在释放最后 strong lease 前强捕获 CleanupPlan，显式清理 unique fallback/scroll 资源
+- [x] ViewController staged public metadata/Header/provider generation，matching terminal 原子提交 Store/public/bar 几何
+- [x] 首次 pre-load reload 保持 public metadata/selection 语义且不加载 paging view，首次 terminal 复用同一 request
+- [x] Swift 6.2.4 generation atomicity 完整验收：框架 193 项、Example 5 项单测与 16 项 UI 测试通过，均为 0 fail、0 skip；resolve 1.34 秒、框架墙钟 53.81 秒、Example generic build 15.71 秒、Example 全量墙钟 277.97 秒；warning 仅为 Pageboy/Tabman `PrivacyInfo.xcprivacy` unhandled resource 提示
 - [ ] 最终独立代码复审清零 Critical/Important 后确认 v0.4 可合并并开放 v0.5 入口
 
 ## v0.5：纵向嵌套滚动协调版
 
-启动门禁：当前不可启动。必须先完成 v0.4 最终独立复审并清零 Critical/Important；实现只能依赖稳定 paging host、Store committed current child/scroll target 和标准化 reload/selection terminal，不得缓存 adapter 实例或复制 page identity/cache/generation 职责。
+启动门禁：当前不可启动。必须先完成 v0.4 最终独立复审并清零 Critical/Important；ScrollCoordinator 只读 Store committed current page/scroll target，empty 时两者为 nil，并在 matching reload/selection terminal 后重新绑定。不得缓存 Host/adapter/provider、读取 provider pending，或复制 page identity/cache/generation 职责。
 
 - [ ] 创建 `Sources/AnchorPager/Core/AnchorPagerScrollCoordinator.swift`
 - [ ] Header 未完全折叠时优先响应向上滚动
@@ -413,6 +420,8 @@
 
 ## v0.6：顶部 Overscroll 事件处理版
 
+依赖门禁：OverscrollCoordinator 只消费 v0.5 已绑定的 committed current/empty owner；pending provider page 不能成为 overscroll owner。
+
 - [ ] 创建 `Sources/AnchorPager/Overscroll/AnchorPagerOverscrollCoordinator.swift`
 - [ ] 实现 `.none`
 - [ ] 实现 `.container`
@@ -439,6 +448,7 @@
 ## v0.7：手势与交互状态机版
 
 - [ ] 复用 v0.5 已建立的 current container/current child 最小纵向 simultaneous recognition，不重复建立第二套纵向 handoff
+- [ ] 扩展 PagingHost 现有单一 request/selection transaction，不建立第二套 generation owner 或旁路 terminal
 - [ ] 创建 `Sources/AnchorPager/Gesture/AnchorPagerInteractionState.swift`
 - [ ] 创建 `Sources/AnchorPager/Gesture/AnchorPagerGestureCoordinator.swift`
 - [ ] 定义 idle
@@ -475,6 +485,8 @@
 
 ## v0.8：状态栏点击与尺寸变化版
 
+依赖门禁：scrollsToTop 与尺寸恢复只消费 Store committed current/empty owner；不得把 provider pending page 设为系统 owner。
+
 - [ ] 实现 scrollsToTop owner manager
 - [ ] 任一时刻只允许一个 managed UIScrollView 的 scrollsToTop 为 true
 - [ ] 横向 paging scroll view 永不响应 scrollsToTop
@@ -500,6 +512,8 @@
 - [ ] 测试旋转后 Header、bar、child inset 一致性
 
 ## v0.9：可访问性、RTL 与示例矩阵版
+
+依赖门禁：accessibility、Dynamic Type 与 RTL 的 current page/selection 语义只读 committed visible state，不读取 provider pending。
 
 - [ ] 分段栏 item 支持 selected accessibility trait
 - [ ] 分段栏 item 支持 button accessibility trait
@@ -602,6 +616,9 @@
 - [x] v0.3 Scroll Discovery 与 Inset Ownership 版已完成；验收记录见 `docs/superpowers/plans/2026-07-11-v0-3-fixed-paging-inset-ownership.md`
 - [x] v0.4 Child 生命周期与缓存主体实现已完成
 - [x] v0.4 reload terminal、空态 teardown、reload 重入与 appearance cancel 修复完整验收已通过
+- [x] v0.4 generation atomicity Task 1：Host request/terminal 串行、callback provenance 与 bar acknowledgement 已完成
+- [x] v0.4 generation atomicity Task 2：payload/generation lease、committed current 与强 CleanupPlan 已完成
+- [x] v0.4 generation atomicity Task 3：staged public/provider/bar terminal、pre-load 与跨层 superseded request 已完成
 - [x] 最低工具链已提升为 Swift 6.2，语言模式保持 Swift 6，iOS 14 运行基线不变
 - [ ] v0.4 最终独立复审完成前不开始 v0.5
 - [x] 实现时遵循测试先行

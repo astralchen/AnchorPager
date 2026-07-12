@@ -1,8 +1,10 @@
 # 固定分页视口、Inset Ownership 与纵向滚动所有权设计
 
 **日期：** 2026-07-11
-**状态：** v0.3 已实现；v0.4 修复实现与完整验收已通过，待最终独立复审；v0.5 尚未实现
+**状态：** v0.3 已实现；v0.4 generation atomicity Task 1–3 与完整验收已完成，最终独立复审待执行；v0.5 尚未实现
 **适用版本：** v0.3、v0.4、v0.5
+
+**最新验收：** Swift 6.2.4；Framework 193 项、Example 5 项单元 + 16 项 UI，均 0 fail、0 skip；resolve / Framework / Example build / Example test 墙钟分别为 1.34 / 53.81 / 15.71 / 277.97 秒；warning 仅为 Pageboy/Tabman `PrivacyInfo.xcprivacy` unhandled resource 提示。
 
 当前技术基线为最低工具链 Swift 6.2、语言模式 Swift 6、最低系统版本 iOS 14；详见
 `2026-07-12-swift-6-2-toolchain-baseline-design.md`。
@@ -313,18 +315,16 @@ PageStateStore 不写 inset，不直接调整 container/child owner。
 
 ### reloadData 收敛顺序
 
-1. 结束或明确取消当前分页/滚动事务。
-2. 保存当前页面 `childDistanceFromTop`。
-3. 从 data source 获取并验证新页面身份。
-4. 建立新 page state，执行 scroll discovery 或 fallback 选择。
-5. 让 Tabman/Pageboy reload。
-6. 等 adapter 完成 bar 布局并获得 resolved barInsets。
-7. 应用新页面 managed inset。
-8. 按 container 状态恢复或归一化当前 child offset。
-9. 在旧页面不再可见后归还旧 inset ownership。
-10. 清理旧 fallback host、page state 和 adapter 状态。
+1. 采集 latest metadata snapshot；已有 committed visible generation 时只 staged，不发布 public/Header 或 Store visible state。
+2. PagingHost 以 request identifier 串行 pending/active reload；selection terminal 只解除 readiness，不提交被 reload 取代的旧 selection。
+3. matching `willPerform` 才建立 provider generation；Pageboy provider 读取 pending，纵向可见/inset 查询继续读取 committed。
+4. Pageboy 按需请求新页面；新 generation 使用独立 retention、strong lease、snapshot 和 ownership lease，仅共享 live identity payload。
+5. adapter 完成 bar 布局，将最终 bar inset 暂存在该 active request；active 期间不写旧 committed scroll。
+6. matching page/empty terminal 到达后，ViewController 先提交 Store，再一次发布 public metadata/Header、terminal index 和 bar inset，并返回 acknowledgement。
+7. Store 在释放旧代最后 strong lease 前捕获强 CleanupPlan，发布新 committed、释放旧 lease、强制收敛新 ownership，再清理旧代 unique fallback/scroll。
+8. Host 只有 ack 为 true 才更新 committed bar baseline；stale/superseded terminal 保留旧 baseline，并推进 latest pending。
 
-旧 ownership 不应在 Tabman 页面替换前提前归还，避免仍可见的旧页面发生中间态跳动。
+terminal 前旧 committed page、`childDistanceFromTop`、inset ownership 与可见几何不得改变。首次 pre-load 没有 committed visible generation 时可预发布初始 metadata并激活 provider，但不得因此加载 paging view。
 
 ## 纵向滚动所有权
 
@@ -379,6 +379,8 @@ interaction state 优先级。
    `childDistanceFromTop` 更新为 `0`。
 3. 不暂存非零 child distance 等待 Header 再次折叠后突然恢复，避免临界点内容跳跃。
 4. 不为了恢复目标 child offset 强制折叠 Header，避免切页导致 Header 突然消失。
+
+v0.5 只能通过 Store 的 committed-current 只读入口取得上述当前页；empty 时 page/scroll 均为 nil。ScrollCoordinator 在 matching reload/selection terminal 后重新绑定，不缓存 Host、adapter 或 provider，也不读取 pending generation。
 
 ## 尺寸与 Header 变化
 
@@ -503,6 +505,7 @@ scroll.handoff.childToContainer
 3. v0.5 实现 ScrollCoordinator，并包含当前 container/current child 的最小纵向 simultaneous recognition。
 4. v0.6 保持顶部 overscroll owner 职责。
 5. v0.7 保持完整手势与交互状态机职责，不重复实现 v0.5 的纵向基础 handoff。
+6. v0.6/v0.8 只消费 committed current/empty owner；v0.7 扩展 Host 单一 transaction；v0.9 不读取 provider pending。
 
 ## 影响范围
 

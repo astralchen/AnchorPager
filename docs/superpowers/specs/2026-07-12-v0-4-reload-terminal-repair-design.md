@@ -2,7 +2,9 @@
 
 **日期：** 2026-07-12
 
-**状态：** 完整验收已通过，但最终独立复审发现代际原子性问题，修复设计见 `2026-07-12-v0-4-generation-atomicity-repair-design.md`
+**状态：** reload terminal 修复、后续 generation atomicity Task 1–3 与完整验收已完成，最终独立复审仍待执行
+
+**最新验收：** Swift 6.2.4；Framework 193 项、Example 5 项单元 + 16 项 UI，均 0 fail、0 skip；resolve / Framework / Example build / Example test 墙钟分别为 1.34 / 53.81 / 15.71 / 277.97 秒；warning 仅为 Pageboy/Tabman `PrivacyInfo.xcprivacy` unhandled resource 提示。
 
 **适用范围：** v0.4 合并前修复，并为 v0.5 的 current child/scroll owner 提供可信空页状态
 
@@ -103,11 +105,16 @@ enum AnchorPagerPagingReloadTerminal: Equatable {
 6. 空 reload 先移除旧 adapter，再把 barInsets 收敛为 `.zero`，最后同步发送 `.empty`；
 7. host 不持有业务页面、不决定 generation、不管理 inset 或 snapshot。
 
-Host 还维护一个 latest-wins 的 internal pending reload request，只保存 titles、page count 和 selected index，不保存
-Store generation。当 adapter 正在用户/程序化 selection transaction 中时，Pageboy 5.0.2 不能安全执行
+Host 还维护 request-aware 的 latest-wins pending/active reload transaction，只保存 request identifier、titles、page count
+和 selected index，不保存 Store generation。当 adapter 正在用户/程序化 selection transaction 中时，Pageboy 5.0.2 不能安全执行
 `reloadData()` 或 delete-last-page；Host 不调用第三方更新，而是暂存最新 reload。selection 的 did/cancel terminal
 到达后，Host 丢弃该旧 selection 对上层的提交事件并立即执行最新 pending reload。后续 reload 覆盖先前 pending
 request；pending 期间程序化 selection 返回拒绝。不得用 timer、主队列 delay 或猜测动画时长推进 pending reload。
+
+Host 开始 request 前通过 `willPerform` 让 ViewController 激活 matching provider generation；page/empty terminal、adapter
+callback provenance 和 request-scoped final bar inset 都携带同一 identifier。active terminal 通知期间的同步重入或旧 request
+迟到 callback 不得结束新 request。ViewController terminal delegate 返回 acknowledgement；只有 matching Store/public/Header/bar
+提交成功时 Host 才更新 committed bar baseline，ack=false 保留旧 baseline，并推进 latest pending。
 
 host view 是 Header 下方固定分页 viewport 的约束对象。adapter 替换不会改变 AnchorPager 根布局约束。
 
@@ -168,10 +175,11 @@ clear/detach API，应立即替换 shim。不得把这个机制泄漏到 public 
 
 主控制器只 contain paging host，不直接 contain adapter。它：
 
-1. 在 host terminal 到达前保持 pending generation；
-2. 收到 `.page(index:)` 后 commit，并按 index 收敛 Store current；
-3. 收到 `.empty` 后 commit，保持 `selectedIndex == 0`、`effectiveSelectedIndex == nil`；
-4. 不再包含 `pageCount == 0` 的直接 Store commit 特例。
+1. 保存 latest staged metadata snapshot；已有 committed visible generation 时 terminal 前不发布 public/Header；
+2. matching `willPerform` 才建立 provider generation，Pageboy provider 与 visible committed 查询保持分流；
+3. 收到 matching `.page(index:)`/`.empty` 后原子提交 Store、public metadata、Header、terminal index 与 bar inset；
+4. `.empty` 提交后保持 `selectedIndex == 0`、`effectiveSelectedIndex == nil`；
+5. stale/superseded terminal 返回 false，不包含 `pageCount == 0` 的直接 Store commit 特例。
 
 ## Reload Transaction
 
@@ -186,15 +194,18 @@ read Header into local snapshot
   ↓ validate transaction
 read titles into local snapshot（每次回调后验证）
   ↓
-atomically publish pageCount/titles/Header/selectedIndex
+stage latest snapshot
   ↓
-begin Store generation
-  ↓
-PagingHost reload
+PagingHost enqueue request identifier
+  ↓ matching willPerform
+begin provider generation
+  ↓ matching terminal + acknowledgement
+commit Store/public/Header/bar
 ```
 
 任何 data source 回调重入 `reloadData()` 时，内层会取得更新的 identifier；外层在当前回调返回后发现 token
-失效并立即退出，不能发布部分旧快照，也不能开始旧 generation。
+失效并立即退出，不能发布部分旧快照，也不能开始旧 generation。首次 view 未加载且没有 committed visible generation
+时可以预发布初始 metadata并激活 provider，但不会加载 paging view，首次 terminal 继续使用同一 request。
 
 页面 provider 闭包中的重入继续使用 Store 已有 generation 二次校验；两层保护分别覆盖“reload 元数据采集”
 和“按需页面创建”。
@@ -203,17 +214,17 @@ PagingHost reload
 
 非空到空的顺序固定为：
 
-1. ViewController 原子发布空元数据并建立 pending generation；
-2. PagingHost 调用旧 adapter 的 `prepareForRemoval()`；
+1. ViewController staged 空元数据并 enqueue request，旧 public/Header/committed ownership 保持不变；
+2. PagingHost matching `willPerform` 激活 provider generation，再调用旧 adapter 的 `prepareForRemoval()`；
 3. adapter 通过 Pageboy public delete-last-page 同步进入 count 0/current index nil，并由 Pageboy 自己解除旧业务
    page containment；
 4. adapter 在 delete 整体返回后清理剩余第三方 plumbing containment；
 5. PagingHost 对已清空 adapter 调用 `willMove(toParent: nil)`；
-6. 移除 adapter view并调用 `removeFromParent()`；
-7. host 清空 adapter 引用并报告 barInsets `.zero`；
-8. host 发送 `.empty` terminal；
-9. ViewController commit pending generation；
-10. Store 归还旧 ownership、清理旧 fallback 和 snapshot；
+6. 移除 adapter view，并调用 `removeFromParent()`；
+7. host 清空 adapter 引用，把 barInsets `.zero` staged 到 active request；
+8. host 发送带 request identifier/final bar inset 的 `.empty` terminal；
+9. ViewController matching commit pending generation、public/Header/bar，并 acknowledgement；
+10. Store 通过强 CleanupPlan 归还旧 ownership、清理旧 fallback 和 snapshot；
 11. public 空页状态与实际可见层级同时成立；UIKit 对已移除 plumbing 对象可在后续 run-loop 自然析构。
 
 空到空重复 reload 仍发送当前 transaction 的 `.empty` terminal，但不重复 containment removal。空到非空先创建
@@ -223,13 +234,13 @@ adapter、安装 containment，再执行普通非空 reload，只有 Pageboy `di
 
 若 animated/programmatic/interactive selection 尚未 terminal 时收到 reload：
 
-1. ViewController 可以建立新的 pending Store generation，但旧 committed generation 继续持有实际页面和 ownership；
+1. ViewController 只保存 latest staged snapshot，旧 public/Header/committed generation 继续持有实际页面和 ownership；
 2. Host 发现 adapter 仍有 selection transaction 或 programmatic completion，只保存最新 reload request，不调用
    Pageboy reload/delete；
 3. 旧 selection did/cancel terminal 到达时，adapter 先完成自己的 pending selection 状态；
 4. Host 若仍有 pending reload，不把这个过期 selection terminal 转发成 public selection commit；
 5. Host 立即执行最新 pending reload：非空走正常 Pageboy reload，空态走 `prepareForRemoval()`；
-6. 只有新的 `.page`/`.empty` reload terminal 才提交最新 Store generation；旧 transition retention 随旧 generation
+6. 只有 matching `.page`/`.empty` reload terminal 被 acknowledgement 才提交最新 Store/public/Header/bar；旧 transition retention 随旧 generation
    释放；
 7. 若 terminal 永不到达，pending 保持，不用 timer 猜测。后续更新的 reload 只替换 pending request。
 
@@ -290,12 +301,12 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExa
 
 ## 对后续版本的影响
 
-1. v0.5 只依赖稳定 paging host、Store current scroll target 和 selection terminal，不缓存 adapter 实例。
+1. v0.5 只读 Store committed current page/scroll target（empty 为 nil），在 matching reload/selection terminal 后重新绑定；不缓存 Host/adapter/provider或读取 pending。
 2. 空状态下没有 adapter/current child，ScrollCoordinator 只能让 container 成为纵向 owner。
-3. v0.7 的完整 interaction state 继续在 host 的标准化事件上扩展，不把 Tabman/Pageboy 类型泄漏出去。
-4. v0.8 的 scrollsToTop owner 在空状态关闭所有 managed scroll view。
-5. Pageboy 依赖升级属于 paging adapter 兼容边界变更，必须先替换或重新验证空态 teardown shim，不能只依赖
-   package resolve/build 通过。
+3. v0.6/v0.8 只消费 committed current/empty owner。
+4. v0.7 的完整 interaction state 只扩展 Host 现有单一 request/selection transaction，不建立第二套 generation owner。
+5. v0.9 accessibility/RTL 不读取 provider pending。
+6. Pageboy 依赖升级属于 paging adapter 兼容边界变更，必须重新验证 teardown、request provenance/terminal acknowledgement、appearance、provider activation 和 bar settlement，不能只依赖 package resolve/build 通过。
 
 ## 完成定义
 

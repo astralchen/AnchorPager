@@ -2,7 +2,7 @@
 
 **日期：** 2026-07-12
 
-**状态：** 已确认，待实施计划
+**状态：** Task 1–3 已实现并通过聚焦复审与完整验收；最终独立复审待完成
 
 **适用范围：** v0.4 最终复审发现的 deferred reload 代际不一致、跨 generation 可变 PageState 共享，以及 v0.5 committed current child/scroll target 启动门禁
 
@@ -300,12 +300,30 @@ childDistanceFromTop
 2. v0.6 overscroll owner 与 v0.8 scrollsToTop 同样只能基于 committed/empty 事实。
 3. v0.7 可以扩展 Host request/selection transaction，但不得建立第二套 generation owner。
 4. v0.6–v0.9 路线无需重排；本修复是它们共同的代际一致性门禁。
-5. Pageboy 升级仍必须重新验证 delete-last-page teardown、reload terminal 和 request 串行化。
+5. v0.9 accessibility/RTL 只读 committed visible state，不读取 provider pending。
+6. Pageboy 升级仍必须重新验证 delete-last-page teardown、request provenance/terminal acknowledgement、appearance、provider activation 和 bar settlement。
+
+## 实施结果
+
+1. Task 1 完成 Host request identifier、pending/active 串行、callback provenance、terminal 重入/迟到隔离，以及 request-scoped bar acknowledgement；无 identifier 临时兼容桥已在 Task 3 删除。
+2. Task 2 完成 `PageIdentityPayload` 与 `GenerationPageState` 分离、generation-specific ownership lease、严格 committed-current 入口，以及 commit/cancel/releaseAll 前强捕获 `CleanupPlan`。
+3. Task 3 完成 ViewController staged public/provider/Header/bar terminal、ack=false baseline 保留、真实 superseded request 跨层推进和 pre-load latest-wins；四套聚焦组合 144 项通过、0 fail、0 skip。
+4. 最终复审曾发现的两个 Important 均有 RED/GREEN：deferred reload 的跨层 public/provider/bar 原子性由 Task 1/3 覆盖；跨 generation 可变 PageState/ownership cleanup 由 Task 2 覆盖。
+5. 上述结果不替代 Task 4 的新鲜完整验收与最终独立复审；后者完成前不得把 v0.4 标记为 Ready 或启动 v0.5。
+
+### Task 4 完整验收
+
+- Swift：Apple Swift 6.2.4；`swift package resolve` 1.34 秒通过。
+- Framework：iPhone 17 / iOS 26.3.1，193 项通过，0 fail、0 skip；xcresult 区间约 45.12 秒，命令墙钟 53.81 秒。
+- Example generic simulator build：通过，墙钟 15.71 秒。
+- Example：同一 iPhone 17，5 项单元测试与 16 项 UI 测试通过，0 fail、0 skip；xcresult 区间约 272.20 秒，命令墙钟 277.97 秒。
+- warnings：Pageboy 5.0.2 与 Tabman 4.0.1 的 `PrivacyInfo.xcprivacy` unhandled resource 提示；未观察到本修复新增生产 warning。
+- `git diff --check` 通过。最终独立复审仍保持 pending。
 
 ## 完成定义
 
 1. 两个最终复审 Important 都有先失败后通过的自动化测试。
-2. deferred terminal 前 public、visible Store、旧 page 和 ownership保持 committed 一致。
+2. deferred terminal 前 public、visible Store、旧 page 和 ownership 保持 committed 一致。
 3. generation migration 不共享可变 retention/snapshot/lease。
 4. v0.5 committed current internal 入口存在并有单元测试。
 5. public API 未变化，第三方类型不泄漏，生产代码无 timer/delay/internal API。
