@@ -56,7 +56,7 @@ open class AnchorPagerViewController: UIViewController {
     private let viewportView = UIView()
     private let headerViewHost = AnchorPagerHeaderViewHost()
     private let layoutEngine = AnchorPagerLayoutEngine()
-    private let pagingAdapter = AnchorPagerPagingAdapter()
+    private let pagingHost = AnchorPagerPagingHostViewController()
     private let managedInsetCoordinator = AnchorPagerManagedInsetCoordinator()
     private var scrollRangeHeightConstraint: NSLayoutConstraint?
     private var headerHeightConstraint: NSLayoutConstraint?
@@ -87,7 +87,7 @@ open class AnchorPagerViewController: UIViewController {
     public init(configuration: AnchorPagerConfiguration = .default) {
         self.configuration = configuration
         super.init(nibName: nil, bundle: nil)
-        configurePagingAdapter()
+        configurePagingHost()
         AnchorPagerLogger.log(.info, category: .lifecycle, event: "init")
     }
 
@@ -95,7 +95,7 @@ open class AnchorPagerViewController: UIViewController {
     public required init?(coder: NSCoder) {
         self.configuration = .default
         super.init(coder: coder)
-        configurePagingAdapter()
+        configurePagingHost()
         AnchorPagerLogger.log(.info, category: .lifecycle, event: "init")
     }
 
@@ -156,10 +156,6 @@ open class AnchorPagerViewController: UIViewController {
         )
 
         reloadVisibleContentIfNeeded()
-        if pageCount == 0, let pendingReloadGeneration {
-            pageStateStore.commitReload(generation: pendingReloadGeneration)
-            self.pendingReloadGeneration = nil
-        }
         AnchorPagerLogger.log(.info, category: .lifecycle, event: "reloadData.end")
     }
 
@@ -175,13 +171,13 @@ open class AnchorPagerViewController: UIViewController {
 
         guard selectedIndex != self.selectedIndex else { return }
 
-        if !isViewLoaded || pagingAdapter.parent == nil {
+        if !isViewLoaded || pagingHost.activeAdapter == nil {
             pageStateStore.didSelect(selectedIndex, context: pageAccessContext)
             commitSelectedIndex(selectedIndex, animated: animated)
             return
         }
 
-        let didAcceptRequest = pagingAdapter.setSelectedIndex(selectedIndex, animated: animated)
+        let didAcceptRequest = pagingHost.setSelectedIndex(selectedIndex, animated: animated)
         if !didAcceptRequest {
             AnchorPagerLogger.log(.debug, category: .paging, event: "setSelectedIndex.rejected")
         }
@@ -240,9 +236,9 @@ open class AnchorPagerViewController: UIViewController {
         ])
     }
 
-    private func configurePagingAdapter() {
-        pagingAdapter.eventDelegate = self
-        pagingAdapter.pageProvider = self
+    private func configurePagingHost() {
+        pagingHost.eventDelegate = self
+        pagingHost.pageProvider = self
     }
 
     private func reloadVisibleContentIfNeeded() {
@@ -250,9 +246,9 @@ open class AnchorPagerViewController: UIViewController {
 
         installVerticalScrollViewIfNeeded()
         installHeaderHost()
-        installPagingAdapterIfNeeded()
+        installPagingHostIfNeeded()
         updateVisibleLayout()
-        pagingAdapter.reload(
+        pagingHost.reload(
             titles: currentTitles,
             pageCount: pageCount,
             selectedIndex: selectedIndex
@@ -270,21 +266,21 @@ open class AnchorPagerViewController: UIViewController {
         }
     }
 
-    private func installPagingAdapterIfNeeded() {
-        let didAddPagingAdapter = pagingAdapter.parent == nil
-        if pagingAdapter.parent == nil {
-            addChild(pagingAdapter)
+    private func installPagingHostIfNeeded() {
+        let didAddPagingHost = pagingHost.parent == nil
+        if pagingHost.parent == nil {
+            addChild(pagingHost)
         }
 
-        if pagingAdapter.view.superview == nil {
-            let adapterView = pagingAdapter.view!
-            adapterView.translatesAutoresizingMaskIntoConstraints = false
-            viewportView.addSubview(adapterView)
-            let pagingTopConstraint = adapterView.topAnchor.constraint(equalTo: headerViewHost.view.bottomAnchor)
-            let pagingHeightConstraint = adapterView.heightAnchor.constraint(equalToConstant: 0)
+        if pagingHost.view.superview == nil {
+            let hostView = pagingHost.view!
+            hostView.translatesAutoresizingMaskIntoConstraints = false
+            viewportView.addSubview(hostView)
+            let pagingTopConstraint = hostView.topAnchor.constraint(equalTo: headerViewHost.view.bottomAnchor)
+            let pagingHeightConstraint = hostView.heightAnchor.constraint(equalToConstant: 0)
             NSLayoutConstraint.activate([
-                adapterView.leadingAnchor.constraint(equalTo: viewportView.leadingAnchor),
-                adapterView.trailingAnchor.constraint(equalTo: viewportView.trailingAnchor),
+                hostView.leadingAnchor.constraint(equalTo: viewportView.leadingAnchor),
+                hostView.trailingAnchor.constraint(equalTo: viewportView.trailingAnchor),
                 pagingTopConstraint,
                 pagingHeightConstraint
             ])
@@ -293,8 +289,8 @@ open class AnchorPagerViewController: UIViewController {
             self.pagingHeightConstraint = pagingHeightConstraint
         }
 
-        if didAddPagingAdapter {
-            pagingAdapter.didMove(toParent: self)
+        if didAddPagingHost {
+            pagingHost.didMove(toParent: self)
         }
     }
 
@@ -306,7 +302,7 @@ open class AnchorPagerViewController: UIViewController {
               isViewLoaded,
               headerViewHost.view.superview != nil else { return }
 
-        pagingAdapter.setBarHeight(configuration.bar.height)
+        pagingHost.setBarHeight(configuration.bar.height)
         isApplyingLayout = true
         defer { isApplyingLayout = false }
 
@@ -619,9 +615,9 @@ extension AnchorPagerViewController: AnchorPagerPageProviding {
     }
 }
 
-extension AnchorPagerViewController: AnchorPagerPagingAdapterDelegate {
-    func pagingAdapter(
-        _ adapter: AnchorPagerPagingAdapter,
+extension AnchorPagerViewController: AnchorPagerPagingHostViewControllerDelegate {
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
         didUpdateBarInsets barInsets: UIEdgeInsets
     ) {
         guard resolvedBarInsets != barInsets else { return }
@@ -632,7 +628,11 @@ extension AnchorPagerViewController: AnchorPagerPagingAdapterDelegate {
         }
     }
 
-    func pagingAdapter(_ adapter: AnchorPagerPagingAdapter, willSelect index: Int, animated: Bool) {
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
+        willSelect index: Int,
+        animated: Bool
+    ) {
         pageStateStore.willSelect(
             from: selectedIndex,
             to: index,
@@ -640,14 +640,18 @@ extension AnchorPagerViewController: AnchorPagerPagingAdapterDelegate {
         )
     }
 
-    func pagingAdapter(_ adapter: AnchorPagerPagingAdapter, didSelect index: Int, animated: Bool) {
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
+        didSelect index: Int,
+        animated: Bool
+    ) {
         guard index >= 0, index < pageCount else { return }
         pageStateStore.didSelect(index, context: pageAccessContext)
         commitSelectedIndex(index, animated: animated)
     }
 
-    func pagingAdapter(
-        _ adapter: AnchorPagerPagingAdapter,
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
         didCancelSelectionAt index: Int,
         returningTo previousIndex: Int
     ) {
@@ -660,11 +664,16 @@ extension AnchorPagerViewController: AnchorPagerPagingAdapterDelegate {
         AnchorPagerLogger.log(.debug, category: .paging, event: "setSelectedIndex.cancel")
     }
 
-    func pagingAdapter(_ adapter: AnchorPagerPagingAdapter, didReloadAt index: Int) {
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
+        didReload terminal: AnchorPagerPagingReloadTerminal
+    ) {
         guard let pendingReloadGeneration else { return }
         pageStateStore.commitReload(generation: pendingReloadGeneration)
         self.pendingReloadGeneration = nil
-        if index >= 0, index < pageCount {
+        if case let .page(index) = terminal,
+           index >= 0,
+           index < pageCount {
             pageStateStore.didSelect(index, context: pageAccessContext)
         }
     }

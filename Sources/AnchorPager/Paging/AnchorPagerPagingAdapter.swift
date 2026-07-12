@@ -21,6 +21,7 @@ protocol AnchorPagerPagingAdapterDelegate: AnyObject {
         didUpdateBarInsets barInsets: UIEdgeInsets
     )
     func pagingAdapter(_ adapter: AnchorPagerPagingAdapter, didReloadAt index: Int)
+    func pagingAdapterDidBecomeReadyForReload(_ adapter: AnchorPagerPagingAdapter)
 }
 
 extension AnchorPagerPagingAdapterDelegate {
@@ -28,6 +29,7 @@ extension AnchorPagerPagingAdapterDelegate {
         _ adapter: AnchorPagerPagingAdapter,
         didUpdateBarInsets barInsets: UIEdgeInsets
     ) {}
+    func pagingAdapterDidBecomeReadyForReload(_ adapter: AnchorPagerPagingAdapter) {}
 }
 
 @MainActor
@@ -41,6 +43,7 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
     private var committedSelectedIndex = 0
     private var pendingPageboySelectionIndex: Int?
     private var pendingProgrammaticSelection: ProgrammaticSelection?
+    private var isProgrammaticTransitionCompletionPending = false
     private var installedBar: TMBar?
     private var barHeightConstraint: NSLayoutConstraint?
     private var requestedBarHeight: CGFloat?
@@ -51,6 +54,19 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
         let index: Int
         let previousIndex: Int
         let animated: Bool
+    }
+
+    /// 当前是否可以同步执行 Pageboy reload 或空态 teardown。
+    ///
+    /// 该查询只读取 AnchorPager 已有 selection 状态和 Pageboy public 滚动状态，
+    /// 不得修改 data source 或第三方状态。
+    var isReadyForReload: Bool {
+        pendingPageboySelectionIndex == nil &&
+            pendingProgrammaticSelection == nil &&
+            !isProgrammaticTransitionCompletionPending &&
+            !isTracking &&
+            !isDragging &&
+            !isDecelerating
     }
 
     override init(nibName nibNameOrNil: String?, bundle nibBundleOrNil: Bundle?) {
@@ -121,6 +137,7 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
         committedSelectedIndex = defaultSelectedIndex
         pendingPageboySelectionIndex = nil
         pendingProgrammaticSelection = nil
+        isProgrammaticTransitionCompletionPending = false
 
         if isViewLoaded {
             reloadSelectionCallbackSuppressionDepth += 1
@@ -133,6 +150,62 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
             }
         }
         AnchorPagerLogger.log(.info, category: .paging, event: "paging.reload")
+    }
+
+    /// 清空 Pageboy 业务页面后，允许 PagingHost 安全移除当前 adapter。
+    ///
+    /// Pageboy 5.0.2 的零页 `reloadData()` 不会清理内部页面；这里通过 public
+    /// delete-last-page 进入零页状态，再清理只剩第三方 plumbing 的 containment。
+    /// 升级依赖时必须重新验证该兼容点。
+    @discardableResult
+    func prepareForRemoval() -> Bool {
+        let oldPageCount = pageCount ?? 0
+        let deletionIndex = Swift.min(
+            Swift.max(0, committedSelectedIndex),
+            Swift.max(0, oldPageCount - 1)
+        )
+        titles = []
+        configuredPageCount = 0
+        defaultSelectedIndex = 0
+        committedSelectedIndex = 0
+        pendingPageboySelectionIndex = nil
+        pendingProgrammaticSelection = nil
+        isProgrammaticTransitionCompletionPending = false
+
+        guard isViewLoaded else { return true }
+
+        reloadSelectionCallbackSuppressionDepth += 1
+        defer { reloadSelectionCallbackSuppressionDepth -= 1 }
+        guard oldPageCount > 0 else {
+            guard pageCount == 0, currentIndex == nil else { return false }
+            tearDownChildTreeForRemoval()
+            return true
+        }
+
+        var didDeletionCompleteSynchronously = false
+        deletePage(at: deletionIndex, then: .doNothing) {
+            didDeletionCompleteSynchronously = true
+        }
+        guard didDeletionCompleteSynchronously,
+              pageCount == 0,
+              currentIndex == nil else { return false }
+        tearDownChildTreeForRemoval()
+        return true
+    }
+
+    private func tearDownChildTreeForRemoval() {
+        func tearDown(_ viewController: UIViewController) {
+            for child in viewController.children {
+                tearDown(child)
+            }
+            viewController.willMove(toParent: nil)
+            viewController.viewIfLoaded?.removeFromSuperview()
+            viewController.removeFromParent()
+        }
+
+        for child in children {
+            tearDown(child)
+        }
     }
 
     @discardableResult
@@ -150,12 +223,14 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
             animated: animated
         )
         pendingProgrammaticSelection = requestedSelection
+        isProgrammaticTransitionCompletionPending = true
 
         let didStartScroll = scrollToPage(.at(index: index), animated: animated) { [weak self] _, _, finished in
-            self?.finishProgrammaticSelection(at: index, finished: finished)
+            self?.finishProgrammaticTransition(at: index, finished: finished)
         }
         if !didStartScroll {
             pendingProgrammaticSelection = previousProgrammaticSelection
+            isProgrammaticTransitionCompletionPending = false
             AnchorPagerLogger.log(.debug, category: .paging, event: "paging.setSelectedIndex.rejected")
         }
         return didStartScroll
@@ -293,6 +368,14 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
     private func clearProgrammaticSelectionIfNeeded(at index: Int) {
         guard pendingProgrammaticSelection?.index == index else { return }
         pendingProgrammaticSelection = nil
+    }
+
+    private func finishProgrammaticTransition(at index: Int, finished: Bool) {
+        isProgrammaticTransitionCompletionPending = false
+        _ = finishProgrammaticSelection(at: index, finished: finished)
+        if isReadyForReload {
+            eventDelegate?.pagingAdapterDidBecomeReadyForReload(self)
+        }
     }
 
     @discardableResult

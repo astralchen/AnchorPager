@@ -35,6 +35,12 @@ protocol AnchorPagerPagingHostViewControllerDelegate: AnyObject {
 
 @MainActor
 final class AnchorPagerPagingHostViewController: UIViewController {
+    private struct ReloadRequest {
+        let titles: [String]
+        let pageCount: Int
+        let selectedIndex: Int
+    }
+
     weak var pageProvider: AnchorPagerPageProviding? {
         didSet {
             activeAdapter?.pageProvider = pageProvider
@@ -46,6 +52,8 @@ final class AnchorPagerPagingHostViewController: UIViewController {
 
     private var requestedBarHeight: CGFloat?
     private var lastReportedBarInsets: UIEdgeInsets = .zero
+    private var activeAdapterConstraints: [NSLayoutConstraint] = []
+    private var pendingReloadRequest: ReloadRequest?
 
     override func loadView() {
         let view = UIView()
@@ -54,8 +62,24 @@ final class AnchorPagerPagingHostViewController: UIViewController {
     }
 
     func reload(titles: [String], pageCount: Int, selectedIndex: Int) {
-        guard pageCount > 0 else {
-            removeActiveAdapterIfNeeded()
+        let request = ReloadRequest(
+            titles: titles,
+            pageCount: pageCount,
+            selectedIndex: selectedIndex
+        )
+        if let activeAdapter, !activeAdapter.isReadyForReload {
+            pendingReloadRequest = request
+            AnchorPagerLogger.log(.debug, category: .paging, event: "paging.reload.deferred")
+            return
+        }
+
+        pendingReloadRequest = nil
+        performReload(request)
+    }
+
+    private func performReload(_ request: ReloadRequest) {
+        guard request.pageCount > 0 else {
+            guard removeActiveAdapterIfNeeded(pendingRequestOnFailure: request) else { return }
             reportZeroBarInsetsIfNeeded()
             AnchorPagerLogger.log(.info, category: .paging, event: "paging.reload.empty")
             eventDelegate?.pagingHost(self, didReload: .empty)
@@ -64,7 +88,11 @@ final class AnchorPagerPagingHostViewController: UIViewController {
 
         let adapter = activeAdapter ?? installAdapter()
         adapter.pageProvider = pageProvider
-        adapter.reload(titles: titles, pageCount: pageCount, selectedIndex: selectedIndex)
+        adapter.reload(
+            titles: request.titles,
+            pageCount: request.pageCount,
+            selectedIndex: request.selectedIndex
+        )
     }
 
     func setBarHeight(_ height: CGFloat?) {
@@ -74,7 +102,15 @@ final class AnchorPagerPagingHostViewController: UIViewController {
 
     @discardableResult
     func setSelectedIndex(_ index: Int, animated: Bool) -> Bool {
-        activeAdapter?.setSelectedIndex(index, animated: animated) ?? false
+        guard pendingReloadRequest == nil else {
+            AnchorPagerLogger.log(
+                .debug,
+                category: .paging,
+                event: "paging.setSelectedIndex.reloadPending"
+            )
+            return false
+        }
+        return activeAdapter?.setSelectedIndex(index, animated: animated) ?? false
     }
 
     private func installAdapter() -> AnchorPagerPagingAdapter {
@@ -86,26 +122,55 @@ final class AnchorPagerPagingHostViewController: UIViewController {
         addChild(adapter)
         adapter.view.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(adapter.view)
-        NSLayoutConstraint.activate([
+        let constraints = [
             adapter.view.topAnchor.constraint(equalTo: view.topAnchor),
             adapter.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             adapter.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             adapter.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-        ])
+        ]
+        NSLayoutConstraint.activate(constraints)
+        activeAdapterConstraints = constraints
         adapter.didMove(toParent: self)
         activeAdapter = adapter
         AnchorPagerLogger.log(.debug, category: .lifecycle, event: "paging.adapter.install")
         return adapter
     }
 
-    private func removeActiveAdapterIfNeeded() {
-        guard let adapter = activeAdapter else { return }
+    @discardableResult
+    private func removeActiveAdapterIfNeeded(
+        pendingRequestOnFailure request: ReloadRequest
+    ) -> Bool {
+        guard let adapter = activeAdapter else { return true }
+        guard adapter.prepareForRemoval() else {
+            pendingReloadRequest = request
+            AnchorPagerAssertions.failure(
+                "AnchorPager could not synchronously prepare the paging adapter for removal."
+            )
+            AnchorPagerLogger.log(
+                .error,
+                category: .paging,
+                event: "paging.adapter.remove.rejected"
+            )
+            return false
+        }
 
         adapter.willMove(toParent: nil)
+        NSLayoutConstraint.deactivate(activeAdapterConstraints)
+        activeAdapterConstraints = []
         adapter.view.removeFromSuperview()
         adapter.removeFromParent()
         activeAdapter = nil
         AnchorPagerLogger.log(.debug, category: .lifecycle, event: "paging.adapter.remove")
+        return true
+    }
+
+    @discardableResult
+    private func performPendingReloadIfNeeded() -> Bool {
+        guard let request = pendingReloadRequest else { return false }
+        guard activeAdapter?.isReadyForReload != false else { return true }
+        pendingReloadRequest = nil
+        performReload(request)
+        return true
     }
 
     private func reportZeroBarInsetsIfNeeded() {
@@ -131,6 +196,7 @@ extension AnchorPagerPagingHostViewController: AnchorPagerPagingAdapterDelegate 
         animated: Bool
     ) {
         guard adapter === activeAdapter else { return }
+        guard !performPendingReloadIfNeeded() else { return }
         eventDelegate?.pagingHost(self, didSelect: index, animated: animated)
     }
 
@@ -140,6 +206,7 @@ extension AnchorPagerPagingHostViewController: AnchorPagerPagingAdapterDelegate 
         returningTo previousIndex: Int
     ) {
         guard adapter === activeAdapter else { return }
+        guard !performPendingReloadIfNeeded() else { return }
         eventDelegate?.pagingHost(
             self,
             didCancelSelectionAt: index,
@@ -159,5 +226,10 @@ extension AnchorPagerPagingHostViewController: AnchorPagerPagingAdapterDelegate 
     func pagingAdapter(_ adapter: AnchorPagerPagingAdapter, didReloadAt index: Int) {
         guard adapter === activeAdapter else { return }
         eventDelegate?.pagingHost(self, didReload: .page(index: index))
+    }
+
+    func pagingAdapterDidBecomeReadyForReload(_ adapter: AnchorPagerPagingAdapter) {
+        guard adapter === activeAdapter else { return }
+        _ = performPendingReloadIfNeeded()
     }
 }

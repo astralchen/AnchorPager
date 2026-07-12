@@ -163,12 +163,10 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
             viewControllers: [UIViewController(), UIViewController()],
             selectedIndex: 0
         )
-
         let didAcceptRequest = adapter.setSelectedIndex(1, animated: true)
 
         XCTAssertTrue(didAcceptRequest)
         XCTAssertFalse(delegate.events.contains(.didSelect(1, true)))
-
         adapter.pageboyViewController(adapter, didScrollToPageAt: 1, direction: .forward, animated: true)
 
         XCTAssertTrue(delegate.events.contains(.didSelect(1, true)))
@@ -205,13 +203,11 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
             viewControllers: [UIViewController(), UIViewController(), UIViewController()],
             selectedIndex: 0
         )
-
         let didAcceptFirstRequest = adapter.setSelectedIndex(1, animated: true)
         let didAcceptSecondRequest = adapter.setSelectedIndex(2, animated: true)
 
         XCTAssertTrue(didAcceptFirstRequest)
         XCTAssertFalse(didAcceptSecondRequest)
-
         adapter.pageboyViewController(adapter, didScrollToPageAt: 1, direction: .forward, animated: true)
 
         XCTAssertTrue(delegate.events.contains(.didSelect(1, true)))
@@ -239,6 +235,194 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
         XCTAssertTrue(events.contains(.init(category: .paging, level: .debug, event: "paging.callback.missingWillSelect")))
         XCTAssertTrue(events.contains(.init(category: .paging, level: .debug, event: "paging.callback.duplicateWillSelect")))
         XCTAssertTrue(events.contains(.init(category: .paging, level: .debug, event: "paging.callback.outOfOrder")))
+    }
+
+    @MainActor
+    func testPrepareForRemovalSynchronouslyClearsScrollPageWithoutPagingEvents() {
+        let page = ScrollPageViewController()
+        let adapter = AnchorPagerPagingAdapter()
+        let delegate = RecordingPagingDelegate()
+        adapter.eventDelegate = delegate
+        reload(adapter, titles: ["Page"], viewControllers: [page], selectedIndex: 0)
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = adapter
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        window.layoutIfNeeded()
+        XCTAssertNotNil(page.parent)
+        XCTAssertNotNil(page.view.superview)
+        delegate.events.removeAll()
+
+        let didCompleteSynchronously = adapter.prepareForRemoval()
+
+        XCTAssertTrue(didCompleteSynchronously)
+        XCTAssertNil(page.parent)
+        XCTAssertNil(page.view.superview)
+        XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 0)
+        XCTAssertNil(adapter.defaultPage(for: adapter))
+        XCTAssertEqual(delegate.events, [])
+    }
+
+    @MainActor
+    func testPrepareForRemovalSynchronouslyClearsFallbackPageWithoutPagingEvents() {
+        let content = UIViewController()
+        let fallbackPage = AnchorPagerPageScrollHostViewController(
+            contentViewController: content
+        )
+        fallbackPage.loadViewIfNeeded()
+        let adapter = AnchorPagerPagingAdapter()
+        let delegate = RecordingPagingDelegate()
+        adapter.eventDelegate = delegate
+        reload(
+            adapter,
+            titles: ["Fallback"],
+            viewControllers: [fallbackPage],
+            selectedIndex: 0
+        )
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = adapter
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        window.layoutIfNeeded()
+        XCTAssertNotNil(fallbackPage.parent)
+        XCTAssertNotNil(fallbackPage.view.superview)
+        XCTAssertTrue(content.parent === fallbackPage)
+        delegate.events.removeAll()
+
+        let didCompleteSynchronously = adapter.prepareForRemoval()
+
+        XCTAssertTrue(didCompleteSynchronously)
+        XCTAssertNil(fallbackPage.parent)
+        XCTAssertNil(fallbackPage.view.superview)
+        XCTAssertTrue(content.parent === fallbackPage)
+        XCTAssertEqual(delegate.events, [])
+    }
+
+    @MainActor
+    func testDeleteBasedPrepareForRemovalClearsSelectedPageFromMultiplePagesSynchronously() {
+        let first = UIViewController()
+        let second = UIViewController()
+        let adapter = AnchorPagerPagingAdapter()
+        let delegate = RecordingPagingDelegate()
+        adapter.eventDelegate = delegate
+        reload(
+            adapter,
+            titles: ["First", "Second"],
+            viewControllers: [first, second],
+            selectedIndex: 1
+        )
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = adapter
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        window.layoutIfNeeded()
+        XCTAssertTrue(adapter.currentViewController === second)
+        XCTAssertNotNil(second.parent)
+        delegate.events.removeAll()
+
+        let didCompleteSynchronously = adapter.prepareForRemoval()
+
+        XCTAssertTrue(didCompleteSynchronously)
+        XCTAssertEqual(adapter.pageCount, 0)
+        XCTAssertNil(adapter.currentIndex)
+        XCTAssertNil(second.parent)
+        XCTAssertNil(second.view.superview)
+        XCTAssertEqual(delegate.events, [])
+    }
+
+    @MainActor
+    func testDeleteBasedPrepareForRemovalIsRepeatableAndSilent() {
+        let page = UIViewController()
+        let adapter = AnchorPagerPagingAdapter()
+        let delegate = RecordingPagingDelegate()
+        adapter.eventDelegate = delegate
+        reload(adapter, titles: ["Page"], viewControllers: [page], selectedIndex: 0)
+        adapter.loadViewIfNeeded()
+        delegate.events.removeAll()
+
+        let firstDidCompleteSynchronously = adapter.prepareForRemoval()
+        let secondDidCompleteSynchronously = adapter.prepareForRemoval()
+
+        XCTAssertTrue(firstDidCompleteSynchronously)
+        XCTAssertTrue(secondDidCompleteSynchronously)
+        XCTAssertEqual(adapter.pageCount, 0)
+        XCTAssertNil(adapter.currentIndex)
+        XCTAssertNil(page.parent)
+        XCTAssertNil(page.view.superview)
+        XCTAssertEqual(delegate.events, [])
+    }
+
+    @MainActor
+    func testReloadReadinessTracksSelectionWithoutMutatingPagingState() {
+        let first = UIViewController()
+        let second = UIViewController()
+        let adapter = AnchorPagerPagingAdapter()
+        reload(
+            adapter,
+            titles: ["First", "Second"],
+            viewControllers: [first, second],
+            selectedIndex: 0
+        )
+        adapter.loadViewIfNeeded()
+        XCTAssertTrue(adapter.isReadyForReload)
+
+        adapter.pageboyViewController(
+            adapter,
+            willScrollToPageAt: 1,
+            direction: .forward,
+            animated: true
+        )
+
+        XCTAssertFalse(adapter.isReadyForReload)
+        XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 2)
+        XCTAssertTrue(adapter.viewController(for: adapter, at: 0) === first)
+
+        adapter.pageboyViewController(
+            adapter,
+            didCancelScrollToPageAt: 1,
+            returnToPageAt: 0
+        )
+
+        XCTAssertTrue(adapter.isReadyForReload)
+        XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 2)
+    }
+
+    @MainActor
+    func testDeleteThenPostOrderTeardownClearsRemainingPageboyContainment() {
+        let page = UIViewController()
+        let adapter = AnchorPagerPagingAdapter()
+        reload(adapter, titles: ["Page"], viewControllers: [page], selectedIndex: 0)
+        adapter.loadViewIfNeeded()
+        XCTAssertEqual(adapter.children.count, 1)
+        XCTAssertFalse(adapter.children.first === page)
+        XCTAssertTrue(adapter.children.first?.children.contains(page) == true)
+        let didCompleteSynchronously = adapter.prepareForRemoval()
+
+        XCTAssertTrue(didCompleteSynchronously)
+        XCTAssertNil(page.parent)
+        XCTAssertNil(page.view.superview)
+        XCTAssertTrue(adapter.children.isEmpty)
+    }
+
+    @MainActor
+    func testPostOrderRemovalDoesNotDuplicateBusinessPageAppearanceCallbacks() {
+        let page = AppearanceRecordingPageViewController()
+        let adapter = AnchorPagerPagingAdapter()
+        reload(adapter, titles: ["Page"], viewControllers: [page], selectedIndex: 0)
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = adapter
+        window.makeKeyAndVisible()
+        window.layoutIfNeeded()
+        defer { window.isHidden = true }
+        page.events.removeAll()
+
+        let didCompleteSynchronously = adapter.prepareForRemoval()
+
+        XCTAssertTrue(didCompleteSynchronously)
+        XCTAssertLessThanOrEqual(page.events.filter { $0 == .willDisappear }.count, 1)
+        XCTAssertLessThanOrEqual(page.events.filter { $0 == .didDisappear }.count, 1)
+        XCTAssertFalse(page.events.contains(.willAppear))
+        XCTAssertFalse(page.events.contains(.didAppear))
     }
 
     func testPublicSourcesDoNotReferenceTabmanOrPageboy() throws {
@@ -289,6 +473,47 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
 }
 
 @MainActor
+private final class ScrollPageViewController: UIViewController {
+    let scrollView = UIScrollView()
+
+    override func loadView() {
+        view = scrollView
+    }
+}
+
+@MainActor
+private final class AppearanceRecordingPageViewController: UIViewController {
+    enum Event: Equatable {
+        case willAppear
+        case didAppear
+        case willDisappear
+        case didDisappear
+    }
+
+    var events: [Event] = []
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        events.append(.willAppear)
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        events.append(.didAppear)
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        events.append(.willDisappear)
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        events.append(.didDisappear)
+    }
+}
+
+@MainActor
 private final class RecordingPageProvider: AnchorPagerPageProviding {
     var pages: [Int: UIViewController]
     var requestedIndexes: [Int] = []
@@ -327,7 +552,8 @@ private final class RecordingPagingDelegate: AnchorPagerPagingAdapterDelegate {
         willSelect index: Int,
         animated: Bool
     ) {
-        events.append(.willSelect(index, animated))
+        let event = Event.willSelect(index, animated)
+        events.append(event)
     }
 
     func pagingAdapter(
@@ -335,7 +561,8 @@ private final class RecordingPagingDelegate: AnchorPagerPagingAdapterDelegate {
         didSelect index: Int,
         animated: Bool
     ) {
-        events.append(.didSelect(index, animated))
+        let event = Event.didSelect(index, animated)
+        events.append(event)
     }
 
     func pagingAdapter(
@@ -343,11 +570,13 @@ private final class RecordingPagingDelegate: AnchorPagerPagingAdapterDelegate {
         didCancelSelectionAt index: Int,
         returningTo previousIndex: Int
     ) {
-        events.append(.didCancel(index, previousIndex))
+        let event = Event.didCancel(index, previousIndex)
+        events.append(event)
     }
 
     func pagingAdapter(_ adapter: AnchorPagerPagingAdapter, didReloadAt index: Int) {
-        events.append(.didReload(index))
+        let event = Event.didReload(index)
+        events.append(event)
     }
 }
 

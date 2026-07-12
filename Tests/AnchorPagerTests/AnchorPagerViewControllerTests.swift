@@ -199,12 +199,14 @@ final class AnchorPagerViewControllerTests: XCTestCase {
 
         XCTAssertTrue(headerView.isDescendant(of: pager.view))
 
-        let adapter = pager.children.compactMap { $0 as? AnchorPagerPagingAdapter }.first
+        let pagingHost = installedPagingHost(in: pager)
+        let adapter = pagingHost?.activeAdapter
         guard let adapter else {
             XCTFail("reloadData 应安装分页 adapter。")
             return
         }
-        XCTAssertTrue(adapter.parent === pager)
+        XCTAssertTrue(pagingHost?.parent === pager)
+        XCTAssertTrue(adapter.parent === pagingHost)
         XCTAssertTrue(adapter.view.isDescendant(of: pager.view))
         XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 2)
         XCTAssertTrue(adapter.viewController(for: adapter, at: 0) === first)
@@ -741,7 +743,7 @@ final class AnchorPagerViewControllerTests: XCTestCase {
     }
 
     @MainActor
-    func testHeaderScrollingMovesAdapterWithoutChangingAdapterOrChildHeight() throws {
+    func testHeaderScrollingMovesPagingHostWithoutChangingAdapterOrChildHeight() throws {
         var configuration = AnchorPagerConfiguration.default
         configuration.header.heightMode = .fixed(max: 120, min: 20)
         configuration.bar.height = 56
@@ -760,16 +762,17 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         pager.reloadData()
         window.layoutIfNeeded()
 
+        let pagingHost = try XCTUnwrap(installedPagingHost(in: pager))
         let adapter = try XCTUnwrap(installedAdapter(in: pager))
         let expandedAdapterHeight = adapter.view.bounds.height
         let expandedChildHeight = child.view.bounds.height
-        let expandedMinY = adapter.view.frame.minY
+        let expandedMinY = pagingHost.view.frame.minY
 
         pager.verticalScrollView.contentOffset.y = 100
         pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
         window.layoutIfNeeded()
 
-        XCTAssertLessThan(adapter.view.frame.minY, expandedMinY)
+        XCTAssertLessThan(pagingHost.view.frame.minY, expandedMinY)
         XCTAssertEqual(adapter.view.bounds.height, expandedAdapterHeight, accuracy: 0.5)
         XCTAssertEqual(child.view.bounds.height, expandedChildHeight, accuracy: 0.5)
     }
@@ -1041,7 +1044,7 @@ final class AnchorPagerViewControllerTests: XCTestCase {
 
         pager.reloadData()
 
-        guard let adapter = pager.children.compactMap({ $0 as? AnchorPagerPagingAdapter }).first else {
+        guard let adapter = installedAdapter(in: pager) else {
             XCTFail("reloadData 应安装分页 adapter。")
             return
         }
@@ -1146,12 +1149,152 @@ final class AnchorPagerViewControllerTests: XCTestCase {
 
         pager.reloadData()
 
-        guard let adapter = pager.children.compactMap({ $0 as? AnchorPagerPagingAdapter }).first else {
+        guard let adapter = installedAdapter(in: pager) else {
             XCTFail("reloadData 应安装分页 adapter。")
             return
         }
 
         XCTAssertTrue(adapter.viewController(for: adapter, at: 0) === scrollChild)
+    }
+
+    @MainActor
+    func testReloadDataFromScrollPageToEmptyRemovesPagingContentAndReleasesInsetOwnership() throws {
+        let child = ScrollChildViewController()
+        child.loadViewIfNeeded()
+        child.scrollView.contentInsetAdjustmentBehavior = .always
+        child.scrollView.contentInset = UIEdgeInsets(top: 7, left: 0, bottom: 11, right: 0)
+        child.scrollView.automaticallyAdjustsScrollIndicatorInsets = true
+        let dataSource = StubDataSource(count: 1, viewControllers: [child])
+        let pager = AnchorPagerViewController()
+        pager.dataSource = dataSource
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+
+        let pagingHost = try XCTUnwrap(installedPagingHost(in: pager))
+        try autoreleasepool {
+            let adapter = try XCTUnwrap(pagingHost.activeAdapter)
+            XCTAssertTrue(adapter.viewController(for: adapter, at: 0) === child)
+            XCTAssertNotNil(child.parent)
+            XCTAssertEqual(child.scrollView.contentInsetAdjustmentBehavior, .never)
+        }
+
+        dataSource.count = 0
+        dataSource.titles = []
+        dataSource.viewControllers = []
+        autoreleasepool {
+            pager.reloadData()
+        }
+
+        XCTAssertNil(pager.effectiveSelectedIndex)
+        XCTAssertNil(pagingHost.activeAdapter)
+        XCTAssertNil(child.parent)
+        XCTAssertNil(child.view.superview)
+        XCTAssertEqual(child.scrollView.contentInsetAdjustmentBehavior, .always)
+        XCTAssertTrue(child.scrollView.automaticallyAdjustsScrollIndicatorInsets)
+        XCTAssertEqual(child.scrollView.contentInset.top, 7, accuracy: 0.5)
+        XCTAssertEqual(child.scrollView.contentInset.bottom, 11, accuracy: 0.5)
+    }
+
+    @MainActor
+    func testReloadDataFromFallbackPageToEmptyRemovesBusinessChildAndPagingContent() throws {
+        let child = UIViewController()
+        let dataSource = StubDataSource(count: 1, viewControllers: [child])
+        let pager = AnchorPagerViewController()
+        pager.dataSource = dataSource
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+
+        let pagingHost = try XCTUnwrap(installedPagingHost(in: pager))
+        let fallbackHost = try autoreleasepool {
+            let adapter = try XCTUnwrap(pagingHost.activeAdapter)
+            let fallbackHost = try XCTUnwrap(
+                adapter.viewController(
+                    for: adapter,
+                    at: 0
+                ) as? AnchorPagerPageScrollHostViewController
+            )
+            fallbackHost.loadViewIfNeeded()
+            XCTAssertTrue(child.parent === fallbackHost)
+            return fallbackHost
+        }
+
+        dataSource.count = 0
+        dataSource.titles = []
+        dataSource.viewControllers = []
+        autoreleasepool {
+            pager.reloadData()
+        }
+
+        XCTAssertNil(pager.effectiveSelectedIndex)
+        XCTAssertNil(pagingHost.activeAdapter)
+        XCTAssertNil(fallbackHost.parent)
+        XCTAssertNil(child.parent)
+        XCTAssertNil(child.view.superview)
+    }
+
+    @MainActor
+    func testReloadDataFromEmptyToNonEmptyInstallsAdapterUnderStablePagingHost() throws {
+        let child = ScrollChildViewController()
+        let dataSource = StubDataSource(count: 0, titles: [], viewControllers: [])
+        let pager = AnchorPagerViewController()
+        pager.dataSource = dataSource
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+
+        let pagingHost = try XCTUnwrap(installedPagingHost(in: pager))
+        XCTAssertTrue(pagingHost.parent === pager)
+        XCTAssertNil(pagingHost.activeAdapter)
+
+        dataSource.count = 1
+        dataSource.titles = ["Page 0"]
+        dataSource.viewControllers = [child]
+        pager.reloadData()
+
+        let adapter = try XCTUnwrap(pagingHost.activeAdapter)
+        XCTAssertTrue(adapter.parent === pagingHost)
+        XCTAssertTrue(adapter.viewController(for: adapter, at: 0) === child)
+        XCTAssertEqual(pager.effectiveSelectedIndex, 0)
+    }
+
+    @MainActor
+    func testRepeatedEmptyReloadKeepsStablePagingHostWithoutAdapter() throws {
+        let dataSource = StubDataSource(count: 0, titles: [], viewControllers: [])
+        let pager = AnchorPagerViewController()
+        pager.dataSource = dataSource
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+
+        let pagingHost = try XCTUnwrap(installedPagingHost(in: pager))
+
+        pager.reloadData()
+
+        XCTAssertTrue(pagingHost.parent === pager)
+        XCTAssertNil(pagingHost.activeAdapter)
+        XCTAssertNil(pager.effectiveSelectedIndex)
+    }
+
+    @MainActor
+    func testNonEmptyReloadReusesAdapterAndReplacesCommittedPageGeneration() throws {
+        let oldChild = ScrollChildViewController()
+        let replacementChild = ScrollChildViewController()
+        let dataSource = StubDataSource(count: 1, viewControllers: [oldChild])
+        let pager = AnchorPagerViewController()
+        pager.dataSource = dataSource
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+
+        let pagingHost = try XCTUnwrap(installedPagingHost(in: pager))
+        let adapter = try XCTUnwrap(pagingHost.activeAdapter)
+        XCTAssertTrue(adapter.viewController(for: adapter, at: 0) === oldChild)
+
+        dataSource.viewControllers = [replacementChild]
+        pager.reloadData()
+
+        XCTAssertTrue(pagingHost.activeAdapter === adapter)
+        XCTAssertTrue(adapter.viewController(for: adapter, at: 0) === replacementChild)
+        XCTAssertNil(oldChild.parent)
+        XCTAssertNil(oldChild.view.superview)
+        XCTAssertEqual(pager.effectiveSelectedIndex, 0)
     }
 
     @MainActor
@@ -1167,7 +1310,7 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         pager.loadViewIfNeeded()
         pager.reloadData()
 
-        guard let adapter = pager.children.compactMap({ $0 as? AnchorPagerPagingAdapter }).first,
+        guard let adapter = installedAdapter(in: pager),
               let staleFallbackHost = adapter.viewController(
                 for: adapter,
                 at: 0
@@ -1280,12 +1423,13 @@ final class AnchorPagerViewControllerTests: XCTestCase {
             pager.loadViewIfNeeded()
             pager.reloadData()
             pager.view.layoutIfNeeded()
-            guard let adapter = installedAdapter(in: pager) else {
-                XCTFail("reloadData 应安装分页 adapter。")
+            guard installedAdapter(in: pager) != nil,
+                  let pagingHost = installedPagingHost(in: pager) else {
+                XCTFail("reloadData 应安装稳定 paging host 和分页 adapter。")
                 return
             }
-            pager.pagingAdapter(
-                adapter,
+            pager.pagingHost(
+                pagingHost,
                 didUpdateBarInsets: UIEdgeInsets(top: 56, left: 0, bottom: 0, right: 0)
             )
             pager.view.layoutIfNeeded()
@@ -1446,7 +1590,14 @@ final class AnchorPagerViewControllerTests: XCTestCase {
 
     @MainActor
     private func installedAdapter(in pager: AnchorPagerViewController) -> AnchorPagerPagingAdapter? {
-        pager.children.compactMap { $0 as? AnchorPagerPagingAdapter }.first
+        installedPagingHost(in: pager)?.activeAdapter
+    }
+
+    @MainActor
+    private func installedPagingHost(
+        in pager: AnchorPagerViewController
+    ) -> AnchorPagerPagingHostViewController? {
+        pager.children.compactMap { $0 as? AnchorPagerPagingHostViewController }.first
     }
 }
 
