@@ -648,6 +648,62 @@ final class AnchorPagerPageStateStoreTests: XCTestCase {
         XCTAssertEqual(committedPage.scrollView.contentInsetAdjustmentBehavior, .never)
     }
 
+    func testPendingCancelReleasesOwnershipWhenCommittedWeakIdentityIsNotRetained() {
+        let coordinator = AnchorPagerManagedInsetCoordinator()
+        let store = AnchorPagerPageStateStore(managedInsetCoordinator: coordinator)
+        let movedPage = PageStateScrollViewController()
+        let committedCurrent = PageStateScrollViewController()
+        movedPage.loadViewIfNeeded()
+        movedPage.scrollView.contentInset = UIEdgeInsets(top: 7, left: 0, bottom: 9, right: 0)
+        movedPage.scrollView.contentInsetAdjustmentBehavior = .always
+        let context = AnchorPagerPageStateStore.AccessContext(
+            managedInsetTarget: .init(
+                content: UIEdgeInsets(top: 20, left: 0, bottom: 30, right: 0),
+                indicators: UIEdgeInsets(top: 20, left: 0, bottom: 30, right: 0)
+            ),
+            containerIsCollapsed: false
+        )
+        store.beginReload(
+            generation: 1,
+            pageCount: 2,
+            selectedIndex: 0,
+            keepsAdjacentPagesLoaded: false
+        )
+        _ = store.pageViewController(at: 0, context: context) { movedPage }
+        _ = store.pageViewController(at: 1, context: context) { committedCurrent }
+        store.commitReload(generation: 1)
+        store.willSelect(from: 0, to: 1, context: context)
+        store.didSelect(1, context: context)
+
+        XCTAssertEqual(movedPage.scrollView.contentInset.top, 7)
+        XCTAssertEqual(movedPage.scrollView.contentInset.bottom, 9)
+        XCTAssertEqual(movedPage.scrollView.contentInsetAdjustmentBehavior, .always)
+
+        store.beginReload(
+            generation: 2,
+            pageCount: 1,
+            selectedIndex: 0,
+            keepsAdjacentPagesLoaded: false
+        )
+        _ = store.pageViewController(at: 0, context: context) { movedPage }
+
+        XCTAssertEqual(movedPage.scrollView.contentInset.top, 27)
+        XCTAssertEqual(movedPage.scrollView.contentInsetAdjustmentBehavior, .never)
+
+        store.beginReload(
+            generation: 3,
+            pageCount: 0,
+            selectedIndex: 0,
+            keepsAdjacentPagesLoaded: false
+        )
+
+        XCTAssertEqual(store.committedCurrentIndex, 1)
+        XCTAssertEqual(store.retentionReasons(at: 0), [])
+        XCTAssertEqual(movedPage.scrollView.contentInset.top, 7)
+        XCTAssertEqual(movedPage.scrollView.contentInset.bottom, 9)
+        XCTAssertEqual(movedPage.scrollView.contentInsetAdjustmentBehavior, .always)
+    }
+
     func testMovedScrollPageMigrationDoesNotMutateCommittedLeaseBeforeTerminal() {
         let coordinator = AnchorPagerManagedInsetCoordinator()
         let store = AnchorPagerPageStateStore(managedInsetCoordinator: coordinator)
@@ -699,6 +755,9 @@ final class AnchorPagerPageStateStoreTests: XCTestCase {
         XCTAssertTrue(store.livePageViewController(at: 1) === movedPage)
         XCTAssertNotEqual(store.pageStateIdentifier(at: 1), committedStateIdentifier)
         XCTAssertEqual(store.childDistanceFromTop(at: 1), 0, accuracy: 0.5)
+        XCTAssertEqual(movedPage.scrollView.contentInset.top, 0)
+        XCTAssertEqual(movedPage.scrollView.contentInset.bottom, 0)
+        XCTAssertEqual(movedPage.scrollView.contentInsetAdjustmentBehavior, .automatic)
     }
 
     func testMovedFallbackMigrationDoesNotRemoveCommittedContentBeforeTerminal() {
@@ -747,6 +806,61 @@ final class AnchorPagerPageStateStoreTests: XCTestCase {
         XCTAssertTrue(store.livePageViewController(at: 1) === committedHost)
         XCTAssertNotEqual(store.pageStateIdentifier(at: 1), committedStateIdentifier)
         XCTAssertTrue(movedChild.parent === committedHost)
+        XCTAssertEqual(committedHost?.scrollView.contentInset.top, 0)
+        XCTAssertEqual(committedHost?.scrollView.contentInset.bottom, 0)
+    }
+
+    func testCommitExplicitlyRemovesUniqueFallbackBeforeReleasingLastHostLease() {
+        let coordinator = AnchorPagerManagedInsetCoordinator()
+        let store = AnchorPagerPageStateStore(managedInsetCoordinator: coordinator)
+        let oldChild = PageStateContainmentRecordingViewController()
+        store.beginReload(
+            generation: 1,
+            pageCount: 1,
+            selectedIndex: 0,
+            keepsAdjacentPagesLoaded: false
+        )
+        _ = store.pageViewController(at: 0, context: .testZero) { oldChild }
+        store.commitReload(generation: 1)
+
+        store.beginReload(
+            generation: 2,
+            pageCount: 1,
+            selectedIndex: 0,
+            keepsAdjacentPagesLoaded: false
+        )
+        _ = store.pageViewController(at: 0, context: .testZero) {
+            PageStateScrollViewController()
+        }
+        store.commitReload(generation: 2)
+
+        XCTAssertEqual(oldChild.willMoveToNilParentCount, 1)
+        XCTAssertNil(oldChild.parent)
+        XCTAssertNil(oldChild.view.superview)
+    }
+
+    func testPendingCancelExplicitlyRemovesUniqueFallbackBeforeReleasingLastHostLease() {
+        let coordinator = AnchorPagerManagedInsetCoordinator()
+        let store = AnchorPagerPageStateStore(managedInsetCoordinator: coordinator)
+        let pendingChild = PageStateContainmentRecordingViewController()
+        store.beginReload(
+            generation: 1,
+            pageCount: 1,
+            selectedIndex: 0,
+            keepsAdjacentPagesLoaded: false
+        )
+        _ = store.pageViewController(at: 0, context: .testZero) { pendingChild }
+
+        store.beginReload(
+            generation: 2,
+            pageCount: 0,
+            selectedIndex: 0,
+            keepsAdjacentPagesLoaded: false
+        )
+
+        XCTAssertEqual(pendingChild.willMoveToNilParentCount, 1)
+        XCTAssertNil(pendingChild.parent)
+        XCTAssertNil(pendingChild.view.superview)
     }
 
     func testSameIndexMigrationSharesLiveIdentityButNotGenerationState() {
@@ -1083,5 +1197,17 @@ private final class PageStateExplicitScrollViewController: UIViewController {
 
     override func loadView() {
         view = UIView()
+    }
+}
+
+@MainActor
+private final class PageStateContainmentRecordingViewController: UIViewController {
+    private(set) var willMoveToNilParentCount = 0
+
+    override func willMove(toParent parent: UIViewController?) {
+        super.willMove(toParent: parent)
+        if parent == nil {
+            willMoveToNilParentCount += 1
+        }
     }
 }
