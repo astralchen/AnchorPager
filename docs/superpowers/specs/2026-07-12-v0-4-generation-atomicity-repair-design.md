@@ -137,6 +137,9 @@ active request：已调用 willPerform、等待 page/empty terminal 的唯一 re
 10. ViewController 的 request-aware terminal delegate 必须返回是否实际提交；只有 active ID 与 latest staged snapshot
     同时匹配并完成 Store/public commit 才返回 true。Host 只有收到 true acknowledgement 才更新 committed bar baseline；
     superseded terminal 返回 false 后必须保留旧 baseline，再推进 latest pending request，避免旧 empty `.zero` 污染新页。
+11. 非空 request 的 Adapter 必须在 matching Pageboy terminal 前完成一次 bar layout settlement，并直接采样当前
+    sanitized bar insets 随 request identifier 传给 Host；terminal final geometry 不得依赖普通 `didUpdateBarInsets` 的
+    change-dedup callback。这样 superseded A 即使已更新 Adapter 的去重缓存，复用同一 Adapter 的 B 仍提交实际几何。
 
 ### ViewController 激活与提交
 

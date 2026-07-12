@@ -315,6 +315,8 @@ git commit -m "隔离页面代际 retention 与 ownership"
   非 reload 期间继续即时发布。
 - Terminal delegate returns a Bool acknowledgement；Host 只在 ViewController 实际提交 matching snapshot 后更新
   committed bar baseline，superseded terminal 不得污染后续 request。
+- Adapter matching Pageboy terminal completes one layout settlement and passes its directly sampled sanitized bar insets to Host；
+  terminal final geometry must not depend on the ordinary bar callback's change-dedup cache。
 
 - [x] **Step 1: 写 deferred 端到端 RED 测试**
 
@@ -394,6 +396,9 @@ func pagingHost(
 - [x] **Step 6: 实现匹配 terminal 原子 commit**
 
 Host 在 active request 内暂存 adapter bar insets，empty 明确暂存 `.zero`，不得提前调用 ViewController 的即时 bar 更新。
+非空 Adapter 在 matching Pageboy terminal 前执行一次 layout settlement，并把直接采样的 sanitized bar insets 与 request ID
+一并传给 Host；即使普通 bar callback 因 Adapter 去重缓存没有再次发送，Host 也必须用该显式 terminal geometry覆盖
+`activeReloadFinalBarInsets`。
 terminal 必须同时携带 active ID、最终 bar insets并匹配 staged snapshot；ViewController 匹配并提交后返回 true，stale 或
 superseded 时返回 false。顺序：Store commit → publish snapshot fields 与
 bar insets → page terminal index 收敛 Store committed current → 安装 Header/更新布局 → 按 ID 清 active/staged。empty
