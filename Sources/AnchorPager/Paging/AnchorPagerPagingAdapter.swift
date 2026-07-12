@@ -20,7 +20,6 @@ protocol AnchorPagerPagingAdapterDelegate: AnyObject {
         _ adapter: AnchorPagerPagingAdapter,
         didUpdateBarInsets barInsets: UIEdgeInsets
     )
-    func pagingAdapter(_ adapter: AnchorPagerPagingAdapter, didReloadAt index: Int)
     func pagingAdapter(
         _ adapter: AnchorPagerPagingAdapter,
         didReloadAt index: Int,
@@ -34,13 +33,6 @@ extension AnchorPagerPagingAdapterDelegate {
         _ adapter: AnchorPagerPagingAdapter,
         didUpdateBarInsets barInsets: UIEdgeInsets
     ) {}
-    func pagingAdapter(
-        _ adapter: AnchorPagerPagingAdapter,
-        didReloadAt index: Int,
-        requestIdentifier: AnchorPagerPagingReloadRequestIdentifier
-    ) {
-        pagingAdapter(adapter, didReloadAt: index)
-    }
     func pagingAdapterDidBecomeReadyForReload(_ adapter: AnchorPagerPagingAdapter) {}
 }
 
@@ -63,7 +55,6 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
     private var reloadSelectionCallbackSuppressionDepth = 0
     // 只在对应同步 reloadData 调用栈内存在，避免晚到回调借用后续 request 标识。
     private var reloadCallbackRequestIdentifier: AnchorPagerPagingReloadRequestIdentifier?
-    private var allowsUnidentifiedReloadCallback = false
 
     private struct ProgrammaticSelection: Equatable {
         let index: Int
@@ -135,26 +126,11 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
     }
 
     func reload(
-        titles: [String],
-        pageCount: Int,
-        selectedIndex: Int
-    ) {
-        allowsUnidentifiedReloadCallback = true
-        performReload(
-            requestIdentifier: nil,
-            titles: titles,
-            pageCount: pageCount,
-            selectedIndex: selectedIndex
-        )
-    }
-
-    func reload(
         requestIdentifier: AnchorPagerPagingReloadRequestIdentifier,
         titles: [String],
         pageCount: Int,
         selectedIndex: Int
     ) {
-        allowsUnidentifiedReloadCallback = false
         performReload(
             requestIdentifier: requestIdentifier,
             titles: titles,
@@ -164,7 +140,7 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
     }
 
     private func performReload(
-        requestIdentifier: AnchorPagerPagingReloadRequestIdentifier?,
+        requestIdentifier: AnchorPagerPagingReloadRequestIdentifier,
         titles: [String],
         pageCount: Int,
         selectedIndex: Int
@@ -383,8 +359,6 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
                 didReloadAt: currentPageIndex,
                 requestIdentifier: reloadCallbackRequestIdentifier
             )
-        } else if allowsUnidentifiedReloadCallback {
-            eventDelegate?.pagingAdapter(self, didReloadAt: currentPageIndex)
         } else {
             AnchorPagerLogger.log(.debug, category: .paging, event: "paging.reload.stale")
         }

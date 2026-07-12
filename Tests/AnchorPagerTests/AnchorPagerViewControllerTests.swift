@@ -355,6 +355,219 @@ final class AnchorPagerViewControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testDeferredReloadKeepsCommittedPublicAndVisibleStoreStateUntilTerminal() throws {
+        let oldHeader = UIView()
+        let newHeader = UIView()
+        let oldFirst = ScrollChildViewController()
+        let oldSecond = ScrollChildViewController()
+        let replacement = ScrollChildViewController()
+        let dataSource = StubDataSource(
+            count: 2,
+            titles: ["Old 0", "Old 1"],
+            viewControllers: [oldFirst, oldSecond],
+            headerContent: .view(oldHeader)
+        )
+        let pager = AnchorPagerViewController()
+        pager.dataSource = dataSource
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+        let adapter = try XCTUnwrap(installedAdapter(in: pager))
+        XCTAssertTrue(adapter.viewController(for: adapter, at: 0) === oldFirst)
+
+        pager.setSelectedIndex(1, animated: true)
+        dataSource.count = 1
+        dataSource.titles = ["Replacement"]
+        dataSource.viewControllers = [replacement]
+        dataSource.headerContent = .view(newHeader)
+        pager.reloadData()
+
+        XCTAssertEqual(pager.selectedIndex, 0)
+        XCTAssertEqual(pager.effectiveSelectedIndex, 0)
+        XCTAssertTrue(oldHeader.isDescendant(of: pager.view))
+        XCTAssertFalse(newHeader.isDescendant(of: pager.view))
+        XCTAssertTrue(adapter.viewController(for: adapter, at: 0) === oldFirst)
+
+        adapter.pageboyViewController(
+            adapter,
+            didScrollToPageAt: 1,
+            direction: .forward,
+            animated: true
+        )
+        adapter.finishProgrammaticTransition(at: 1, finished: true)
+        let pagingHost = try XCTUnwrap(installedPagingHost(in: pager))
+        pagingHost.pagingAdapter(
+            adapter,
+            didReloadAt: 0,
+            requestIdentifier: 2
+        )
+
+        XCTAssertEqual(pager.selectedIndex, 0)
+        XCTAssertEqual(pager.effectiveSelectedIndex, 0)
+        XCTAssertTrue(newHeader.isDescendant(of: pager.view))
+        XCTAssertFalse(oldHeader.isDescendant(of: pager.view))
+        XCTAssertTrue(adapter.viewController(for: adapter, at: 0) === replacement)
+    }
+
+    @MainActor
+    func testDeferredLatestReloadDoesNotLetOldAdapterFetchPendingGeneration() throws {
+        let oldFirst = ScrollChildViewController()
+        let oldSecond = ScrollChildViewController()
+        let firstReplacement = ScrollChildViewController()
+        let latestReplacement = ScrollChildViewController()
+        let dataSource = StubDataSource(
+            count: 2,
+            viewControllers: [oldFirst, oldSecond]
+        )
+        let pager = AnchorPagerViewController()
+        pager.dataSource = dataSource
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+        let adapter = try XCTUnwrap(installedAdapter(in: pager))
+        XCTAssertTrue(adapter.viewController(for: adapter, at: 0) === oldFirst)
+        pager.setSelectedIndex(1, animated: true)
+
+        dataSource.count = 1
+        dataSource.titles = ["First replacement"]
+        dataSource.viewControllers = [firstReplacement]
+        pager.reloadData()
+        dataSource.titles = ["Latest replacement"]
+        dataSource.viewControllers = [latestReplacement]
+        pager.reloadData()
+        dataSource.requestedViewControllerIndexes.removeAll()
+
+        XCTAssertTrue(adapter.viewController(for: adapter, at: 0) === oldFirst)
+        XCTAssertEqual(dataSource.requestedViewControllerIndexes, [])
+
+        adapter.pageboyViewController(
+            adapter,
+            didScrollToPageAt: 1,
+            direction: .forward,
+            animated: true
+        )
+        adapter.finishProgrammaticTransition(at: 1, finished: true)
+
+        XCTAssertTrue(adapter.viewController(for: adapter, at: 0) === latestReplacement)
+        XCTAssertFalse(adapter.viewController(for: adapter, at: 0) === firstReplacement)
+    }
+
+    @MainActor
+    func testDeferredEmptyKeepsOldOwnershipUntilEmptyTerminal() throws {
+        var configuration = AnchorPagerConfiguration.default
+        configuration.bar.height = 56
+        let oldFirst = ScrollChildViewController()
+        let oldSecond = ScrollChildViewController()
+        oldFirst.loadViewIfNeeded()
+        oldFirst.scrollView.contentInset = UIEdgeInsets(top: 7, left: 0, bottom: 9, right: 0)
+        oldFirst.scrollView.contentInsetAdjustmentBehavior = .always
+        let dataSource = StubDataSource(
+            count: 2,
+            viewControllers: [oldFirst, oldSecond]
+        )
+        let pager = AnchorPagerViewController(configuration: configuration)
+        pager.dataSource = dataSource
+        pager.view.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+        let host = try XCTUnwrap(installedPagingHost(in: pager))
+        let adapter = try XCTUnwrap(host.activeAdapter)
+        _ = adapter.viewController(for: adapter, at: 0)
+        pager.pagingHost(
+            host,
+            didUpdateBarInsets: UIEdgeInsets(top: 56, left: 0, bottom: 0, right: 0)
+        )
+        pager.view.layoutIfNeeded()
+        XCTAssertEqual(oldFirst.scrollView.contentInsetAdjustmentBehavior, .never)
+        let committedManagedTop = oldFirst.scrollView.contentInset.top
+
+        pager.setSelectedIndex(1, animated: true)
+        dataSource.count = 0
+        dataSource.titles = []
+        dataSource.viewControllers = []
+        pager.reloadData()
+
+        XCTAssertEqual(pager.effectiveSelectedIndex, 0)
+        XCTAssertTrue(host.activeAdapter === adapter)
+        XCTAssertEqual(oldFirst.scrollView.contentInset.top, committedManagedTop, accuracy: 0.5)
+        XCTAssertEqual(oldFirst.scrollView.contentInsetAdjustmentBehavior, .never)
+    }
+
+    @MainActor
+    func testFirstTerminalCannotCommitSupersedingSnapshot() throws {
+        let oldHeader = UIView()
+        let latestHeader = UIView()
+        let oldFirst = ScrollChildViewController()
+        let oldSecond = ScrollChildViewController()
+        let latestPage = ScrollChildViewController()
+        let dataSource = StubDataSource(
+            count: 2,
+            viewControllers: [oldFirst, oldSecond],
+            headerContent: .view(oldHeader)
+        )
+        let pager = AnchorPagerViewController()
+        pager.dataSource = dataSource
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+        let host = try XCTUnwrap(installedPagingHost(in: pager))
+        let adapter = try XCTUnwrap(host.activeAdapter)
+        pager.setSelectedIndex(1, animated: true)
+        dataSource.count = 1
+        dataSource.titles = ["Latest"]
+        dataSource.viewControllers = [latestPage]
+        dataSource.headerContent = .view(latestHeader)
+        pager.reloadData()
+
+        pager.pagingHost(
+            host,
+            didReload: .page(index: 0),
+            requestIdentifier: .max
+        )
+
+        XCTAssertEqual(pager.effectiveSelectedIndex, 0)
+        XCTAssertTrue(oldHeader.isDescendant(of: pager.view))
+        XCTAssertFalse(latestHeader.isDescendant(of: pager.view))
+        XCTAssertTrue(adapter.viewController(for: adapter, at: 0) === oldFirst)
+    }
+
+    @MainActor
+    func testPreloadReloadPublishesInitialMetadataWithoutLoadingPagingView() {
+        let page = ScrollChildViewController()
+        let pager = AnchorPagerViewController()
+        let dataSource = StubDataSource(count: 1, viewControllers: [page])
+        pager.dataSource = dataSource
+
+        pager.reloadData()
+
+        XCTAssertFalse(pager.isViewLoaded)
+        XCTAssertEqual(pager.selectedIndex, 0)
+        XCTAssertEqual(pager.effectiveSelectedIndex, 0)
+        XCTAssertEqual(dataSource.requestedViewControllerIndexes, [])
+        XCTAssertFalse(page.isViewLoaded)
+    }
+
+    @MainActor
+    func testPreloadSelectionUpdatesStagedRequestUsedAtFirstTerminal() throws {
+        let pages = (0..<3).map { _ in ScrollChildViewController() }
+        let pager = AnchorPagerViewController()
+        let dataSource = StubDataSource(count: 3, viewControllers: pages)
+        pager.dataSource = dataSource
+        pager.reloadData()
+
+        pager.setSelectedIndex(2, animated: false)
+
+        XCTAssertFalse(pager.isViewLoaded)
+        XCTAssertEqual(pager.selectedIndex, 2)
+        XCTAssertEqual(pager.effectiveSelectedIndex, 2)
+        XCTAssertEqual(dataSource.requestedViewControllerIndexes, [])
+
+        pager.loadViewIfNeeded()
+
+        let adapter = try XCTUnwrap(installedAdapter(in: pager))
+        XCTAssertEqual(adapter.currentIndex, 2)
+        XCTAssertEqual(pager.selectedIndex, 2)
+        XCTAssertEqual(pager.effectiveSelectedIndex, 2)
+    }
+
+    @MainActor
     func testSetSelectedIndexOutOfRangeIsNoOp() {
         let pager = AnchorPagerViewController()
         let dataSource = StubDataSource(count: 2)

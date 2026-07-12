@@ -3,6 +3,15 @@ import UIKit
 /// UIKit 嵌套分页容器入口。
 @MainActor
 open class AnchorPagerViewController: UIViewController {
+    private struct ReloadSnapshot {
+        let requestIdentifier: AnchorPagerPagingReloadRequestIdentifier
+        let pageCount: Int
+        var selectedIndex: Int
+        let headerContent: AnchorPagerHeaderContent?
+        let titles: [String]
+        var providerGenerationIsActive: Bool
+    }
+
     @MainActor
     private final class VerticalScrollDelegate: NSObject, UIScrollViewDelegate {
         weak var owner: AnchorPagerViewController?
@@ -72,9 +81,10 @@ open class AnchorPagerViewController: UIViewController {
     private lazy var pageStateStore = AnchorPagerPageStateStore(
         managedInsetCoordinator: managedInsetCoordinator
     )
-    private var reloadGeneration = 0
     private var reloadTransactionIdentifier = 0
-    private var pendingReloadGeneration: Int?
+    private var nextReloadRequestIdentifier = 0
+    private var stagedReloadSnapshot: ReloadSnapshot?
+    private var activeReloadRequestIdentifier: AnchorPagerPagingReloadRequestIdentifier?
     private var lastLayoutContext: AnchorPagerLayoutContext?
     private var lastLayoutOutput: AnchorPagerLayoutEngine.Output?
     private var lastLoggedResolvedHeaderHeight: AnchorPagerLayoutEngine.ResolvedHeaderHeight?
@@ -111,7 +121,8 @@ open class AnchorPagerViewController: UIViewController {
     open override func viewDidLoad() {
         super.viewDidLoad()
         installVerticalScrollViewIfNeeded()
-        reloadVisibleContentIfNeeded()
+        installVisibleContentIfNeeded()
+        submitStagedReloadIfNeeded()
     }
 
     open override func viewDidLayoutSubviews() {
@@ -167,20 +178,24 @@ open class AnchorPagerViewController: UIViewController {
             )
         }
         AnchorPagerLogger.log(.info, category: .lifecycle, event: "reloadData.begin")
-        pageCount = resolvedPageCount
-        selectedIndex = resolvedSelectedIndex
-        currentHeaderContent = resolvedHeaderContent
-        currentTitles = resolvedTitles
-        reloadGeneration &+= 1
-        pendingReloadGeneration = reloadGeneration
-        pageStateStore.beginReload(
-            generation: reloadGeneration,
+        nextReloadRequestIdentifier &+= 1
+        let requestIdentifier = nextReloadRequestIdentifier
+        stagedReloadSnapshot = ReloadSnapshot(
+            requestIdentifier: requestIdentifier,
             pageCount: resolvedPageCount,
             selectedIndex: resolvedSelectedIndex,
-            keepsAdjacentPagesLoaded: configuration.paging.keepsAdjacentPagesLoaded
+            headerContent: resolvedHeaderContent,
+            titles: resolvedTitles,
+            providerGenerationIsActive: false
         )
 
-        reloadVisibleContentIfNeeded()
+        if !isViewLoaded,
+           pageStateStore.committedGenerationIdentifier == nil {
+            activateProviderGeneration(for: requestIdentifier)
+            publishPreloadMetadata(from: requestIdentifier)
+        }
+
+        submitStagedReloadIfNeeded()
         AnchorPagerLogger.log(.info, category: .lifecycle, event: "reloadData.end")
     }
 
@@ -209,6 +224,9 @@ open class AnchorPagerViewController: UIViewController {
         guard selectedIndex != self.selectedIndex else { return }
 
         if !isViewLoaded || pagingHost.activeAdapter == nil {
+            if stagedReloadSnapshot != nil {
+                stagedReloadSnapshot?.selectedIndex = selectedIndex
+            }
             pageStateStore.didSelect(selectedIndex, context: pageAccessContext)
             commitSelectedIndex(selectedIndex, animated: animated)
             return
@@ -278,18 +296,51 @@ open class AnchorPagerViewController: UIViewController {
         pagingHost.pageProvider = self
     }
 
-    private func reloadVisibleContentIfNeeded() {
+    private func installVisibleContentIfNeeded() {
         guard isViewLoaded else { return }
 
         installVerticalScrollViewIfNeeded()
         installHeaderHost()
         installPagingHostIfNeeded()
         updateVisibleLayout()
+    }
+
+    private func submitStagedReloadIfNeeded() {
+        guard isViewLoaded, let snapshot = stagedReloadSnapshot else { return }
         pagingHost.reload(
-            titles: currentTitles,
-            pageCount: pageCount,
-            selectedIndex: selectedIndex
+            requestIdentifier: snapshot.requestIdentifier,
+            titles: snapshot.titles,
+            pageCount: snapshot.pageCount,
+            selectedIndex: snapshot.selectedIndex
         )
+    }
+
+    private func activateProviderGeneration(
+        for requestIdentifier: AnchorPagerPagingReloadRequestIdentifier
+    ) {
+        guard var snapshot = stagedReloadSnapshot,
+              snapshot.requestIdentifier == requestIdentifier else { return }
+        guard !snapshot.providerGenerationIsActive else { return }
+
+        pageStateStore.beginReload(
+            generation: requestIdentifier,
+            pageCount: snapshot.pageCount,
+            selectedIndex: snapshot.selectedIndex,
+            keepsAdjacentPagesLoaded: configuration.paging.keepsAdjacentPagesLoaded
+        )
+        snapshot.providerGenerationIsActive = true
+        stagedReloadSnapshot = snapshot
+    }
+
+    private func publishPreloadMetadata(
+        from requestIdentifier: AnchorPagerPagingReloadRequestIdentifier
+    ) {
+        guard let snapshot = stagedReloadSnapshot,
+              snapshot.requestIdentifier == requestIdentifier else { return }
+        pageCount = snapshot.pageCount
+        selectedIndex = snapshot.selectedIndex
+        currentHeaderContent = snapshot.headerContent
+        currentTitles = snapshot.titles
     }
 
     private func installHeaderHost() {
@@ -655,6 +706,19 @@ extension AnchorPagerViewController: AnchorPagerPageProviding {
 extension AnchorPagerViewController: AnchorPagerPagingHostViewControllerDelegate {
     func pagingHost(
         _ host: AnchorPagerPagingHostViewController,
+        willPerformReloadRequest identifier: AnchorPagerPagingReloadRequestIdentifier
+    ) -> Bool {
+        guard stagedReloadSnapshot?.requestIdentifier == identifier else {
+            AnchorPagerLogger.log(.debug, category: .paging, event: "paging.reload.stale")
+            return false
+        }
+        activateProviderGeneration(for: identifier)
+        activeReloadRequestIdentifier = identifier
+        return true
+    }
+
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
         didUpdateBarInsets barInsets: UIEdgeInsets
     ) {
         guard resolvedBarInsets != barInsets else { return }
@@ -703,15 +767,33 @@ extension AnchorPagerViewController: AnchorPagerPagingHostViewControllerDelegate
 
     func pagingHost(
         _ host: AnchorPagerPagingHostViewController,
-        didReload terminal: AnchorPagerPagingReloadTerminal
+        didReload terminal: AnchorPagerPagingReloadTerminal,
+        requestIdentifier: AnchorPagerPagingReloadRequestIdentifier
     ) {
-        guard let pendingReloadGeneration else { return }
-        pageStateStore.commitReload(generation: pendingReloadGeneration)
-        self.pendingReloadGeneration = nil
+        guard activeReloadRequestIdentifier == requestIdentifier,
+              let snapshot = stagedReloadSnapshot,
+              snapshot.requestIdentifier == requestIdentifier else {
+            AnchorPagerLogger.log(.debug, category: .paging, event: "paging.reload.stale")
+            return
+        }
+
+        pageStateStore.commitReload(generation: requestIdentifier)
+        pageCount = snapshot.pageCount
+        selectedIndex = snapshot.selectedIndex
+        currentHeaderContent = snapshot.headerContent
+        currentTitles = snapshot.titles
         if case let .page(index) = terminal,
            index >= 0,
-           index < pageCount {
+           index < snapshot.pageCount {
             pageStateStore.didSelect(index, context: pageAccessContext)
+            selectedIndex = index
+        }
+        installVisibleContentIfNeeded()
+        if activeReloadRequestIdentifier == requestIdentifier {
+            activeReloadRequestIdentifier = nil
+        }
+        if stagedReloadSnapshot?.requestIdentifier == requestIdentifier {
+            stagedReloadSnapshot = nil
         }
     }
 }

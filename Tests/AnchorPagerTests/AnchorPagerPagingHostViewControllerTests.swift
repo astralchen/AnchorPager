@@ -169,7 +169,7 @@ final class AnchorPagerPagingHostViewControllerTests: XCTestCase {
         host.pagingAdapter(adapter, willSelect: 1, animated: true)
         host.pagingAdapter(adapter, didSelect: 1, animated: true)
         host.pagingAdapter(adapter, didCancelSelectionAt: 1, returningTo: 0)
-        host.pagingAdapter(adapter, didReloadAt: 1)
+        host.pagingAdapter(adapter, didReloadAt: 1, requestIdentifier: 999)
 
         XCTAssertEqual(
             delegate.events,
@@ -694,7 +694,8 @@ private final class RecordingPagingHostDelegate: AnchorPagerPagingHostViewContro
 
     func pagingHost(
         _ host: AnchorPagerPagingHostViewController,
-        didReload terminal: AnchorPagerPagingReloadTerminal
+        didReload terminal: AnchorPagerPagingReloadTerminal,
+        requestIdentifier: AnchorPagerPagingReloadRequestIdentifier
     ) {
         let event = Event.reload(terminal)
         events.append(event)
@@ -741,5 +742,17 @@ private final class RecordingPagingHostDelegate: AnchorPagerPagingHostViewContro
     ) {
         let event = Event.barInsets(barInsets)
         events.append(event)
+    }
+}
+
+@MainActor
+private extension AnchorPagerPagingHostViewController {
+    func reload(titles: [String], pageCount: Int, selectedIndex: Int) {
+        reload(
+            requestIdentifier: 0,
+            titles: titles,
+            pageCount: pageCount,
+            selectedIndex: selectedIndex
+        )
     }
 }

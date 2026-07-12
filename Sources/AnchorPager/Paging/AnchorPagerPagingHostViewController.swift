@@ -19,11 +19,6 @@ protocol AnchorPagerPagingHostViewControllerDelegate: AnyObject {
         didReload terminal: AnchorPagerPagingReloadTerminal,
         requestIdentifier: AnchorPagerPagingReloadRequestIdentifier
     )
-    // Task 3 接入请求标识后删除该兼容协议方法。
-    func pagingHost(
-        _ host: AnchorPagerPagingHostViewController,
-        didReload terminal: AnchorPagerPagingReloadTerminal
-    )
     func pagingHost(
         _ host: AnchorPagerPagingHostViewController,
         willSelect index: Int,
@@ -53,18 +48,6 @@ extension AnchorPagerPagingHostViewControllerDelegate {
         true
     }
 
-    func pagingHost(
-        _ host: AnchorPagerPagingHostViewController,
-        didReload terminal: AnchorPagerPagingReloadTerminal,
-        requestIdentifier: AnchorPagerPagingReloadRequestIdentifier
-    ) {
-        pagingHost(host, didReload: terminal)
-    }
-
-    func pagingHost(
-        _ host: AnchorPagerPagingHostViewController,
-        didReload terminal: AnchorPagerPagingReloadTerminal
-    ) {}
 }
 
 @MainActor
@@ -92,24 +75,11 @@ final class AnchorPagerPagingHostViewController: UIViewController {
     private var activeReloadRequest: ReloadRequest?
     private var finishingReloadRequestIdentifier: AnchorPagerPagingReloadRequestIdentifier?
     private var isStartingReloadRequest = false
-    private var nextCompatibilityRequestIdentifier = -1
 
     override func loadView() {
         let view = UIView()
         view.backgroundColor = .clear
         self.view = view
-    }
-
-    // Task 3 接入显式请求标识后删除该兼容入口。
-    func reload(titles: [String], pageCount: Int, selectedIndex: Int) {
-        let requestIdentifier = nextCompatibilityRequestIdentifier
-        nextCompatibilityRequestIdentifier -= 1
-        reload(
-            requestIdentifier: requestIdentifier,
-            titles: titles,
-            pageCount: pageCount,
-            selectedIndex: selectedIndex
-        )
     }
 
     func reload(
@@ -325,11 +295,6 @@ extension AnchorPagerPagingHostViewController: AnchorPagerPagingAdapterDelegate 
         guard adapter === activeAdapter else { return }
         lastReportedBarInsets = barInsets
         eventDelegate?.pagingHost(self, didUpdateBarInsets: barInsets)
-    }
-
-    func pagingAdapter(_ adapter: AnchorPagerPagingAdapter, didReloadAt index: Int) {
-        guard adapter === activeAdapter else { return }
-        AnchorPagerLogger.log(.debug, category: .paging, event: "paging.reload.stale")
     }
 
     func pagingAdapter(

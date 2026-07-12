@@ -119,7 +119,12 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
         let provider = RecordingPageProvider(pages: [0: first])
         adapter.pageProvider = provider
 
-        adapter.reload(titles: ["First", "Second"], pageCount: 2, selectedIndex: 1)
+        adapter.reload(
+            requestIdentifier: 1,
+            titles: ["First", "Second"],
+            pageCount: 2,
+            selectedIndex: 1
+        )
 
         XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 2)
         XCTAssertTrue(adapter.viewController(for: adapter, at: 0) === first)
@@ -128,7 +133,7 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
     }
 
     @MainActor
-    func testAdapterForwardsPageboyEventsWithoutLeakingPageboyTypes() {
+    func testAdapterForwardsSelectionEventsAndIgnoresUnidentifiedReloadCallback() {
         let adapter = AnchorPagerPagingAdapter()
         let delegate = RecordingPagingDelegate()
         adapter.eventDelegate = delegate
@@ -147,7 +152,7 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
 
         XCTAssertEqual(
             delegate.events,
-            [.willSelect(1, true), .didSelect(1, true), .didCancel(1, 0), .didReload(0)]
+            [.willSelect(1, true), .didSelect(1, true), .didCancel(1, 0)]
         )
     }
 
@@ -507,6 +512,7 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
         retainedPageProvider = provider
         adapter.pageProvider = provider
         adapter.reload(
+            requestIdentifier: 1,
             titles: titles,
             pageCount: viewControllers.count,
             selectedIndex: selectedIndex
@@ -616,7 +622,11 @@ private final class RecordingPagingDelegate: AnchorPagerPagingAdapterDelegate {
         events.append(event)
     }
 
-    func pagingAdapter(_ adapter: AnchorPagerPagingAdapter, didReloadAt index: Int) {
+    func pagingAdapter(
+        _ adapter: AnchorPagerPagingAdapter,
+        didReloadAt index: Int,
+        requestIdentifier: AnchorPagerPagingReloadRequestIdentifier
+    ) {
         let event = Event.didReload(index)
         events.append(event)
     }
