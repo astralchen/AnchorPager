@@ -309,9 +309,15 @@ extension AnchorPagerPagingHostViewController: AnchorPagerPagingAdapterDelegate 
     func pagingAdapter(
         _ adapter: AnchorPagerPagingAdapter,
         didReloadAt index: Int,
+        terminalBarInsets: UIEdgeInsets,
         requestIdentifier: AnchorPagerPagingReloadRequestIdentifier
     ) {
-        guard adapter === activeAdapter else { return }
+        guard adapter === activeAdapter,
+              activeReloadRequest?.identifier == requestIdentifier else {
+            AnchorPagerLogger.log(.debug, category: .paging, event: "paging.reload.stale")
+            return
+        }
+        activeReloadFinalBarInsets = terminalBarInsets
         finishActiveReload(
             with: .page(index: index),
             requestIdentifier: requestIdentifier

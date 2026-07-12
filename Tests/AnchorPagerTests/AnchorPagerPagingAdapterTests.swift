@@ -81,7 +81,28 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
         } else {
             XCTFail("reload terminal 前应先完成 bar inset settlement。")
         }
-        XCTAssertEqual(delegate.callbackOrder[1], .didReload(0))
+        if case let .didReload(index, insets) = delegate.callbackOrder[1] {
+            XCTAssertEqual(index, 0)
+            XCTAssertEqual(insets.top, 64, accuracy: 0.5)
+        } else {
+            XCTFail("reload terminal 应携带直接采样的 bar inset。")
+        }
+
+        delegate.callbackOrder.removeAll()
+        adapter.reload(
+            requestIdentifier: 43,
+            titles: ["Latest"],
+            pageCount: 1,
+            selectedIndex: 0
+        )
+
+        XCTAssertEqual(delegate.callbackOrder.count, 1)
+        if case let .didReload(index, insets) = delegate.callbackOrder[0] {
+            XCTAssertEqual(index, 0)
+            XCTAssertEqual(insets.top, 64, accuracy: 0.5)
+        } else {
+            XCTFail("相同几何没有普通回调时，terminal 仍应显式携带 bar inset。")
+        }
     }
 
     @MainActor
@@ -624,7 +645,7 @@ private final class RecordingPagingDelegate: AnchorPagerPagingAdapterDelegate {
 
     enum Callback: Equatable {
         case barInsets(UIEdgeInsets)
-        case didReload(Int)
+        case didReload(Int, UIEdgeInsets)
     }
 
     var events: [Event] = []
@@ -669,11 +690,12 @@ private final class RecordingPagingDelegate: AnchorPagerPagingAdapterDelegate {
     func pagingAdapter(
         _ adapter: AnchorPagerPagingAdapter,
         didReloadAt index: Int,
+        terminalBarInsets: UIEdgeInsets,
         requestIdentifier: AnchorPagerPagingReloadRequestIdentifier
     ) {
         let event = Event.didReload(index)
         events.append(event)
-        callbackOrder.append(.didReload(index))
+        callbackOrder.append(.didReload(index, terminalBarInsets))
     }
 }
 

@@ -398,6 +398,7 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         pagingHost.pagingAdapter(
             adapter,
             didReloadAt: 0,
+            terminalBarInsets: UIEdgeInsets(top: 44, left: 0, bottom: 0, right: 0),
             requestIdentifier: 2
         )
 
@@ -529,12 +530,22 @@ final class AnchorPagerViewControllerTests: XCTestCase {
             viewControllers: [oldFirst, oldSecond],
             headerContent: .view(oldHeader)
         )
-        let pager = AnchorPagerViewController()
+        var configuration = AnchorPagerConfiguration.default
+        configuration.bar.height = 44
+        let pager = AnchorPagerViewController(configuration: configuration)
+        let delegate = StubDelegate()
         pager.dataSource = dataSource
-        pager.loadViewIfNeeded()
+        pager.delegate = delegate
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = pager
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
         pager.reloadData()
+        window.layoutIfNeeded()
         let adapter = try XCTUnwrap(installedAdapter(in: pager))
         XCTAssertTrue(adapter.viewController(for: adapter, at: 0) === oldFirst)
+        XCTAssertEqual(adapter.barInsets.top, 44, accuracy: 0.5)
+        XCTAssertEqual(oldFirst.scrollView.contentInset.top, 44, accuracy: 0.5)
         var events: [AnchorPagerLogger.Event] = []
         AnchorPagerLogger.sink = { events.append($0) }
         defer { AnchorPagerLogger.sink = nil }
@@ -545,6 +556,11 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         dataSource.headerContent = .view(firstHeader)
         var observedCommittedStateWhileLatestWasPending = false
         dataSource.onViewController = {
+            pager.configuration.bar.height = 60
+            window.layoutIfNeeded()
+            XCTAssertEqual(adapter.barInsets.top, 60, accuracy: 0.5)
+            XCTAssertEqual(oldFirst.scrollView.contentInset.top, 44, accuracy: 0.5)
+
             dataSource.count = 1
             dataSource.titles = ["Latest"]
             dataSource.viewControllers = [latestPage]
@@ -560,6 +576,7 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         }
 
         pager.reloadData()
+        window.layoutIfNeeded()
 
         XCTAssertTrue(observedCommittedStateWhileLatestWasPending)
         XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 1)
@@ -570,12 +587,19 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         XCTAssertTrue(latestHeader.isDescendant(of: pager.view))
         XCTAssertTrue(adapter.viewController(for: adapter, at: 0) === latestPage)
         XCTAssertFalse(adapter.viewController(for: adapter, at: 0) === firstPage)
+        XCTAssertEqual(adapter.barInsets.top, 60, accuracy: 0.5)
+        XCTAssertEqual(latestPage.scrollView.contentInset.top, 60, accuracy: 0.5)
+        XCTAssertEqual(delegate.layoutContexts.last?.barFrame.height ?? -1, 60, accuracy: 0.5)
         XCTAssertTrue(events.contains(
             .init(category: .paging, level: .debug, event: "paging.reload.stale")
         ))
         XCTAssertEqual(
             events.filter { $0.event == "paging.reload.begin" }.count,
             2
+        )
+        XCTAssertEqual(
+            events.filter { $0.event == "paging.barInsetsChanged" }.count,
+            1
         )
     }
 

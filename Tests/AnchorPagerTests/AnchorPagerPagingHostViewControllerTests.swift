@@ -170,7 +170,12 @@ final class AnchorPagerPagingHostViewControllerTests: XCTestCase {
         host.pagingAdapter(adapter, willSelect: 1, animated: true)
         host.pagingAdapter(adapter, didSelect: 1, animated: true)
         host.pagingAdapter(adapter, didCancelSelectionAt: 1, returningTo: 0)
-        host.pagingAdapter(adapter, didReloadAt: 1, requestIdentifier: 999)
+        host.pagingAdapter(
+            adapter,
+            didReloadAt: 1,
+            terminalBarInsets: UIEdgeInsets(top: 99, left: 0, bottom: 0, right: 0),
+            requestIdentifier: 999
+        )
 
         XCTAssertEqual(
             delegate.events,
@@ -396,14 +401,24 @@ final class AnchorPagerPagingHostViewControllerTests: XCTestCase {
 
         XCTAssertEqual(delegate.events, [.willPerform(2)])
         XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 2)
-        host.pagingAdapter(adapter, didReloadAt: 0, requestIdentifier: 2)
+        host.pagingAdapter(
+            adapter,
+            didReloadAt: 0,
+            terminalBarInsets: UIEdgeInsets(top: 60, left: 0, bottom: 0, right: 0),
+            requestIdentifier: 2
+        )
 
         XCTAssertEqual(
             delegate.events,
             [.willPerform(2), .reload(2, .page(index: 0)), .willPerform(3)]
         )
         XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 3)
-        host.pagingAdapter(adapter, didReloadAt: 2, requestIdentifier: 3)
+        host.pagingAdapter(
+            adapter,
+            didReloadAt: 2,
+            terminalBarInsets: UIEdgeInsets(top: 64, left: 0, bottom: 0, right: 0),
+            requestIdentifier: 3
+        )
 
         XCTAssertEqual(
             delegate.events,
@@ -438,11 +453,16 @@ final class AnchorPagerPagingHostViewControllerTests: XCTestCase {
         )
 
         XCTAssertTrue(delegate.events.isEmpty)
-        host.pagingAdapter(adapter, didReloadAt: 0, requestIdentifier: 2)
+        host.pagingAdapter(
+            adapter,
+            didReloadAt: 0,
+            terminalBarInsets: UIEdgeInsets(top: 64, left: 0, bottom: 0, right: 0),
+            requestIdentifier: 2
+        )
         XCTAssertEqual(delegate.events, [.reload(.page(index: 0))])
         XCTAssertEqual(
             Array(delegate.reloadFinalBarInsets.suffix(1)),
-            [UIEdgeInsets(top: 60, left: 0, bottom: 0, right: 0)]
+            [UIEdgeInsets(top: 64, left: 0, bottom: 0, right: 0)]
         )
     }
 
@@ -478,6 +498,7 @@ final class AnchorPagerPagingHostViewControllerTests: XCTestCase {
         host.pagingAdapter(
             replacementAdapter,
             didReloadAt: 0,
+            terminalBarInsets: UIEdgeInsets(top: 44, left: 0, bottom: 0, right: 0),
             requestIdentifier: 3
         )
 
@@ -531,6 +552,7 @@ final class AnchorPagerPagingHostViewControllerTests: XCTestCase {
             host.pagingAdapter(
                 adapter,
                 didReloadAt: index,
+                terminalBarInsets: UIEdgeInsets(top: 44, left: 0, bottom: 0, right: 0),
                 requestIdentifier: requestIdentifier
             )
         }
@@ -563,13 +585,23 @@ final class AnchorPagerPagingHostViewControllerTests: XCTestCase {
             pageCount: 1,
             selectedIndex: 0
         )
-        host.pagingAdapter(adapter, didReloadAt: 0, requestIdentifier: 62)
+        host.pagingAdapter(
+            adapter,
+            didReloadAt: 0,
+            terminalBarInsets: UIEdgeInsets(top: 60, left: 0, bottom: 0, right: 0),
+            requestIdentifier: 62
+        )
         adapter.pageboyViewController(
             adapter,
             didReloadWith: UIViewController(),
             currentPageIndex: 0
         )
-        host.pagingAdapter(adapter, didReloadAt: 0, requestIdentifier: 62)
+        host.pagingAdapter(
+            adapter,
+            didReloadAt: 0,
+            terminalBarInsets: UIEdgeInsets(top: 5, left: 0, bottom: 0, right: 0),
+            requestIdentifier: 62
+        )
 
         XCTAssertEqual(
             delegate.events,
@@ -577,7 +609,12 @@ final class AnchorPagerPagingHostViewControllerTests: XCTestCase {
         )
         XCTAssertFalse(host.setSelectedIndex(0, animated: false))
 
-        host.pagingAdapter(adapter, didReloadAt: 0, requestIdentifier: 63)
+        host.pagingAdapter(
+            adapter,
+            didReloadAt: 0,
+            terminalBarInsets: UIEdgeInsets(top: 64, left: 0, bottom: 0, right: 0),
+            requestIdentifier: 63
+        )
 
         XCTAssertEqual(
             delegate.events,

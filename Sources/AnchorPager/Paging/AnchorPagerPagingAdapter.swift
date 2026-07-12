@@ -23,6 +23,7 @@ protocol AnchorPagerPagingAdapterDelegate: AnyObject {
     func pagingAdapter(
         _ adapter: AnchorPagerPagingAdapter,
         didReloadAt index: Int,
+        terminalBarInsets: UIEdgeInsets,
         requestIdentifier: AnchorPagerPagingReloadRequestIdentifier
     )
     func pagingAdapterDidBecomeReadyForReload(_ adapter: AnchorPagerPagingAdapter)
@@ -355,9 +356,11 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
         )
         if let reloadCallbackRequestIdentifier {
             view.layoutIfNeeded()
+            let terminalBarInsets = sanitizedBarInsets(barInsets)
             eventDelegate?.pagingAdapter(
                 self,
                 didReloadAt: currentPageIndex,
+                terminalBarInsets: terminalBarInsets,
                 requestIdentifier: reloadCallbackRequestIdentifier
             )
         } else {
