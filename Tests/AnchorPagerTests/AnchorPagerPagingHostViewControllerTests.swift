@@ -71,7 +71,8 @@ final class AnchorPagerPagingHostViewControllerTests: XCTestCase {
         XCTAssertNil(adapter.parent)
         XCTAssertNil(adapter.view.superview)
         XCTAssertTrue(host.children.isEmpty)
-        XCTAssertEqual(delegate.events, [.barInsets(.zero), .reload(.empty)])
+        XCTAssertEqual(delegate.events, [.reload(.empty)])
+        XCTAssertEqual(Array(delegate.reloadFinalBarInsets.suffix(1)), [.zero])
         XCTAssertEqual(delegate.terminalSnapshots.count, 1)
         XCTAssertFalse(delegate.terminalSnapshots[0].hasActiveAdapter)
         XCTAssertEqual(delegate.terminalSnapshots[0].childCount, 0)
@@ -415,6 +416,92 @@ final class AnchorPagerPagingHostViewControllerTests: XCTestCase {
         )
     }
 
+    func testActiveReloadStagesBarInsetsUntilMatchingTerminal() throws {
+        let provider = ControllableHostPageProvider()
+        let host = AnchorPagerPagingHostViewController()
+        host.pageProvider = provider
+        let delegate = RecordingPagingHostDelegate()
+        host.eventDelegate = delegate
+        host.reload(requestIdentifier: 1, titles: ["First"], pageCount: 1, selectedIndex: 0)
+        let adapter = try XCTUnwrap(host.activeAdapter)
+        host.pagingAdapter(
+            adapter,
+            didUpdateBarInsets: UIEdgeInsets(top: 44, left: 0, bottom: 0, right: 0)
+        )
+        delegate.events.removeAll()
+        provider.providesPages = false
+
+        host.reload(requestIdentifier: 2, titles: ["Replacement"], pageCount: 1, selectedIndex: 0)
+        host.pagingAdapter(
+            adapter,
+            didUpdateBarInsets: UIEdgeInsets(top: 60, left: 0, bottom: 0, right: 0)
+        )
+
+        XCTAssertTrue(delegate.events.isEmpty)
+        host.pagingAdapter(adapter, didReloadAt: 0, requestIdentifier: 2)
+        XCTAssertEqual(delegate.events, [.reload(.page(index: 0))])
+        XCTAssertEqual(
+            Array(delegate.reloadFinalBarInsets.suffix(1)),
+            [UIEdgeInsets(top: 60, left: 0, bottom: 0, right: 0)]
+        )
+    }
+
+    func testRejectedEmptyTerminalDoesNotReplacePendingRequestBarBaseline() throws {
+        let host = AnchorPagerPagingHostViewController()
+        let provider = ControllableHostPageProvider()
+        host.pageProvider = provider
+        let delegate = RecordingRequestPagingHostDelegate()
+        host.eventDelegate = delegate
+        host.reload(requestIdentifier: 1, titles: ["Initial"], pageCount: 1, selectedIndex: 0)
+        let adapter = try XCTUnwrap(host.activeAdapter)
+        host.pagingAdapter(
+            adapter,
+            didUpdateBarInsets: UIEdgeInsets(top: 44, left: 0, bottom: 0, right: 0)
+        )
+        delegate.events.removeAll()
+        delegate.terminalBarInsets.removeAll()
+        delegate.terminalAcknowledgements[2] = false
+        provider.providesPages = false
+        delegate.onWillPerform = { host, identifier in
+            guard identifier == 2 else { return }
+            host.reload(
+                requestIdentifier: 3,
+                titles: ["Replacement"],
+                pageCount: 1,
+                selectedIndex: 0
+            )
+        }
+
+        host.reload(requestIdentifier: 2, titles: [], pageCount: 0, selectedIndex: 0)
+
+        let replacementAdapter = try XCTUnwrap(host.activeAdapter)
+        host.pagingAdapter(
+            replacementAdapter,
+            didReloadAt: 0,
+            requestIdentifier: 3
+        )
+
+        XCTAssertEqual(
+            delegate.events,
+            [
+                .willPerform(2),
+                .reload(2, .empty),
+                .willPerform(3),
+                .reload(3, .page(index: 0)),
+            ]
+        )
+        XCTAssertEqual(delegate.terminalBarInsets.count, 2)
+        let firstTerminal = try XCTUnwrap(delegate.terminalBarInsets.first)
+        let lastTerminal = try XCTUnwrap(delegate.terminalBarInsets.last)
+        XCTAssertEqual(firstTerminal.0, 2)
+        XCTAssertEqual(firstTerminal.1, .zero)
+        XCTAssertEqual(lastTerminal.0, 3)
+        XCTAssertEqual(
+            lastTerminal.1,
+            UIEdgeInsets(top: 44, left: 0, bottom: 0, right: 0)
+        )
+    }
+
     func testTerminalCarriesActiveRequestIdentifier() {
         let host = makeHost()
         let delegate = RecordingRequestPagingHostDelegate()
@@ -624,6 +711,12 @@ private final class RecordingRequestPagingHostDelegate: AnchorPagerPagingHostVie
 
     var events: [Event] = []
     var rejectedRequestIdentifiers: Set<AnchorPagerPagingReloadRequestIdentifier> = []
+    var terminalAcknowledgements: [AnchorPagerPagingReloadRequestIdentifier: Bool] = [:]
+    var terminalBarInsets: [(AnchorPagerPagingReloadRequestIdentifier, UIEdgeInsets)] = []
+    var onWillPerform: ((
+        AnchorPagerPagingHostViewController,
+        AnchorPagerPagingReloadRequestIdentifier
+    ) -> Void)?
     var onReload: ((
         AnchorPagerPagingHostViewController,
         AnchorPagerPagingReloadRequestIdentifier,
@@ -635,16 +728,20 @@ private final class RecordingRequestPagingHostDelegate: AnchorPagerPagingHostVie
         willPerformReloadRequest identifier: AnchorPagerPagingReloadRequestIdentifier
     ) -> Bool {
         events.append(.willPerform(identifier))
+        onWillPerform?(host, identifier)
         return !rejectedRequestIdentifiers.contains(identifier)
     }
 
     func pagingHost(
         _ host: AnchorPagerPagingHostViewController,
         didReload terminal: AnchorPagerPagingReloadTerminal,
+        finalBarInsets: UIEdgeInsets,
         requestIdentifier: AnchorPagerPagingReloadRequestIdentifier
-    ) {
+    ) -> Bool {
         events.append(.reload(requestIdentifier, terminal))
+        terminalBarInsets.append((requestIdentifier, finalBarInsets))
         onReload?(host, requestIdentifier, terminal)
+        return terminalAcknowledgements[requestIdentifier] ?? true
     }
 
     func pagingHost(
@@ -690,13 +787,16 @@ private final class RecordingPagingHostDelegate: AnchorPagerPagingHostViewContro
 
     var events: [Event] = []
     var terminalSnapshots: [TerminalSnapshot] = []
+    var reloadFinalBarInsets: [UIEdgeInsets] = []
     weak var observedPage: UIViewController?
 
     func pagingHost(
         _ host: AnchorPagerPagingHostViewController,
         didReload terminal: AnchorPagerPagingReloadTerminal,
+        finalBarInsets: UIEdgeInsets,
         requestIdentifier: AnchorPagerPagingReloadRequestIdentifier
-    ) {
+    ) -> Bool {
+        reloadFinalBarInsets.append(finalBarInsets)
         let event = Event.reload(terminal)
         events.append(event)
         terminalSnapshots.append(
@@ -707,6 +807,7 @@ private final class RecordingPagingHostDelegate: AnchorPagerPagingHostViewContro
                 observedPageHasSuperview: observedPage?.viewIfLoaded?.superview != nil
             )
         )
+        return true
     }
 
     func pagingHost(

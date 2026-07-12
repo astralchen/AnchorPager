@@ -768,13 +768,14 @@ extension AnchorPagerViewController: AnchorPagerPagingHostViewControllerDelegate
     func pagingHost(
         _ host: AnchorPagerPagingHostViewController,
         didReload terminal: AnchorPagerPagingReloadTerminal,
+        finalBarInsets: UIEdgeInsets,
         requestIdentifier: AnchorPagerPagingReloadRequestIdentifier
-    ) {
+    ) -> Bool {
         guard activeReloadRequestIdentifier == requestIdentifier,
               let snapshot = stagedReloadSnapshot,
               snapshot.requestIdentifier == requestIdentifier else {
             AnchorPagerLogger.log(.debug, category: .paging, event: "paging.reload.stale")
-            return
+            return false
         }
 
         pageStateStore.commitReload(generation: requestIdentifier)
@@ -782,6 +783,7 @@ extension AnchorPagerViewController: AnchorPagerPagingHostViewControllerDelegate
         selectedIndex = snapshot.selectedIndex
         currentHeaderContent = snapshot.headerContent
         currentTitles = snapshot.titles
+        resolvedBarInsets = finalBarInsets
         if case let .page(index) = terminal,
            index >= 0,
            index < snapshot.pageCount {
@@ -795,5 +797,6 @@ extension AnchorPagerViewController: AnchorPagerPagingHostViewControllerDelegate
         if stagedReloadSnapshot?.requestIdentifier == requestIdentifier {
             stagedReloadSnapshot = nil
         }
+        return true
     }
 }

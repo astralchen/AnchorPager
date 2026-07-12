@@ -48,6 +48,43 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
     }
 
     @MainActor
+    func testReloadSettlesBarInsetsBeforeForwardingTerminal() {
+        let adapter = AnchorPagerPagingAdapter()
+        let delegate = RecordingPagingDelegate()
+        adapter.eventDelegate = delegate
+        adapter.setBarHeight(44)
+        reload(
+            adapter,
+            titles: ["First"],
+            viewControllers: [UIViewController()],
+            selectedIndex: 0
+        )
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = adapter
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        window.layoutIfNeeded()
+        adapter.view.layoutIfNeeded()
+        delegate.callbackOrder.removeAll()
+
+        adapter.setBarHeight(64)
+        adapter.reload(
+            requestIdentifier: 42,
+            titles: ["Replacement"],
+            pageCount: 1,
+            selectedIndex: 0
+        )
+
+        XCTAssertEqual(delegate.callbackOrder.count, 2)
+        if case let .barInsets(insets) = delegate.callbackOrder[0] {
+            XCTAssertEqual(insets.top, 64, accuracy: 0.5)
+        } else {
+            XCTFail("reload terminal 前应先完成 bar inset settlement。")
+        }
+        XCTAssertEqual(delegate.callbackOrder[1], .didReload(0))
+    }
+
+    @MainActor
     func testNilBarHeightUsesAdaptiveTabmanHeight() {
         let adapter = AnchorPagerPagingAdapter()
         adapter.setBarHeight(nil)
@@ -585,14 +622,21 @@ private final class RecordingPagingDelegate: AnchorPagerPagingAdapterDelegate {
         case didReload(Int)
     }
 
+    enum Callback: Equatable {
+        case barInsets(UIEdgeInsets)
+        case didReload(Int)
+    }
+
     var events: [Event] = []
     var barInsets: [UIEdgeInsets] = []
+    var callbackOrder: [Callback] = []
 
     func pagingAdapter(
         _ adapter: AnchorPagerPagingAdapter,
         didUpdateBarInsets barInsets: UIEdgeInsets
     ) {
         self.barInsets.append(barInsets)
+        callbackOrder.append(.barInsets(barInsets))
     }
 
     func pagingAdapter(
@@ -629,6 +673,7 @@ private final class RecordingPagingDelegate: AnchorPagerPagingAdapterDelegate {
     ) {
         let event = Event.didReload(index)
         events.append(event)
+        callbackOrder.append(.didReload(index))
     }
 }
 

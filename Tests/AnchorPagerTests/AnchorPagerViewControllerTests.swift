@@ -414,6 +414,8 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         let oldSecond = ScrollChildViewController()
         let firstReplacement = ScrollChildViewController()
         let latestReplacement = ScrollChildViewController()
+        oldFirst.loadViewIfNeeded()
+        oldFirst.scrollView.contentInsetAdjustmentBehavior = .always
         let dataSource = StubDataSource(
             count: 2,
             viewControllers: [oldFirst, oldSecond]
@@ -424,7 +426,12 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         pager.reloadData()
         let adapter = try XCTUnwrap(installedAdapter(in: pager))
         XCTAssertTrue(adapter.viewController(for: adapter, at: 0) === oldFirst)
-        pager.setSelectedIndex(1, animated: true)
+        adapter.pageboyViewController(
+            adapter,
+            willScrollToPageAt: 1,
+            direction: .forward,
+            animated: true
+        )
 
         dataSource.count = 1
         dataSource.titles = ["First replacement"]
@@ -436,18 +443,19 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         dataSource.requestedViewControllerIndexes.removeAll()
 
         XCTAssertTrue(adapter.viewController(for: adapter, at: 0) === oldFirst)
+        XCTAssertEqual(oldFirst.scrollView.contentInsetAdjustmentBehavior, .never)
+        XCTAssertFalse(latestReplacement.isViewLoaded)
         XCTAssertEqual(dataSource.requestedViewControllerIndexes, [])
 
         adapter.pageboyViewController(
             adapter,
-            didScrollToPageAt: 1,
-            direction: .forward,
-            animated: true
+            didCancelScrollToPageAt: 1,
+            returnToPageAt: 0
         )
-        adapter.finishProgrammaticTransition(at: 1, finished: true)
 
         XCTAssertTrue(adapter.viewController(for: adapter, at: 0) === latestReplacement)
         XCTAssertFalse(adapter.viewController(for: adapter, at: 0) === firstReplacement)
+        XCTAssertEqual(oldFirst.scrollView.contentInsetAdjustmentBehavior, .always)
     }
 
     @MainActor
@@ -471,15 +479,20 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         let host = try XCTUnwrap(installedPagingHost(in: pager))
         let adapter = try XCTUnwrap(host.activeAdapter)
         _ = adapter.viewController(for: adapter, at: 0)
-        pager.pagingHost(
-            host,
+        host.pagingAdapter(
+            adapter,
             didUpdateBarInsets: UIEdgeInsets(top: 56, left: 0, bottom: 0, right: 0)
         )
         pager.view.layoutIfNeeded()
         XCTAssertEqual(oldFirst.scrollView.contentInsetAdjustmentBehavior, .never)
         let committedManagedTop = oldFirst.scrollView.contentInset.top
 
-        pager.setSelectedIndex(1, animated: true)
+        adapter.pageboyViewController(
+            adapter,
+            willScrollToPageAt: 1,
+            direction: .forward,
+            animated: true
+        )
         dataSource.count = 0
         dataSource.titles = []
         dataSource.viewControllers = []
@@ -489,6 +502,17 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         XCTAssertTrue(host.activeAdapter === adapter)
         XCTAssertEqual(oldFirst.scrollView.contentInset.top, committedManagedTop, accuracy: 0.5)
         XCTAssertEqual(oldFirst.scrollView.contentInsetAdjustmentBehavior, .never)
+
+        adapter.pageboyViewController(
+            adapter,
+            didCancelScrollToPageAt: 1,
+            returnToPageAt: 0
+        )
+
+        XCTAssertNil(pager.effectiveSelectedIndex)
+        XCTAssertNil(host.activeAdapter)
+        XCTAssertEqual(oldFirst.scrollView.contentInset.top, 7, accuracy: 0.5)
+        XCTAssertEqual(oldFirst.scrollView.contentInsetAdjustmentBehavior, .always)
     }
 
     @MainActor
@@ -516,10 +540,13 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         dataSource.headerContent = .view(latestHeader)
         pager.reloadData()
 
-        pager.pagingHost(
-            host,
-            didReload: .page(index: 0),
-            requestIdentifier: .max
+        XCTAssertFalse(
+            pager.pagingHost(
+                host,
+                didReload: .page(index: 0),
+                finalBarInsets: .zero,
+                requestIdentifier: .max
+            )
         )
 
         XCTAssertEqual(pager.effectiveSelectedIndex, 0)
@@ -565,6 +592,76 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         XCTAssertEqual(adapter.currentIndex, 2)
         XCTAssertEqual(pager.selectedIndex, 2)
         XCTAssertEqual(pager.effectiveSelectedIndex, 2)
+    }
+
+    @MainActor
+    func testMultiplePreloadReloadsUseLatestSnapshotWithoutDuplicateProviderActivation() throws {
+        let pager = AnchorPagerViewController()
+        let dataSource = StubDataSource(count: 2)
+        pager.dataSource = dataSource
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+
+        pager.reloadData()
+        dataSource.count = 3
+        dataSource.titles = ["Latest 0", "Latest 1", "Latest 2"]
+        dataSource.viewControllers = (0..<3).map { _ in ScrollChildViewController() }
+        pager.reloadData()
+        pager.setSelectedIndex(2, animated: false)
+        let beginCountBeforeViewLoad = events.filter {
+            $0.event == "children.page.generation.begin"
+        }.count
+
+        pager.loadViewIfNeeded()
+
+        let adapter = try XCTUnwrap(installedAdapter(in: pager))
+        XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 3)
+        XCTAssertEqual(adapter.currentIndex, 2)
+        XCTAssertEqual(pager.selectedIndex, 2)
+        XCTAssertEqual(
+            events.filter { $0.event == "children.page.generation.begin" }.count,
+            beginCountBeforeViewLoad
+        )
+    }
+
+    @MainActor
+    func testLayoutDelegateTerminalReentrantReloadPreservesLatestSnapshot() throws {
+        let firstHeader = FixedFittingView(height: 40)
+        let latestHeader = FixedFittingView(height: 100)
+        let firstPage = ScrollChildViewController()
+        let latestPage = ScrollChildViewController()
+        let pager = AnchorPagerViewController()
+        let dataSource = StubDataSource(count: 1)
+        let delegate = StubDelegate()
+        pager.dataSource = dataSource
+        pager.delegate = delegate
+        pager.view.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+
+        dataSource.titles = ["First"]
+        dataSource.viewControllers = [firstPage]
+        dataSource.headerContent = .view(firstHeader)
+        var observedFirstTerminal = false
+        delegate.onLayout = { _ in
+            guard !observedFirstTerminal else { return }
+            observedFirstTerminal = true
+            XCTAssertTrue(firstHeader.isDescendant(of: pager.view))
+            XCTAssertFalse(latestHeader.isDescendant(of: pager.view))
+            dataSource.titles = ["Latest"]
+            dataSource.viewControllers = [latestPage]
+            dataSource.headerContent = .view(latestHeader)
+            pager.reloadData()
+        }
+
+        pager.reloadData()
+
+        XCTAssertTrue(observedFirstTerminal)
+        XCTAssertTrue(latestHeader.isDescendant(of: pager.view))
+        XCTAssertFalse(firstHeader.isDescendant(of: pager.view))
+        let adapter = try XCTUnwrap(installedAdapter(in: pager))
+        XCTAssertTrue(adapter.viewController(for: adapter, at: 0) === latestPage)
     }
 
     @MainActor
@@ -2097,6 +2194,7 @@ private final class StubDelegate: AnchorPagerViewControllerDelegate {
     var selectedIndexes: [Int] = []
     var collapseProgresses: [CGFloat] = []
     var layoutContexts: [AnchorPagerLayoutContext] = []
+    var onLayout: ((AnchorPagerLayoutContext) -> Void)?
 
     func pagerViewController(
         _ pagerViewController: AnchorPagerViewController,
@@ -2117,6 +2215,7 @@ private final class StubDelegate: AnchorPagerViewControllerDelegate {
         didUpdateLayout context: AnchorPagerLayoutContext
     ) {
         layoutContexts.append(context)
+        onLayout?(context)
     }
 }
 

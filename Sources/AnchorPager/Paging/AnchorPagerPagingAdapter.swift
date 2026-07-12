@@ -354,6 +354,7 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
             currentPageIndex: currentPageIndex
         )
         if let reloadCallbackRequestIdentifier {
+            view.layoutIfNeeded()
             eventDelegate?.pagingAdapter(
                 self,
                 didReloadAt: currentPageIndex,

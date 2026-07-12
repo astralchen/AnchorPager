@@ -17,8 +17,9 @@ protocol AnchorPagerPagingHostViewControllerDelegate: AnyObject {
     func pagingHost(
         _ host: AnchorPagerPagingHostViewController,
         didReload terminal: AnchorPagerPagingReloadTerminal,
+        finalBarInsets: UIEdgeInsets,
         requestIdentifier: AnchorPagerPagingReloadRequestIdentifier
-    )
+    ) -> Bool
     func pagingHost(
         _ host: AnchorPagerPagingHostViewController,
         willSelect index: Int,
@@ -73,6 +74,7 @@ final class AnchorPagerPagingHostViewController: UIViewController {
     private var activeAdapterConstraints: [NSLayoutConstraint] = []
     private var pendingReloadRequest: ReloadRequest?
     private var activeReloadRequest: ReloadRequest?
+    private var activeReloadFinalBarInsets: UIEdgeInsets?
     private var finishingReloadRequestIdentifier: AnchorPagerPagingReloadRequestIdentifier?
     private var isStartingReloadRequest = false
 
@@ -122,13 +124,15 @@ final class AnchorPagerPagingHostViewController: UIViewController {
         }
 
         activeReloadRequest = request
+        activeReloadFinalBarInsets = lastReportedBarInsets
         AnchorPagerLogger.log(.info, category: .paging, event: "paging.reload.begin")
         guard request.pageCount > 0 else {
             guard removeActiveAdapterIfNeeded(pendingRequestOnFailure: request) else {
                 activeReloadRequest = nil
+                activeReloadFinalBarInsets = nil
                 return false
             }
-            reportZeroBarInsetsIfNeeded()
+            activeReloadFinalBarInsets = .zero
             AnchorPagerLogger.log(.info, category: .paging, event: "paging.reload.empty")
             finishActiveReload(with: .empty, requestIdentifier: request.identifier)
             return true
@@ -237,21 +241,22 @@ final class AnchorPagerPagingHostViewController: UIViewController {
             return
         }
         finishingReloadRequestIdentifier = requestIdentifier
-        eventDelegate?.pagingHost(
+        let finalBarInsets = activeReloadFinalBarInsets ?? lastReportedBarInsets
+        let didCommitTerminal = eventDelegate?.pagingHost(
             self,
             didReload: terminal,
+            finalBarInsets: finalBarInsets,
             requestIdentifier: request.identifier
-        )
+        ) ?? true
         activeReloadRequest = nil
+        activeReloadFinalBarInsets = nil
+        if didCommitTerminal {
+            lastReportedBarInsets = finalBarInsets
+        }
         finishingReloadRequestIdentifier = nil
         _ = performPendingReloadIfNeeded()
     }
 
-    private func reportZeroBarInsetsIfNeeded() {
-        guard lastReportedBarInsets != .zero else { return }
-        lastReportedBarInsets = .zero
-        eventDelegate?.pagingHost(self, didUpdateBarInsets: .zero)
-    }
 }
 
 extension AnchorPagerPagingHostViewController: AnchorPagerPagingAdapterDelegate {
@@ -293,6 +298,10 @@ extension AnchorPagerPagingHostViewController: AnchorPagerPagingAdapterDelegate 
         didUpdateBarInsets barInsets: UIEdgeInsets
     ) {
         guard adapter === activeAdapter else { return }
+        if activeReloadRequest != nil {
+            activeReloadFinalBarInsets = barInsets
+            return
+        }
         lastReportedBarInsets = barInsets
         eventDelegate?.pagingHost(self, didUpdateBarInsets: barInsets)
     }
