@@ -4,6 +4,8 @@
 
 **Goal:** 修复非空到空 reload 的旧 Pageboy 内容残留，建立统一 page/empty terminal、public reload 重入保护，并补齐 v0.4 appearance cancel 和文档验收。
 
+> 最终独立复审发现 deferred reload 代际原子性和跨 generation 可变 PageState 共享问题；后续实施转入 `2026-07-12-v0-4-generation-atomicity-repair.md`。
+
 **Architecture:** viewport 长期 contain `AnchorPagerPagingHostViewController`，host 按空/非空状态 contain 或移除 `AnchorPagerPagingAdapter`，并向主控制器发送领域无关 reload terminal。移除前由 adapter 的集中 Pageboy 5.0.2 兼容 shim 通过第三方 public delete-last-page 先解除业务页面，再清理只剩 plumbing 的 UIKit containment。`AnchorPagerViewController.reloadData()` 使用 transaction token 采集局部数据快照，只有最新事务才能发布并开始 Store generation。
 
 **Tech Stack:** Swift 6、UIKit、Swift Package Manager、XCTest、XCUITest、Tabman 4.0.1、Pageboy 5.0.2、iOS 14+
