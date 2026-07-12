@@ -3,7 +3,12 @@ import UIKit
 
 final class ExamplePagerViewController: UIViewController {
     private let pagerViewController = AnchorPagerViewController()
-    private let appearanceRecorder = ExampleAppearanceRecorder()
+    private let appearanceRecorder: ExampleAppearanceRecorder? = {
+        guard ProcessInfo.processInfo.arguments.contains("--anchorPagerAppearanceRecorder") else {
+            return nil
+        }
+        return ExampleAppearanceRecorder()
+    }()
     private var headerTopBehaviorItem: UIBarButtonItem?
     private var pageGeneration = 1
     private lazy var pages = makePages()
@@ -16,7 +21,7 @@ final class ExamplePagerViewController: UIViewController {
         view.backgroundColor = .systemBackground
         installNavigationItem()
         installPager()
-        if ProcessInfo.processInfo.arguments.contains("--anchorPagerAppearanceRecorder") {
+        if appearanceRecorder != nil {
             installAppearanceRecorderControl()
         }
     }
@@ -58,7 +63,7 @@ final class ExamplePagerViewController: UIViewController {
     }
 
     @objc private func resetAppearanceRecorder() {
-        appearanceRecorder.reset()
+        appearanceRecorder?.reset()
     }
 
     @objc private func pushAnchorPagerExample() {
@@ -144,6 +149,8 @@ final class ExamplePagerViewController: UIViewController {
     }
 
     private func installAppearanceRecorderControl() {
+        guard let appearanceRecorder else { return }
+
         let control = UIButton(type: .custom)
         control.accessibilityIdentifier = "page-appearance-events"
         control.accessibilityLabel = "页面生命周期事件"
@@ -172,6 +179,10 @@ final class ExamplePagerViewController: UIViewController {
             return 1
         }
         return min(max(0, requestedIndex), pages.count - 1)
+    }
+
+    var isAppearanceRecorderEnabledForTesting: Bool {
+        appearanceRecorder != nil
     }
 
     private func makePages() -> [UIViewController] {
@@ -319,7 +330,7 @@ private final class ExampleScrollPageViewController: UIViewController {
     private let pageIdentifier: String
     private let rows: Int
     private let generation: Int
-    private let appearanceRecorder: ExampleAppearanceRecorder
+    private let appearanceRecorder: ExampleAppearanceRecorder?
     private let scrollView = UIScrollView()
     private let appearanceLabel = UILabel()
     private var willAppearCount = 0
@@ -332,7 +343,7 @@ private final class ExampleScrollPageViewController: UIViewController {
         identifier: String,
         rows: Int,
         generation: Int,
-        appearanceRecorder: ExampleAppearanceRecorder
+        appearanceRecorder: ExampleAppearanceRecorder?
     ) {
         self.pageTitle = title
         self.pageIdentifier = identifier
@@ -359,28 +370,28 @@ private final class ExampleScrollPageViewController: UIViewController {
         super.viewWillAppear(animated)
         willAppearCount += 1
         updateAppearanceLabel()
-        appearanceRecorder.record(page: pageIdentifier, callback: "viewWillAppear")
+        appearanceRecorder?.record(page: pageIdentifier, callback: "viewWillAppear")
     }
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         didAppearCount += 1
         updateAppearanceLabel()
-        appearanceRecorder.record(page: pageIdentifier, callback: "viewDidAppear")
+        appearanceRecorder?.record(page: pageIdentifier, callback: "viewDidAppear")
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         willDisappearCount += 1
         updateAppearanceLabel()
-        appearanceRecorder.record(page: pageIdentifier, callback: "viewWillDisappear")
+        appearanceRecorder?.record(page: pageIdentifier, callback: "viewWillDisappear")
     }
 
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
         didDisappearCount += 1
         updateAppearanceLabel()
-        appearanceRecorder.record(page: pageIdentifier, callback: "viewDidDisappear")
+        appearanceRecorder?.record(page: pageIdentifier, callback: "viewDidDisappear")
     }
 
     private func installScrollView() {
@@ -449,12 +460,12 @@ private final class ExampleScrollPageViewController: UIViewController {
 private final class ExamplePlainPageViewController: UIViewController {
     private let pageTitle: String
     private let pageIdentifier: String
-    private let appearanceRecorder: ExampleAppearanceRecorder
+    private let appearanceRecorder: ExampleAppearanceRecorder?
 
     init(
         title: String,
         identifier: String,
-        appearanceRecorder: ExampleAppearanceRecorder
+        appearanceRecorder: ExampleAppearanceRecorder?
     ) {
         self.pageTitle = title
         self.pageIdentifier = identifier
@@ -469,22 +480,22 @@ private final class ExamplePlainPageViewController: UIViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        appearanceRecorder.record(page: pageIdentifier, callback: "viewWillAppear")
+        appearanceRecorder?.record(page: pageIdentifier, callback: "viewWillAppear")
     }
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        appearanceRecorder.record(page: pageIdentifier, callback: "viewDidAppear")
+        appearanceRecorder?.record(page: pageIdentifier, callback: "viewDidAppear")
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        appearanceRecorder.record(page: pageIdentifier, callback: "viewWillDisappear")
+        appearanceRecorder?.record(page: pageIdentifier, callback: "viewWillDisappear")
     }
 
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
-        appearanceRecorder.record(page: pageIdentifier, callback: "viewDidDisappear")
+        appearanceRecorder?.record(page: pageIdentifier, callback: "viewDidDisappear")
     }
 
     override func viewDidLoad() {

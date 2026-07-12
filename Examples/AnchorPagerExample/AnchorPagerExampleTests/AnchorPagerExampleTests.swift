@@ -34,6 +34,19 @@ struct AnchorPagerExampleTests {
         #expect(actions.map(\.state) == [.on, .off])
     }
 
+    @Test func normalLaunchDoesNotEnableAppearanceRecorder() {
+        let viewController = ExamplePagerViewController()
+
+        viewController.loadViewIfNeeded()
+
+        #expect(viewController.isAppearanceRecorderEnabledForTesting == false)
+        #expect(
+            firstSubview(in: viewController.view, as: UIButton.self) {
+                $0.accessibilityIdentifier == "page-appearance-events"
+            } == nil
+        )
+    }
+
     @Test func headerTopBehaviorMenuAppliesExtendsUnderTopSafeAreaCoverage() throws {
         let viewController = ExamplePagerViewController()
         let navigationController = UINavigationController(rootViewController: viewController)
