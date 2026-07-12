@@ -249,11 +249,12 @@ extension UIViewController {
 4. 分段栏吸顶基线必须基于当前可见顶部遮挡计算，不固定使用 view.safeAreaInsets.top。
 5. Tabman adapter 的 top 跟随 Header bottom，高度固定为 Header 完全折叠时的最大可见高度；普通 Header 折叠滚动只移动 adapter，不改变 Pageboy child bounds。
 6. child managed contentInset.top 只表达 Tabman adapter 内实际覆盖 Pageboy child 的 bar obstruction，不包含 Header 高度或容器顶部遮挡。
-7. child managed scrollIndicatorInsets.top 避让实际 bar obstruction；contentInset.bottom 和 scrollIndicatorInsets.bottom 避让底部 safe area、tab bar、toolbar 或其他可见底部遮挡。
+7. child managed scrollIndicatorInsets.top 避让实际 bar obstruction；contentInset.bottom 和 scrollIndicatorInsets.bottom 必须使用 child 局部底部遮挡，即 adapter 当前底端到 AnchorPager 安全可见底端的距离。Header 展开时该值包含尚未折叠距离，完全折叠时收敛为底部 safe area、tab bar、toolbar 或其他根容器可见遮挡。
 8. 框架必须区分自身 managed inset 和外部追加 inset，不覆盖调用方已有额外 contentInset。
 9. 框架接管的 scroll view 设置 `contentInsetAdjustmentBehavior = .never`、`automaticallyAdjustsScrollIndicatorInsets = false`；ownership 结束时只移除最后一次 managed 部分并恢复两项原始自动调整状态。
 10. child top offset 迁移使用相对顶部距离，bar 高度变化不能让当前 child 可见内容跳动。
 11. safe area、bar 显隐、横竖屏、Split View、Stage Manager 尺寸变化后必须重新计算布局，并尽量保持 selectedIndex、Header 折叠进度和当前 child 可见位置。
+12. container 折叠导致 child 局部 bottom 变化时，必须保持 child distance-from-top 和固定 Pageboy child bounds；滚动热路径不得逐帧输出 inset 日志。
 
 ## 9. Child 生命周期与缓存要求
 

@@ -770,8 +770,9 @@ final class AnchorPagerViewControllerTests: XCTestCase {
     }
 
     @MainActor
-    func testManagedScrollIndicatorInsetsUseBarAndBottomObstruction() {
+    func testManagedScrollIndicatorInsetsUseChildLocalBottomObstruction() {
         var configuration = AnchorPagerConfiguration.default
+        configuration.header.heightMode = .fixed(max: 120, min: 20)
         configuration.bar.height = 56
         let pager = AnchorPagerViewController(configuration: configuration)
         pager.additionalSafeAreaInsets.bottom = 23
@@ -784,7 +785,11 @@ final class AnchorPagerViewControllerTests: XCTestCase {
             right: 3
         )
         child.scrollView.automaticallyAdjustsScrollIndicatorInsets = true
-        let dataSource = StubDataSource(count: 1, viewControllers: [child])
+        let dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [child],
+            headerContent: .view(FixedFittingView(height: 120))
+        )
         pager.dataSource = dataSource
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
         window.rootViewController = pager
@@ -801,12 +806,91 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         )
         XCTAssertEqual(
             child.scrollView.verticalScrollIndicatorInsets.bottom,
-            5 + pager.view.safeAreaInsets.bottom,
+            5 + pager.view.safeAreaInsets.bottom + 100,
             accuracy: 0.5
         )
         XCTAssertEqual(child.scrollView.verticalScrollIndicatorInsets.left, 1, accuracy: 0.001)
         XCTAssertEqual(child.scrollView.verticalScrollIndicatorInsets.right, 3, accuracy: 0.001)
         XCTAssertFalse(child.scrollView.automaticallyAdjustsScrollIndicatorInsets)
+    }
+
+    @MainActor
+    func testManagedBottomConvergesWhileContainerCollapses() throws {
+        var configuration = AnchorPagerConfiguration.default
+        configuration.header.heightMode = .fixed(max: 120, min: 20)
+        configuration.bar.height = 56
+        let pager = AnchorPagerViewController(configuration: configuration)
+        pager.additionalSafeAreaInsets.bottom = 23
+        let child = ScrollChildViewController()
+        child.loadViewIfNeeded()
+        child.scrollView.contentInset.bottom = 11
+        child.scrollView.verticalScrollIndicatorInsets.bottom = 5
+        let dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [child],
+            headerContent: .view(FixedFittingView(height: 120))
+        )
+        pager.dataSource = dataSource
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = pager
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+
+        pager.reloadData()
+        window.layoutIfNeeded()
+        let adapter = try XCTUnwrap(installedAdapter(in: pager))
+        let fixedAdapterHeight = adapter.view.bounds.height
+        let fixedChildHeight = child.view.bounds.height
+        let safeBottom = pager.view.safeAreaInsets.bottom
+        XCTAssertEqual(child.scrollView.contentInset.bottom, 11 + safeBottom + 100, accuracy: 0.5)
+        XCTAssertEqual(
+            child.scrollView.verticalScrollIndicatorInsets.bottom,
+            5 + safeBottom + 100,
+            accuracy: 0.5
+        )
+
+        child.scrollView.contentOffset.y = -child.scrollView.contentInset.top + 37
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+
+        pager.verticalScrollView.contentOffset.y = 50
+        pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
+        window.layoutIfNeeded()
+
+        XCTAssertEqual(child.scrollView.contentInset.bottom, 11 + safeBottom + 50, accuracy: 0.5)
+        XCTAssertEqual(
+            child.scrollView.verticalScrollIndicatorInsets.bottom,
+            5 + safeBottom + 50,
+            accuracy: 0.5
+        )
+        XCTAssertEqual(
+            child.scrollView.contentOffset.y + child.scrollView.contentInset.top,
+            37,
+            accuracy: 0.5
+        )
+        XCTAssertEqual(adapter.view.bounds.height, fixedAdapterHeight, accuracy: 0.5)
+        XCTAssertEqual(child.view.bounds.height, fixedChildHeight, accuracy: 0.5)
+        XCTAssertFalse(events.contains { $0.event == "inset.ownership.update" })
+
+        pager.verticalScrollView.contentOffset.y = 100
+        pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
+        window.layoutIfNeeded()
+
+        XCTAssertEqual(child.scrollView.contentInset.bottom, 11 + safeBottom, accuracy: 0.5)
+        XCTAssertEqual(
+            child.scrollView.verticalScrollIndicatorInsets.bottom,
+            5 + safeBottom,
+            accuracy: 0.5
+        )
+        XCTAssertEqual(
+            child.scrollView.contentOffset.y + child.scrollView.contentInset.top,
+            37,
+            accuracy: 0.5
+        )
+        XCTAssertEqual(adapter.view.bounds.height, fixedAdapterHeight, accuracy: 0.5)
+        XCTAssertEqual(child.view.bounds.height, fixedChildHeight, accuracy: 0.5)
+        XCTAssertFalse(events.contains { $0.event == "inset.ownership.update" })
     }
 
     @MainActor
@@ -935,7 +1019,7 @@ final class AnchorPagerViewControllerTests: XCTestCase {
     }
 
     @MainActor
-    func testFallbackPageHostExtendsPlainChildToContentFrameBottomInTabBarController() throws {
+    func testFallbackPageHostKeepsPlainChildAboveBottomObstruction() throws {
         var configuration = AnchorPagerConfiguration.default
         configuration.header.heightMode = .fixed(max: 80, min: 0)
         let pager = AnchorPagerViewController(configuration: configuration)
@@ -962,7 +1046,7 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         pager.reloadHeaderLayout(offsetAdjustment: .resetToExpanded)
         window.layoutIfNeeded()
 
-        let context = try XCTUnwrap(delegate.layoutContexts.last)
+        _ = try XCTUnwrap(delegate.layoutContexts.last)
         let adapter = try XCTUnwrap(installedAdapter(in: pager))
         let fallbackHost = try XCTUnwrap(
             adapter.viewController(for: adapter, at: 0) as? AnchorPagerPageScrollHostViewController
@@ -974,10 +1058,14 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         XCTAssertEqual(fallbackHost.scrollView.contentInsetAdjustmentBehavior, .never)
         XCTAssertEqual(
             fallbackHost.scrollView.adjustedContentInset.bottom,
-            pager.view.safeAreaInsets.bottom,
+            pager.view.safeAreaInsets.bottom + 80,
             accuracy: 0.5
         )
-        XCTAssertEqual(childFrame.maxY, context.contentFrame.maxY, accuracy: 4)
+        XCTAssertEqual(
+            childFrame.maxY,
+            pager.view.safeAreaLayoutGuide.layoutFrame.maxY,
+            accuracy: 4
+        )
     }
 
     @MainActor

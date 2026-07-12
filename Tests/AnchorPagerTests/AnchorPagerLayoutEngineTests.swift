@@ -128,6 +128,35 @@ final class AnchorPagerLayoutEngineTests: XCTestCase {
         XCTAssertEqual(collapsed.pagingFrame.maxY, 640)
     }
 
+    func testChildBottomObstructionTracksFixedPagingOverflow() {
+        let engine = AnchorPagerLayoutEngine()
+        let expanded = engine.layout(
+            for: input(
+                headerHeightMode: .fixed(max: 100, min: 20),
+                bottomObstructionHeight: 83,
+                contentOffsetY: 0
+            )
+        )
+        let partial = engine.layout(
+            for: input(
+                headerHeightMode: .fixed(max: 100, min: 20),
+                bottomObstructionHeight: 83,
+                contentOffsetY: 30
+            )
+        )
+        let collapsed = engine.layout(
+            for: input(
+                headerHeightMode: .fixed(max: 100, min: 20),
+                bottomObstructionHeight: 83,
+                contentOffsetY: 80
+            )
+        )
+
+        XCTAssertEqual(expanded.childBottomObstruction, 163)
+        XCTAssertEqual(partial.childBottomObstruction, 133)
+        XCTAssertEqual(collapsed.childBottomObstruction, 83)
+    }
+
     func testExtendsUnderTopSafeAreaCoversTopObstructionWhenHeaderIsShorter() {
         let output = AnchorPagerLayoutEngine().layout(
             for: input(

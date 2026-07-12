@@ -138,6 +138,36 @@ final class AnchorPagerExampleUITests: XCTestCase {
     }
 
     @MainActor
+    func testLongPageBottomStaysAboveTabBarWhileHeaderIsExpanded() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--anchorPagerInitialIndex", "2"]
+        app.launch()
+
+        let headerTitle = app.staticTexts["AnchorPager Example"]
+        let lastRow = app.staticTexts["长页 - 30"]
+        let tabBar = app.tabBars.firstMatch
+        XCTAssertTrue(headerTitle.waitForExistence(timeout: 3))
+        XCTAssertTrue(lastRow.waitForExistence(timeout: 3))
+        XCTAssertTrue(tabBar.waitForExistence(timeout: 3))
+        let expandedHeaderMinY = headerTitle.frame.minY
+
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.72))
+        let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.24))
+        for _ in 0..<5 {
+            start.press(forDuration: 0.05, thenDragTo: end)
+        }
+
+        let bottomIsVisible = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in
+                lastRow.frame.maxY <= tabBar.frame.minY + 1
+            },
+            object: nil
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [bottomIsVisible], timeout: 3), .completed)
+        XCTAssertEqual(headerTitle.frame.minY, expandedHeaderMinY, accuracy: 1)
+    }
+
+    @MainActor
     func testHorizontalSwipeSelectsNextPageContent() throws {
         let app = XCUIApplication()
         app.launch()

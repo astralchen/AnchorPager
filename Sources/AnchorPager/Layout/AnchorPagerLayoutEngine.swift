@@ -29,6 +29,7 @@ struct AnchorPagerLayoutEngine {
         var barFrame: CGRect
         var contentFrame: CGRect
         var pagingFrame: CGRect
+        var childBottomObstruction: CGFloat
     }
 
     func layout(for input: Input) -> Output {
@@ -92,6 +93,8 @@ struct AnchorPagerLayoutEngine {
             width: bounds.width,
             height: Swift.max(0, bounds.maxY - collapsedAdapterTop)
         )
+        let safeVisibleMaxY = bounds.maxY - nonNegativeFinite(input.bottomObstructionHeight)
+        let childBottomObstruction = nonNegativeFinite(pagingFrame.maxY - safeVisibleMaxY)
 
         return Output(
             resolvedHeaderHeight: resolvedHeaderHeight,
@@ -100,7 +103,8 @@ struct AnchorPagerLayoutEngine {
             headerFrame: headerFrame,
             barFrame: barFrame,
             contentFrame: contentFrame,
-            pagingFrame: pagingFrame
+            pagingFrame: pagingFrame,
+            childBottomObstruction: childBottomObstruction
         )
     }
 

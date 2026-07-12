@@ -392,9 +392,7 @@ open class AnchorPagerViewController: UIViewController {
         )
         pagingHeightConstraint?.constant = output.pagingFrame.height
 
-        if updatesScrollRange {
-            applyManagedInsets(environment: environment)
-        }
+        applyManagedInsets(output: output, logsChanges: logsChanges)
 
         if logsChanges {
             logLayoutChanges(output: output, environment: environment)
@@ -625,18 +623,21 @@ open class AnchorPagerViewController: UIViewController {
         )
     }
 
-    private func applyManagedInsets(environment: LayoutEnvironment) {
+    private func applyManagedInsets(
+        output: AnchorPagerLayoutEngine.Output,
+        logsChanges: Bool
+    ) {
         let target = AnchorPagerManagedInsetCoordinator.Target(
             content: UIEdgeInsets(
                 top: resolvedBarInsets.top,
                 left: 0,
-                bottom: environment.obstruction.bottom,
+                bottom: output.childBottomObstruction,
                 right: 0
             ),
             indicators: UIEdgeInsets(
                 top: resolvedBarInsets.top,
                 left: 0,
-                bottom: environment.obstruction.bottom,
+                bottom: output.childBottomObstruction,
                 right: 0
             )
         )
@@ -648,7 +649,7 @@ open class AnchorPagerViewController: UIViewController {
             if let fallbackHost = viewController as? AnchorPagerPageScrollHostViewController {
                 fallbackHost.setManagedContentInsets(target.content)
             }
-            managedInsetCoordinator.apply(target, to: scrollView)
+            managedInsetCoordinator.apply(target, to: scrollView, logsChanges: logsChanges)
         }
         lastManagedInsetTarget = target
         lastManagedScrollViewIdentifiers = identifiers

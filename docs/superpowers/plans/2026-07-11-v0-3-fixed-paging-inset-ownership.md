@@ -1284,6 +1284,148 @@ git commit -m "隐藏主容器滚动指示器"
 
 ---
 
+### Task 9: 修复固定 Adapter 的 Child 局部底部遮挡
+
+**Files:**
+- Modify: `Sources/AnchorPager/Layout/AnchorPagerLayoutEngine.swift`
+- Modify: `Sources/AnchorPager/Children/AnchorPagerManagedInsetCoordinator.swift`
+- Modify: `Sources/AnchorPager/Public/AnchorPagerViewController.swift`
+- Modify: `Tests/AnchorPagerTests/AnchorPagerLayoutEngineTests.swift`
+- Modify: `Tests/AnchorPagerTests/AnchorPagerViewControllerTests.swift`
+- Modify: `Examples/AnchorPagerExample/AnchorPagerExampleUITests/AnchorPagerExampleUITests.swift`
+- Modify: `README.md`
+- Modify: `docs/requirements.md`
+- Modify: `docs/architecture.md`
+- Modify: `docs/task-list.md`
+
+**Interfaces:**
+- Consumes: `AnchorPagerLayoutEngine.Output.pagingFrame`、`collapseOffset`、`LayoutEnvironment.obstruction.bottom`、既有 managed inset 差量 ownership。
+- Produces: `AnchorPagerLayoutEngine.Output.childBottomObstruction: CGFloat`；`AnchorPagerManagedInsetCoordinator.apply(_:to:logsChanges:)`；展开、部分折叠和完全折叠态正确的 child content/indicator bottom。
+
+- [x] **Step 1: 写纯几何和真实 window 失败测试**
+
+在 `AnchorPagerLayoutEngineTests` 增加展开、半折叠、完全折叠三个输出断言：
+
+```swift
+func testChildBottomObstructionTracksFixedPagingOverflow() {
+    let engine = AnchorPagerLayoutEngine()
+    let expanded = engine.layout(for: input(
+        headerHeightMode: .fixed(max: 100, min: 20),
+        bottomObstructionHeight: 83,
+        contentOffsetY: 0
+    ))
+    let partial = engine.layout(for: input(
+        headerHeightMode: .fixed(max: 100, min: 20),
+        bottomObstructionHeight: 83,
+        contentOffsetY: 30
+    ))
+    let collapsed = engine.layout(for: input(
+        headerHeightMode: .fixed(max: 100, min: 20),
+        bottomObstructionHeight: 83,
+        contentOffsetY: 80
+    ))
+
+    XCTAssertEqual(expanded.childBottomObstruction, 163)
+    XCTAssertEqual(partial.childBottomObstruction, 133)
+    XCTAssertEqual(collapsed.childBottomObstruction, 83)
+}
+```
+
+在真实 window 控制器测试中断言展开态 bottom 包含固定 adapter 溢出；container 从 0 滚到部分和完全折叠时，content/indicator bottom 同步收敛，child distance-from-top 保持不变，adapter/Pageboy child bounds 不变。
+
+- [x] **Step 2: 运行 RED**
+
+```bash
+xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17' -derivedDataPath .build/xcodebuild-v03-indicator -parallel-testing-enabled NO -enableCodeCoverage NO -only-testing:AnchorPagerTests/AnchorPagerLayoutEngineTests/testChildBottomObstructionTracksFixedPagingOverflow -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testManagedScrollIndicatorInsetsUseChildLocalBottomObstruction -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testManagedBottomConvergesWhileContainerCollapses test
+```
+
+Expected: FAIL；`Output` 尚无 `childBottomObstruction`，展开态 child bottom 仍只等于根视图 safe-area bottom。
+
+- [x] **Step 3: 实现纯几何输出**
+
+在 `AnchorPagerLayoutEngine.Output` 增加：
+
+```swift
+var childBottomObstruction: CGFloat
+```
+
+布局时从实际 paging frame 与安全区可见底端推导：
+
+```swift
+let safeVisibleMaxY = bounds.maxY - nonNegativeFinite(input.bottomObstructionHeight)
+let childBottomObstruction = nonNegativeFinite(pagingFrame.maxY - safeVisibleMaxY)
+```
+
+不得修改 `pagingFrame.height`、Header frame、content frame 或 Public API。
+
+- [x] **Step 4: 让 managed bottom 消费布局输出并抑制热路径日志**
+
+把 `applyManagedInsets` 改为消费 layout output：
+
+```swift
+private func applyManagedInsets(
+    output: AnchorPagerLayoutEngine.Output,
+    logsChanges: Bool
+) {
+    let bottom = output.childBottomObstruction
+    // content/indicator top 仍使用 resolvedBarInsets.top，bottom 使用 bottom。
+}
+```
+
+`applyLayoutOutput` 在结构性布局和 container 滚动布局中都调用该方法。Coordinator 增加默认参数：
+
+```swift
+func apply(
+    _ target: Target,
+    to scrollView: UIScrollView,
+    logsChanges: Bool = true
+)
+```
+
+begin/update/skip 只在 `logsChanges == true` 时写日志；滚动热路径传 `false`。差量 external inset、自动 adjustment ownership、release 和 offset 迁移算法保持不变。
+
+- [x] **Step 5: 运行 GREEN 与日志定向回归**
+
+先运行 Step 2 同一命令，Expected: PASS。再运行：
+
+```bash
+xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17' -derivedDataPath .build/xcodebuild-v03-indicator -parallel-testing-enabled NO -enableCodeCoverage NO -only-testing:AnchorPagerTests/AnchorPagerManagedInsetCoordinatorTests -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests test
+```
+
+Expected: PASS；container 滚动不新增逐帧 `inset.ownership.update`，结构性 apply 仍保留既有日志事件。
+
+- [x] **Step 6: 增加并运行示例 UI 回归**
+
+新增 `testLongPageBottomStaysAboveTabBarWhileHeaderIsExpanded`：通过 `--anchorPagerInitialIndex 2` 启动长页，在 Header 仍展开时滚到 child 最大 offset，断言“长页 - 30”底端不超过 tab bar 顶端。该用例同时验证最后内容与 indicator 使用相同 bottom target；indicator 私有 view frame 不作为稳定测试 API。
+
+```bash
+xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,name=iPhone 17' -derivedDataPath .build/example-xcodebuild-v03-indicator -parallel-testing-enabled NO -enableCodeCoverage NO test
+```
+
+Expected: 示例单元/UI tests 全部通过。
+
+- [x] **Step 7: 同步文档、完整验证和自审**
+
+README、requirements、architecture、task-list 统一说明 managed bottom 是 child 局部遮挡，不是根视图 safe-area bottom。自审覆盖：Public API、纯计算层、Tabman/Pageboy containment、固定 child bounds、fallback、external inset、reload/deinit 归还、热路径日志、v0.4 distance snapshot 和 v0.5 owner/handoff。
+
+```bash
+git diff --check
+swift package resolve
+xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17' -derivedDataPath .build/xcodebuild-v03-indicator -parallel-testing-enabled NO -enableCodeCoverage NO test
+xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'generic/platform=iOS Simulator' -derivedDataPath .build/example-xcodebuild-v03-indicator build
+```
+
+Expected: 静态检查、依赖解析、package 全量测试和示例 build 全部成功；Tabman 4.0.1、Pageboy 5.0.2 不变。
+
+- [x] **Step 8: 提交修复**
+
+```bash
+git add Sources/AnchorPager/Layout/AnchorPagerLayoutEngine.swift Sources/AnchorPager/Children/AnchorPagerManagedInsetCoordinator.swift Sources/AnchorPager/Public/AnchorPagerViewController.swift Tests/AnchorPagerTests/AnchorPagerLayoutEngineTests.swift Tests/AnchorPagerTests/AnchorPagerViewControllerTests.swift Examples/AnchorPagerExample/AnchorPagerExampleUITests/AnchorPagerExampleUITests.swift README.md docs/requirements.md docs/architecture.md docs/task-list.md docs/superpowers/plans/2026-07-11-v0-3-fixed-paging-inset-ownership.md
+git commit -m "修复 child 局部底部遮挡"
+```
+
+---
+
 ## Self-review Record
 
 - Task 1：`AnchorPagerLayoutEngine` 仍为只 import CoreGraphics 的纯计算类型；`pagingFrame.height` 只依赖 bounds、top obstruction 和 collapsed Header height，不依赖 contentOffset、bar height 或 bottom obstruction。旧容器级 managed target 与未落地的 target 日志已移除，Header、Tabman/Pageboy containment、selection 和 scroll discovery 未改变。
@@ -1291,6 +1433,7 @@ git commit -m "隐藏主容器滚动指示器"
 - Task 3：`AnchorPagerManagedInsetCoordinator` 与 nested Record 均为 MainActor；record 弱持有 UIScrollView，不阻止页面资源释放。apply/update/release 使用“current - previous managed + new managed”合成 external inset，并按 distance-from-top 迁移 offset；release 恢复原 adjustment behavior。日志只记录 begin/update/skip/end 稳定事件，没有几何或业务数据。
 - Task 4：Public `bar.height` 已切换为 `CGFloat?` 且默认 nil；ViewController 使用 runtime `barInsets.top` 驱动 LayoutEngine 和 managed top。reload 先完成新页面装配再归还 stale ownership，deinit 通过主线程隔离断言同步 `releaseAll()`；fallback 内容高度扣除 managed top/bottom。Tabman/Pageboy page containment 未改。
 - Task 5：示例保持默认 adaptive bar，真实 scroll/fallback 页面均有稳定 UI identifier 和可见性测试。README、architecture、requirements 与 task-list 已同步 v0.3 真实状态；requirements 中遗留的默认 48 契约在最终自审中修正为默认自适应。
+- Task 9 自审：`childBottomObstruction` 是 LayoutEngine 的 internal 纯计算输出，没有扩大 Public API 或泄漏 Tabman/Pageboy 类型；adapter height、Pageboy child bounds、Header/paging containment 和 selection lifecycle 均未改变。动态 bottom 继续使用差量 ownership，external content/indicator inset、自动 adjustment 状态和 reload/deinit 归还保持闭环；更新按 distance-from-top 迁移，不提前实现 v0.4 page snapshot 或 v0.5 handoff。container 滚动热路径关闭 inset begin/update/skip 日志，结构性布局和 ownership release 日志保留。fallback 与真实 scroll child 使用同一局部 bottom，最后内容和 indicator 均停在安全可见区域。
 - 最终源码自审：Public API 只有 optional `CGFloat?` 语义变化；第三方 import/类型只存在于 Paging；Header、adapter、fallback containment 顺序未破坏；fixed paging、weak ownership、external 合成、offset 迁移、reload/deinit 归还均有测试。v0.4 page state 与 v0.5 handoff 未提前实现。
 - 计划覆盖 spec 中 v0.3 的 optional bar height、fixed adapter、barInsets callback、managed inset ownership、fallback、日志、文档和 UI test；v0.4/v0.5 只保留接口兼容边界，没有提前实现。
 - Task 1 的 `barHeight` runtime 语义/`pagingFrame`、Task 2 的 `setBarHeight`/`didUpdateBarInsets`、Task 3 的 `Target`/apply/release 与 Task 4 的消费名称保持一致。
@@ -1328,3 +1471,9 @@ git commit -m "隐藏主容器滚动指示器"
 - Task 8 package 回归：复用 `iPhone 17 Pro` 与 `.build/xcodebuild-v03-indicator`，102 项通过、0 failures、0 skipped，测试阶段约 93 秒。
 - Task 8 示例回归：复用同一模拟器与 `.build/example-xcodebuild-v03-indicator`，示例单元/UI tests 14 项通过、0 failures、0 skipped，测试阶段约 274 秒。
 - Task 8 自审：`alwaysBounceVertical`、content range、内部 delegate、Header collapse/bounce、后续 scroll-to-top owner、child/fallback indicator ownership、Tabman/Pageboy 与 UIKit containment 均未变化；Public API 未扩大。
+- Task 9 运行态诊断：复用已启动的 `iPhone 17`，确认长页 child bounds 高 `758`、content size 高 `1700`、bar 高 `50.67`、根 bottom obstruction `83`；Header 展开时固定 adapter 底端额外超出 viewport `92.33`，旧 managed bottom 漏掉该局部溢出，导致最后内容和 indicator 进入 tab bar 区域。
+- Task 9 RED：package 定向测试因 `AnchorPagerLayoutEngine.Output` 缺少 `childBottomObstruction` 按预期编译失败；截图场景 UI 用例 0/1 通过，失败原因为第 30 行底端未进入 tab bar 顶端上方。
+- Task 9 GREEN：纯几何、真实 window 和日志 3 项定向测试通过。首次相邻回归揭示 fallback 旧测试仍要求根 safe-area bottom 和 content frame bottom；按统一局部遮挡契约修正后，ManagedInsetCoordinator 与 ViewController 定向回归 51/51 通过。
+- Task 9 package 回归：复用同一 `iPhone 17` 与 `.build/xcodebuild-v03-indicator`，104 项通过、0 failures、0 skipped。
+- Task 9 示例回归：复用同一模拟器与 `.build/example-xcodebuild-v03-indicator`，15 项通过、0 failures、0 skipped，包含 Header 展开时长页最后一行停在 tab bar 上方的新 UI 用例；测试阶段约 162 秒。
+- Task 9 其他验证：`git diff --check` 通过；`swift package resolve` 在沙箱外通过，Tabman 4.0.1、Pageboy 5.0.2 不变；示例 `generic/platform=iOS Simulator` build 通过。

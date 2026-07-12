@@ -25,7 +25,11 @@ final class AnchorPagerManagedInsetCoordinator {
 
     private var records: [ObjectIdentifier: Record] = [:]
 
-    func apply(_ target: Target, to scrollView: UIScrollView) {
+    func apply(
+        _ target: Target,
+        to scrollView: UIScrollView,
+        logsChanges: Bool = true
+    ) {
         removeReleasedRecords()
 
         let identifier = ObjectIdentifier(scrollView)
@@ -37,7 +41,9 @@ final class AnchorPagerManagedInsetCoordinator {
                 || record.lastManagedIndicators != target.indicators
                 || scrollView.contentInsetAdjustmentBehavior != .never
                 || scrollView.automaticallyAdjustsScrollIndicatorInsets else {
-            AnchorPagerLogger.log(.debug, category: .inset, event: "inset.ownership.skip")
+            if logsChanges {
+                AnchorPagerLogger.log(.debug, category: .inset, event: "inset.ownership.skip")
+            }
             return
         }
 
@@ -60,11 +66,13 @@ final class AnchorPagerManagedInsetCoordinator {
         record.lastManagedContent = target.content
         record.lastManagedIndicators = target.indicators
         records[identifier] = record
-        AnchorPagerLogger.log(
-            .debug,
-            category: .inset,
-            event: existingRecord == nil ? "inset.ownership.begin" : "inset.ownership.update"
-        )
+        if logsChanges {
+            AnchorPagerLogger.log(
+                .debug,
+                category: .inset,
+                event: existingRecord == nil ? "inset.ownership.begin" : "inset.ownership.update"
+            )
+        }
     }
 
     func release(_ scrollView: UIScrollView) {

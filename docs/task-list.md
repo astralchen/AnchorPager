@@ -301,7 +301,7 @@
 - [x] 测试 navigation bar 显隐
 - [x] 测试 navigation controller 下 Header 实际 frame 与 layout context 对齐
 - [x] 测试 tab bar 和 toolbar 底部遮挡
-- [x] 测试无滚动页 fallback host 底部延伸到 content frame 底部
+- [x] 测试无滚动页 fallback host 的最后内容停在安全可见底端
 - [x] 测试示例工程 `AnchorPagerHeaderTopBehavior` 菜单显示、切换和 `extendsUnderTopSafeArea` 顶部遮挡覆盖
 - [x] 示例 Header 标题栈上下约束到 `safeAreaLayoutGuide`，两种顶部行为下保持 20 pt 内容间距
 - [x] 示例 Header 文本组顶部对齐，标题与副标题保持固定 8 pt 间距且负 offset 不拉伸 label
@@ -327,6 +327,9 @@
 - [x] 修复 scrollIndicatorInsets.top 越过实际 bar 底部
 - [x] 接管并归还 `automaticallyAdjustsScrollIndicatorInsets`，避免底部 safe area 重复避让
 - [x] 隐藏 AnchorPager 主容器横纵滚动指示器，避免与 child indicator 重复或误导
+- [x] 修复 Header 展开时固定 adapter 尾部未计入 child 局部 bottom，确保最后内容和 indicator 位于安全域内
+- [x] container 折叠时动态收敛 child managed bottom，并保持 distance-from-top 与 Pageboy child bounds
+- [x] 抑制 container 折叠热路径的逐帧 inset 日志
 - [x] bar 高度变化时按 child distance-from-top 保持可见内容
 - [x] 测试 managed inset 不覆盖外部 contentInset
 - [x] 测试 contentInsetAdjustmentBehavior 策略
