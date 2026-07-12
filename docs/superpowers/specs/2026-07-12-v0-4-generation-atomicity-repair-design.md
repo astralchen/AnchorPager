@@ -6,6 +6,8 @@
 
 **适用范围：** v0.4 最终复审发现的 deferred reload 代际不一致、跨 generation 可变 PageState 共享，以及 v0.5 committed current child/scroll target 启动门禁
 
+**技术基线：** 最低工具链 Swift 6.2、语言模式 Swift 6、最低系统版本 iOS 14；不以并发 unsafe 标记规避工具链诊断。
+
 ## 背景与根因
 
 v0.4 reload terminal 修复已经建立稳定 PagingHost、page/empty terminal、Pageboy 5.0.2 空态 teardown、
@@ -202,20 +204,36 @@ childDistanceFromTop
 2. 同 controller 移到新 index：共享 payload，但新 generation distance 初始化为 0；committed distance 不变。
 3. pending retention reconciliation 只能改 pending state。
 4. pending 取消时只释放 pending lease；共享 payload 的 fallback content、managed inset 和 committed lease保持不变。
-5. terminal commit 时先把 pending 变成 committed，再释放旧 generation lease；共享 payload 不重复拆 containment。
+5. terminal commit 时先把 pending 变成 committed；在释放旧 generation 最后一个 strong lease 前，必须强捕获旧代
+   unique fallback/scroll cleanup snapshot。共享 payload 不重复拆 containment，unique 资源清理不得依赖 weak identity 或析构副作用。
 
 ## Ownership 与 snapshot 提交
 
 1. pending page 创建可以对它实际使用的 scroll view 应用当前 managed inset target，但不得因为 pending reason 为空而
    归还 committed generation 仍使用的 ownership。
 2. pending reconcile 只计算 reason 和 strong lease，不执行会影响共享 committed payload 的 ownership release。
-3. commit 后对新 committed generation 强制执行一次 ownership reconciliation：
+3. containment identity preservation 与 generation-specific managed inset ownership lease 必须分离判断；identity 被新代共享
+   不代表旧代 ownership lease 可以保留，pending cancel/commit 都必须分别收敛 containment 与 ownership。
+4. commit 必须按以下顺序执行：
+
+   ```text
+   pending -> committed
+   强捕获旧 generation unique fallback/scroll cleanup snapshot
+   release old generation strong leases
+   force reconcile new committed ownership
+   使用 cleanup snapshot 清理旧代 unique fallback/scroll 资源
+   ```
+
+   cleanup snapshot 至少强持有完成 fallback containment removal 与 scroll ownership release 所需的对象，直到清理结束；
+   不得在最后 strong lease 释放后再从 weak payload 猜测资源是否仍存活。
+5. commit 后对新 committed generation 强制执行一次 ownership reconciliation：
    - 新 committed retained state 保持 ownership；
    - 无 reason 的 state 保存自己的 snapshot并归还 ownership；
    - 旧 generation 独有 payload 归还 ownership并清理 fallback content；
    - 新旧共享 payload 不重复 release/remove。
-4. pending cancel 使用 actual page/scroll/fallback identity 判断 preservation，不能再使用 GenerationPageState 对象地址。
-5. committed scroll/fallback 的 offset、inset adjustment behavior 和 retained current 在 terminal 前不得改变。
+6. pending cancel 使用 actual page/scroll/fallback identity 判断 containment preservation，但 ownership lease 必须按 generation
+   独立判断，不能再使用 GenerationPageState 对象地址或仅凭 identity 相同保留旧 ownership。
+7. committed scroll/fallback 的 offset、inset adjustment behavior 和 retained current 在 terminal 前不得改变。
 
 ## Header、bar 与布局顺序
 
@@ -256,6 +274,9 @@ childDistanceFromTop
 3. fallback page 执行同样重排：terminal 前 fallback parent/content/inset 不变，commit 后无双 containment。
 4. pending 被更新 request 取消：committed PageState、snapshot 和 ownership完全不变。
 5. 相同 controller 同 index migration：两个 generation 的 state identifier 不同，live payload identity 相同。
+6. 旧代 unique fallback/scroll 只由最后 strong lease 保活时，commit 必须先强捕获 cleanup snapshot；释放 lease 后仍按标准
+   containment 顺序清理 fallback，并由 recording child 明确观察到 `willMove(toParent: nil)`，同时归还 scroll ownership。
+   测试不得依赖 Debug 生命周期延长、weak payload 恰好存活或对象 `deinit` 的副作用。
 
 ### 回归与验收
 

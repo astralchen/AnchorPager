@@ -6,7 +6,7 @@
 
 **Architecture:** PagingHost 用 internal request identifier 串行化 pending/active reload；ViewController 在 Host 真正开始 request 时只激活 provider generation，在匹配 terminal 时才发布 public visible snapshot。PageStateStore 把共享 live identity payload 与 generation-specific lease/snapshot 分开，provider 读取 pending、visible/selection/inset 读取 committed。
 
-**Tech Stack:** Swift 6、UIKit、Swift Package Manager、XCTest、XCUITest、Tabman 4.0.1、Pageboy 5.0.2、iOS 14+
+**Tech Stack:** Swift 6.2+ toolchain、Swift 6 language mode、UIKit、Swift Package Manager、XCTest、XCUITest、Tabman 4.0.1、Pageboy 5.0.2、iOS 14+
 
 ## Global Constraints
 
@@ -19,6 +19,8 @@
 - 不使用 timer、dispatch delay、强制取消手势、AnchorPager sentinel、手工 appearance forwarding 或第三方 internal API。
 - 保留 Pageboy 5.0.2 delete-last-page teardown 兼容边界及升级门禁。
 - UIKit、data source、Host、Store 和 coordinator 状态保持 `@MainActor`。
+- 最低工具链保持 Swift 6.2，`swiftLanguageModes: [.v6]` 和 iOS 14 运行基线保持不变。
+- 不使用 `nonisolated(unsafe)`、`@unchecked Sendable` 或 `@preconcurrency` 压制 Swift 6.2 工具链下的并发诊断。
 - 每个任务严格执行 RED → GREEN → REFACTOR，并在独立复审清零 Critical/Important 后继续。
 - 复用已启动的 `iPhone 17` simulator，不执行无必要 boot/shutdown。
 
@@ -190,10 +192,16 @@ retention reasons、inset adjustment behavior 和 ownership 仍来自 generation
 func testMovedScrollPageMigrationDoesNotMutateCommittedLeaseBeforeTerminal()
 func testMovedFallbackMigrationDoesNotRemoveCommittedContentBeforeTerminal()
 func testSameIndexMigrationSharesLiveIdentityButNotGenerationState()
+func testCommitCapturesUniqueFallbackCleanupBeforeReleasingLastStrongLease()
+func testUniqueFallbackCleanupRecordsWillMoveNilDuringCommit()
 ```
 
 旧 current controller 从 generation 1 index 0 移到 generation 2 非 current index 1；terminal 前旧 state identifier、
 retention、offset、managed inset、fallback parent/content必须保持。新旧 generation state identifier 必须不同。
+
+unique fallback 回归必须构造“旧 generation 的最后一个 strong lease 是唯一保活来源”，使用 recording child 断言 commit
+仍按标准顺序调用 `willMove(toParent: nil)`、移除 view、`removeFromParent()`，并验证 scroll ownership 归还。测试不得依赖
+Debug/ARC 偶然延长生命周期、weak payload 恰好存活或 fallback host 析构副作用。
 
 - [ ] **Step 3: 运行 Store 测试并确认 RED**
 
@@ -250,17 +258,22 @@ page provider 使用 provider；selection、managed inset、现有查询使用 v
 
 - [ ] **Step 6: 让 ownership release 发生在 commit 边界**
 
-pending reconcile 可以更新 pending reason/strong lease，但共享 payload 不归还 committed ownership。pending cancel 和
-old generation release 使用 actual page/scroll/fallback identity preservation，不使用 generation state 对象地址。
+pending reconcile 可以更新 pending reason/strong lease，但共享 payload 不归还 committed ownership。containment identity
+preservation 与 generation-specific managed inset ownership lease 必须分离；pending cancel 和 old generation release 不能只凭
+identity 相同保留 ownership，也不使用 generation state 对象地址。
 
 commit 顺序：
 
 ```text
 pending -> committed
+capture strong cleanup snapshot for old unique fallback/scroll resources
 release old generation leases, preserving shared payload
 force reconcile new committed ownership
-cleanup old unique fallback/scroll ownership
+cleanup old unique fallback/scroll resources through the captured snapshot
 ```
+
+cleanup snapshot 必须在释放旧 generation 最后 strong lease 前建立，并强持有完成 fallback containment removal 与 scroll
+ownership release 所需对象，直到清理结束。不得在 lease 释放后依赖 weak payload、Debug 生命周期延长或对象析构副作用。
 
 删除只为共享可变 state 回滚服务的 `migratedPreviousDistances`。
 
@@ -439,6 +452,7 @@ git commit -m "原子提交 reload public 与 provider 代际"
 - [ ] **Step 4: 运行完整验收**
 
 ```bash
+swift --version
 git diff --check
 swift package resolve
 xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17' test
@@ -448,7 +462,7 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExa
   -destination 'platform=iOS Simulator,name=iPhone 17' -parallel-testing-enabled NO test
 ```
 
-记录 tests 数量、fail/skip、耗时和 Pageboy/Tabman privacy warnings；复用模拟器。
+确认 Swift 6.2 或更高版本，并记录 Swift 版本、tests 数量、fail/skip、耗时和 Pageboy/Tabman privacy warnings；复用模拟器。
 
 - [ ] **Step 5: 最终自审与独立复审**
 
