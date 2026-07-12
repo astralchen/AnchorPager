@@ -300,12 +300,17 @@ git commit -m "隔离页面代际 retention 与 ownership"
 
 **Files:**
 - Modify: `Sources/AnchorPager/Public/AnchorPagerViewController.swift`
+- Modify: `Sources/AnchorPager/Paging/AnchorPagerPagingHostViewController.swift`
+- Modify: `Sources/AnchorPager/Paging/AnchorPagerPagingAdapter.swift`
 - Modify: `Tests/AnchorPagerTests/AnchorPagerViewControllerTests.swift`
+- Modify: `Tests/AnchorPagerTests/AnchorPagerPagingHostViewControllerTests.swift`
+- Modify: `Tests/AnchorPagerTests/AnchorPagerPagingAdapterTests.swift`
 
 **Interfaces:**
 - Consumes Task 1 Host request identifier/willPerform/terminal APIs.
 - Consumes Task 2 Store provider generation and committed-current accessors.
 - Produces private `ReloadSnapshot` and request lifecycle helpers.
+- Removes Task 1 为旧 ViewController 暂留的无 request identifier Host/Adapter reload 与 terminal bridge。
 
 - [ ] **Step 1: 写 deferred 端到端 RED 测试**
 
@@ -389,7 +394,13 @@ terminal 必须同时匹配 active ID 和 staged snapshot。顺序：Store commi
 view 未加载时 `setSelectedIndex` 同步更新 initial snapshot selected index 和 pending provider current；`viewDidLoad` 安装已
 发布 Header后 enqueue snapshot request。不得创建第二个 request ID或重复 begin generation。
 
-- [ ] **Step 8: 运行端到端组合回归**
+- [ ] **Step 8: 删除无 request identifier 临时兼容桥**
+
+ViewController 全面切换到 request-aware delegate 后，删除 Host 的旧 `reload(titles:pageCount:selectedIndex:)` overload、
+旧 `didReload` delegate bridge 和 compatibility identifier；删除 Adapter 的旧无 identifier reload/delegate bridge、
+`allowsUnidentifiedReloadCallback`。同步更新 Host/Adapter 测试，确保只剩一条 request-aware terminal 路径。
+
+- [ ] **Step 9: 运行端到端组合回归**
 
 ```bash
 xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17' \
@@ -399,11 +410,15 @@ xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 
   -only-testing:AnchorPagerTests/AnchorPagerPagingAdapterTests test
 ```
 
-- [ ] **Step 9: 提交端到端 staged reload**
+- [ ] **Step 10: 提交端到端 staged reload**
 
 ```bash
 git add Sources/AnchorPager/Public/AnchorPagerViewController.swift \
-  Tests/AnchorPagerTests/AnchorPagerViewControllerTests.swift
+  Sources/AnchorPager/Paging/AnchorPagerPagingHostViewController.swift \
+  Sources/AnchorPager/Paging/AnchorPagerPagingAdapter.swift \
+  Tests/AnchorPagerTests/AnchorPagerViewControllerTests.swift \
+  Tests/AnchorPagerTests/AnchorPagerPagingHostViewControllerTests.swift \
+  Tests/AnchorPagerTests/AnchorPagerPagingAdapterTests.swift
 git commit -m "原子提交 reload public 与 provider 代际"
 ```
 

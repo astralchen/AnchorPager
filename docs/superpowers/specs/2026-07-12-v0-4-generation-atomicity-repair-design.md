@@ -129,6 +129,8 @@ active request：已调用 willPerform、等待 page/empty terminal 的唯一 re
 5. pending/active request 存在时程序化 selection 返回 false。
 6. 旧 selection did/cancel 只用于解除 readiness；存在 pending reload 时不提交旧 public selection。
 7. 不使用 timer；推进只来自 did/cancel、programmatic completion 或 reload terminal。
+8. request-aware ViewController 接入完成后，删除 Host/Adapter 的无 request identifier reload 与 terminal 兼容桥；
+   internal 层只保留一条带 request identifier 的 reload/terminal 契约，避免双 terminal 语义长期并存。
 
 ### ViewController 激活与提交
 
