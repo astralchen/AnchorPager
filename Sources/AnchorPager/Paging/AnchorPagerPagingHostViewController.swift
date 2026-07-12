@@ -1,5 +1,7 @@
 import UIKit
 
+typealias AnchorPagerPagingReloadRequestIdentifier = Int
+
 @MainActor
 enum AnchorPagerPagingReloadTerminal: Equatable {
     case page(index: Int)
@@ -8,6 +10,16 @@ enum AnchorPagerPagingReloadTerminal: Equatable {
 
 @MainActor
 protocol AnchorPagerPagingHostViewControllerDelegate: AnyObject {
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
+        willPerformReloadRequest identifier: AnchorPagerPagingReloadRequestIdentifier
+    ) -> Bool
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
+        didReload terminal: AnchorPagerPagingReloadTerminal,
+        requestIdentifier: AnchorPagerPagingReloadRequestIdentifier
+    )
+    // Task 3 接入请求标识后删除该兼容协议方法。
     func pagingHost(
         _ host: AnchorPagerPagingHostViewController,
         didReload terminal: AnchorPagerPagingReloadTerminal
@@ -33,9 +45,32 @@ protocol AnchorPagerPagingHostViewControllerDelegate: AnyObject {
     )
 }
 
+extension AnchorPagerPagingHostViewControllerDelegate {
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
+        willPerformReloadRequest identifier: AnchorPagerPagingReloadRequestIdentifier
+    ) -> Bool {
+        true
+    }
+
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
+        didReload terminal: AnchorPagerPagingReloadTerminal,
+        requestIdentifier: AnchorPagerPagingReloadRequestIdentifier
+    ) {
+        pagingHost(host, didReload: terminal)
+    }
+
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
+        didReload terminal: AnchorPagerPagingReloadTerminal
+    ) {}
+}
+
 @MainActor
 final class AnchorPagerPagingHostViewController: UIViewController {
     private struct ReloadRequest {
+        let identifier: AnchorPagerPagingReloadRequestIdentifier
         let titles: [String]
         let pageCount: Int
         let selectedIndex: Int
@@ -54,6 +89,9 @@ final class AnchorPagerPagingHostViewController: UIViewController {
     private var lastReportedBarInsets: UIEdgeInsets = .zero
     private var activeAdapterConstraints: [NSLayoutConstraint] = []
     private var pendingReloadRequest: ReloadRequest?
+    private var activeReloadRequest: ReloadRequest?
+    private var isStartingReloadRequest = false
+    private var nextCompatibilityRequestIdentifier = -1
 
     override func loadView() {
         let view = UIView()
@@ -61,29 +99,68 @@ final class AnchorPagerPagingHostViewController: UIViewController {
         self.view = view
     }
 
+    // Task 3 接入显式请求标识后删除该兼容入口。
     func reload(titles: [String], pageCount: Int, selectedIndex: Int) {
-        let request = ReloadRequest(
+        let requestIdentifier = nextCompatibilityRequestIdentifier
+        nextCompatibilityRequestIdentifier -= 1
+        reload(
+            requestIdentifier: requestIdentifier,
             titles: titles,
             pageCount: pageCount,
             selectedIndex: selectedIndex
         )
-        if let activeAdapter, !activeAdapter.isReadyForReload {
+    }
+
+    func reload(
+        requestIdentifier: AnchorPagerPagingReloadRequestIdentifier,
+        titles: [String],
+        pageCount: Int,
+        selectedIndex: Int
+    ) {
+        let request = ReloadRequest(
+            identifier: requestIdentifier,
+            titles: titles,
+            pageCount: pageCount,
+            selectedIndex: selectedIndex
+        )
+        if activeReloadRequest != nil ||
+            isStartingReloadRequest ||
+            activeAdapter?.isReadyForReload == false {
             pendingReloadRequest = request
             AnchorPagerLogger.log(.debug, category: .paging, event: "paging.reload.deferred")
             return
         }
 
         pendingReloadRequest = nil
-        performReload(request)
+        _ = performReload(request)
     }
 
-    private func performReload(_ request: ReloadRequest) {
+    @discardableResult
+    private func performReload(_ request: ReloadRequest) -> Bool {
+        isStartingReloadRequest = true
+        let shouldPerform = eventDelegate?.pagingHost(
+            self,
+            willPerformReloadRequest: request.identifier
+        ) ?? true
+        isStartingReloadRequest = false
+
+        guard shouldPerform else {
+            AnchorPagerLogger.log(.debug, category: .paging, event: "paging.reload.stale")
+            _ = performPendingReloadIfNeeded()
+            return false
+        }
+
+        activeReloadRequest = request
+        AnchorPagerLogger.log(.info, category: .paging, event: "paging.reload.begin")
         guard request.pageCount > 0 else {
-            guard removeActiveAdapterIfNeeded(pendingRequestOnFailure: request) else { return }
+            guard removeActiveAdapterIfNeeded(pendingRequestOnFailure: request) else {
+                activeReloadRequest = nil
+                return false
+            }
             reportZeroBarInsetsIfNeeded()
             AnchorPagerLogger.log(.info, category: .paging, event: "paging.reload.empty")
-            eventDelegate?.pagingHost(self, didReload: .empty)
-            return
+            finishActiveReload(with: .empty)
+            return true
         }
 
         let adapter = activeAdapter ?? installAdapter()
@@ -93,6 +170,7 @@ final class AnchorPagerPagingHostViewController: UIViewController {
             pageCount: request.pageCount,
             selectedIndex: request.selectedIndex
         )
+        return true
     }
 
     func setBarHeight(_ height: CGFloat?) {
@@ -102,7 +180,9 @@ final class AnchorPagerPagingHostViewController: UIViewController {
 
     @discardableResult
     func setSelectedIndex(_ index: Int, animated: Bool) -> Bool {
-        guard pendingReloadRequest == nil else {
+        guard pendingReloadRequest == nil,
+              activeReloadRequest == nil,
+              !isStartingReloadRequest else {
             AnchorPagerLogger.log(
                 .debug,
                 category: .paging,
@@ -167,10 +247,22 @@ final class AnchorPagerPagingHostViewController: UIViewController {
     @discardableResult
     private func performPendingReloadIfNeeded() -> Bool {
         guard let request = pendingReloadRequest else { return false }
+        guard activeReloadRequest == nil, !isStartingReloadRequest else { return true }
         guard activeAdapter?.isReadyForReload != false else { return true }
         pendingReloadRequest = nil
-        performReload(request)
+        _ = performReload(request)
         return true
+    }
+
+    private func finishActiveReload(with terminal: AnchorPagerPagingReloadTerminal) {
+        guard let request = activeReloadRequest else { return }
+        eventDelegate?.pagingHost(
+            self,
+            didReload: terminal,
+            requestIdentifier: request.identifier
+        )
+        activeReloadRequest = nil
+        _ = performPendingReloadIfNeeded()
     }
 
     private func reportZeroBarInsetsIfNeeded() {
@@ -225,7 +317,7 @@ extension AnchorPagerPagingHostViewController: AnchorPagerPagingAdapterDelegate 
 
     func pagingAdapter(_ adapter: AnchorPagerPagingAdapter, didReloadAt index: Int) {
         guard adapter === activeAdapter else { return }
-        eventDelegate?.pagingHost(self, didReload: .page(index: index))
+        finishActiveReload(with: .page(index: index))
     }
 
     func pagingAdapterDidBecomeReadyForReload(_ adapter: AnchorPagerPagingAdapter) {

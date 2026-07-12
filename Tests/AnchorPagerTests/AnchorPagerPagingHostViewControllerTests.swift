@@ -157,7 +157,7 @@ final class AnchorPagerPagingHostViewControllerTests: XCTestCase {
         XCTAssertTrue(newAdapter.view.superview === host.view)
     }
 
-    func testAdapterEventsAreForwardedAsHostEvents() throws {
+    func testSelectionEventsAreForwardedAndReloadWithoutActiveRequestIsIgnored() throws {
         let host = makeHost()
         let delegate = RecordingPagingHostDelegate()
         host.eventDelegate = delegate
@@ -173,7 +173,7 @@ final class AnchorPagerPagingHostViewControllerTests: XCTestCase {
 
         XCTAssertEqual(
             delegate.events,
-            [.willSelect(1, true), .didSelect(1, true), .didCancel(1, 0), .reload(.page(index: 1))]
+            [.willSelect(1, true), .didSelect(1, true), .didCancel(1, 0)]
         )
     }
 
@@ -338,6 +338,153 @@ final class AnchorPagerPagingHostViewControllerTests: XCTestCase {
         XCTAssertFalse(delegate.events.contains(.didCancel(1, 0)))
     }
 
+    func testDeferredReloadOnlyStartsLatestRequestAfterSelectionTerminal() throws {
+        let host = makeHost()
+        let delegate = RecordingRequestPagingHostDelegate()
+        host.eventDelegate = delegate
+        host.reload(requestIdentifier: 1, titles: ["First", "Second"], pageCount: 2, selectedIndex: 0)
+        let adapter = try XCTUnwrap(host.activeAdapter)
+        delegate.events.removeAll()
+        adapter.pageboyViewController(
+            adapter,
+            willScrollToPageAt: 1,
+            direction: .forward,
+            animated: true
+        )
+
+        host.reload(requestIdentifier: 2, titles: [], pageCount: 0, selectedIndex: 0)
+        host.reload(requestIdentifier: 3, titles: ["Latest"], pageCount: 1, selectedIndex: 0)
+
+        XCTAssertTrue(delegate.events.isEmpty)
+        adapter.pageboyViewController(
+            adapter,
+            didScrollToPageAt: 1,
+            direction: .forward,
+            animated: true
+        )
+
+        XCTAssertEqual(
+            delegate.events,
+            [.willPerform(3), .reload(3, .page(index: 0))]
+        )
+    }
+
+    func testActiveReloadSerializesNewerRequestUntilMatchingTerminal() throws {
+        let provider = ControllableHostPageProvider()
+        let host = AnchorPagerPagingHostViewController()
+        host.pageProvider = provider
+        let delegate = RecordingRequestPagingHostDelegate()
+        host.eventDelegate = delegate
+        host.reload(requestIdentifier: 1, titles: ["First"], pageCount: 1, selectedIndex: 0)
+        let adapter = try XCTUnwrap(host.activeAdapter)
+        delegate.events.removeAll()
+        provider.providesPages = false
+
+        host.reload(
+            requestIdentifier: 2,
+            titles: ["First", "Second"],
+            pageCount: 2,
+            selectedIndex: 0
+        )
+        host.reload(
+            requestIdentifier: 3,
+            titles: ["First", "Second", "Third"],
+            pageCount: 3,
+            selectedIndex: 2
+        )
+
+        XCTAssertEqual(delegate.events, [.willPerform(2)])
+        XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 2)
+        host.pagingAdapter(adapter, didReloadAt: 0)
+
+        XCTAssertEqual(
+            delegate.events,
+            [.willPerform(2), .reload(2, .page(index: 0)), .willPerform(3)]
+        )
+        XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 3)
+        host.pagingAdapter(adapter, didReloadAt: 2)
+
+        XCTAssertEqual(
+            delegate.events,
+            [
+                .willPerform(2),
+                .reload(2, .page(index: 0)),
+                .willPerform(3),
+                .reload(3, .page(index: 2)),
+            ]
+        )
+    }
+
+    func testTerminalCarriesActiveRequestIdentifier() {
+        let host = makeHost()
+        let delegate = RecordingRequestPagingHostDelegate()
+        host.eventDelegate = delegate
+
+        host.reload(requestIdentifier: 42, titles: ["First"], pageCount: 1, selectedIndex: 0)
+        host.reload(requestIdentifier: 43, titles: [], pageCount: 0, selectedIndex: 0)
+
+        XCTAssertEqual(
+            delegate.events,
+            [
+                .willPerform(42),
+                .reload(42, .page(index: 0)),
+                .willPerform(43),
+                .reload(43, .empty),
+            ]
+        )
+    }
+
+    func testRejectedWillPerformDoesNotCallAdapterOrEmitTerminal() throws {
+        let host = makeHost()
+        let delegate = RecordingRequestPagingHostDelegate()
+        host.eventDelegate = delegate
+        host.reload(requestIdentifier: 1, titles: ["First"], pageCount: 1, selectedIndex: 0)
+        let adapter = try XCTUnwrap(host.activeAdapter)
+        delegate.events.removeAll()
+        delegate.rejectedRequestIdentifiers = [2]
+        var logEvents: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { logEvents.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+
+        host.reload(
+            requestIdentifier: 2,
+            titles: ["First", "Second"],
+            pageCount: 2,
+            selectedIndex: 1
+        )
+
+        XCTAssertEqual(delegate.events, [.willPerform(2)])
+        XCTAssertTrue(host.activeAdapter === adapter)
+        XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 1)
+        XCTAssertTrue(logEvents.contains(
+            .init(category: .paging, level: .debug, event: "paging.reload.stale")
+        ))
+    }
+
+    func testPendingOrActiveReloadRejectsProgrammaticSelection() throws {
+        let pendingHost = makeHost()
+        pendingHost.reload(requestIdentifier: 1, titles: ["First", "Second"], pageCount: 2, selectedIndex: 0)
+        let pendingAdapter = try XCTUnwrap(pendingHost.activeAdapter)
+        pendingAdapter.pageboyViewController(
+            pendingAdapter,
+            willScrollToPageAt: 1,
+            direction: .forward,
+            animated: true
+        )
+        pendingHost.reload(requestIdentifier: 2, titles: ["Replacement"], pageCount: 1, selectedIndex: 0)
+
+        XCTAssertFalse(pendingHost.setSelectedIndex(0, animated: false))
+
+        let provider = ControllableHostPageProvider()
+        let activeHost = AnchorPagerPagingHostViewController()
+        activeHost.pageProvider = provider
+        activeHost.reload(requestIdentifier: 3, titles: ["First", "Second"], pageCount: 2, selectedIndex: 0)
+        provider.providesPages = false
+        activeHost.reload(requestIdentifier: 4, titles: ["Replacement"], pageCount: 1, selectedIndex: 0)
+
+        XCTAssertFalse(activeHost.setSelectedIndex(0, animated: false))
+    }
+
     func testInstallRemoveAndEmptyReloadWriteStableLogs() {
         let host = makeHost()
         var events: [AnchorPagerLogger.Event] = []
@@ -385,6 +532,68 @@ private final class FixedHostPageProvider: AnchorPagerPageProviding {
     func pageViewController(at index: Int) -> UIViewController? {
         index == 0 ? page : nil
     }
+}
+
+@MainActor
+private final class ControllableHostPageProvider: AnchorPagerPageProviding {
+    var providesPages = true
+
+    func pageViewController(at index: Int) -> UIViewController? {
+        providesPages ? UIViewController() : nil
+    }
+}
+
+@MainActor
+private final class RecordingRequestPagingHostDelegate: AnchorPagerPagingHostViewControllerDelegate {
+    enum Event: Equatable {
+        case willPerform(AnchorPagerPagingReloadRequestIdentifier)
+        case reload(
+            AnchorPagerPagingReloadRequestIdentifier,
+            AnchorPagerPagingReloadTerminal
+        )
+    }
+
+    var events: [Event] = []
+    var rejectedRequestIdentifiers: Set<AnchorPagerPagingReloadRequestIdentifier> = []
+
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
+        willPerformReloadRequest identifier: AnchorPagerPagingReloadRequestIdentifier
+    ) -> Bool {
+        events.append(.willPerform(identifier))
+        return !rejectedRequestIdentifiers.contains(identifier)
+    }
+
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
+        didReload terminal: AnchorPagerPagingReloadTerminal,
+        requestIdentifier: AnchorPagerPagingReloadRequestIdentifier
+    ) {
+        events.append(.reload(requestIdentifier, terminal))
+    }
+
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
+        willSelect index: Int,
+        animated: Bool
+    ) {}
+
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
+        didSelect index: Int,
+        animated: Bool
+    ) {}
+
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
+        didCancelSelectionAt index: Int,
+        returningTo previousIndex: Int
+    ) {}
+
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
+        didUpdateBarInsets barInsets: UIEdgeInsets
+    ) {}
 }
 
 @MainActor
