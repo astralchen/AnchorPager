@@ -63,10 +63,7 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
     var isReadyForReload: Bool {
         pendingPageboySelectionIndex == nil &&
             pendingProgrammaticSelection == nil &&
-            !isProgrammaticTransitionCompletionPending &&
-            !isTracking &&
-            !isDragging &&
-            !isDecelerating
+            !isProgrammaticTransitionCompletionPending
     }
 
     override init(nibName nibNameOrNil: String?, bundle nibBundleOrNil: Bundle?) {
@@ -370,7 +367,7 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
         pendingProgrammaticSelection = nil
     }
 
-    private func finishProgrammaticTransition(at index: Int, finished: Bool) {
+    func finishProgrammaticTransition(at index: Int, finished: Bool) {
         isProgrammaticTransitionCompletionPending = false
         _ = finishProgrammaticSelection(at: index, finished: finished)
         if isReadyForReload {

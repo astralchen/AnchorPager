@@ -387,6 +387,48 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
         XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 2)
     }
 
+    func testProgrammaticDidRemainsBusyUntilScrollCompletion() {
+        let adapter = AnchorPagerPagingAdapter()
+        adapter.loadViewIfNeeded()
+        reload(
+            adapter,
+            titles: ["First", "Second"],
+            viewControllers: [UIViewController(), UIViewController()],
+            selectedIndex: 0
+        )
+        XCTAssertTrue(adapter.setSelectedIndex(1, animated: true))
+
+        adapter.pageboyViewController(
+            adapter,
+            didScrollToPageAt: 1,
+            direction: .forward,
+            animated: true
+        )
+
+        XCTAssertFalse(adapter.isReadyForReload)
+
+        adapter.finishProgrammaticTransition(at: 1, finished: true)
+
+        XCTAssertTrue(adapter.isReadyForReload)
+    }
+
+    func testReloadReadinessUsesSemanticTransactionStateOnly() throws {
+        let sourceURL = try packageRoot()
+            .appendingPathComponent("Sources")
+            .appendingPathComponent("AnchorPager")
+            .appendingPathComponent("Paging")
+            .appendingPathComponent("AnchorPagerPagingAdapter.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+        let readiness = try XCTUnwrap(
+            source.components(separatedBy: "var isReadyForReload: Bool {").dropFirst().first?
+                .components(separatedBy: "\n    }").first
+        )
+
+        XCTAssertFalse(readiness.contains("isTracking"))
+        XCTAssertFalse(readiness.contains("isDragging"))
+        XCTAssertFalse(readiness.contains("isDecelerating"))
+    }
+
     @MainActor
     func testDeleteThenPostOrderTeardownClearsRemainingPageboyContainment() {
         let page = UIViewController()
