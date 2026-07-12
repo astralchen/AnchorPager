@@ -32,6 +32,8 @@ final class AnchorPagerPageScrollHostViewController: UIViewController {
         guard contentViewController.parent === self else { return }
 
         contentViewController.willMove(toParent: nil)
+        contentMinimumHeightConstraint?.isActive = false
+        contentMinimumHeightConstraint = nil
         contentViewController.view.removeFromSuperview()
         contentViewController.removeFromParent()
         AnchorPagerLogger.log(.info, category: .children, event: "reloadData.child.remove")

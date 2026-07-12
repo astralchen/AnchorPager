@@ -23,6 +23,7 @@ final class AnchorPagerPageStateStore {
         var retentionReasons: Set<RetentionReason> = []
         var childDistanceFromTop: CGFloat = 0
         var claimedScrollViewIdentifier: ObjectIdentifier?
+        var originalViewControllerIdentifier: ObjectIdentifier?
         var hasLoadedBefore = false
     }
 
@@ -33,6 +34,8 @@ final class AnchorPagerPageStateStore {
         var keepsAdjacentPagesLoaded: Bool
         var pages: [Int: PageState] = [:]
         var claimedScrollViewIdentifiers: Set<ObjectIdentifier> = []
+        var originalControllerIndexes: [ObjectIdentifier: Int] = [:]
+        var migratedPreviousDistances: [ObjectIdentifier: CGFloat] = [:]
         var transitionSourceIndex: Int?
         var transitionTargetIndex: Int?
 
@@ -54,6 +57,14 @@ final class AnchorPagerPageStateStore {
     private var pendingGeneration: GenerationState?
     private(set) var lastManagedUpdateCount = 0
 
+    var committedGenerationIdentifier: Int? {
+        committedGeneration?.identifier
+    }
+
+    var pendingGenerationIdentifier: Int? {
+        pendingGeneration?.identifier
+    }
+
     init(managedInsetCoordinator: AnchorPagerManagedInsetCoordinator) {
         self.managedInsetCoordinator = managedInsetCoordinator
     }
@@ -64,6 +75,28 @@ final class AnchorPagerPageStateStore {
         selectedIndex: Int,
         keepsAdjacentPagesLoaded: Bool
     ) {
+        if let pendingGeneration {
+            restoreMigratedDistances(in: pendingGeneration)
+            let committedStateIdentifiers = Set(
+                committedGeneration?.pages.values.map(ObjectIdentifier.init) ?? []
+            )
+            release(pendingGeneration, preserving: committedStateIdentifiers)
+            if let committedGeneration {
+                reconcileRetention(in: committedGeneration)
+            }
+            AnchorPagerLogger.log(
+                .debug,
+                category: .children,
+                event: "children.page.generation.cancel"
+            )
+        }
+        if pageCount < 0 {
+            AnchorPagerLogger.log(
+                .error,
+                category: .children,
+                event: "children.page.invalidCount"
+            )
+        }
         let count = Swift.max(0, pageCount)
         let currentIndex = (0..<count).contains(selectedIndex) ? selectedIndex : 0
         pendingGeneration = GenerationState(
@@ -85,10 +118,73 @@ final class AnchorPagerPageStateStore {
             return nil
         }
 
-        let state = generation.pages[index] ?? PageState()
+        let existingState = generation.pages[index]
+        if let livePage = existingState?.actualPageViewController {
+            guard let existingState else { return nil }
+            applyManagedInsets(context.managedInsetTarget, to: existingState)
+            AnchorPagerLogger.log(.debug, category: .children, event: "children.page.reuse")
+            return livePage
+        }
+        if let existingState,
+           existingState.originalViewController == nil,
+           let originalIdentifier = existingState.originalViewControllerIdentifier {
+            generation.originalControllerIndexes.removeValue(forKey: originalIdentifier)
+            existingState.originalViewControllerIdentifier = nil
+        }
+
+        let requestedGenerationIdentifier = generation.identifier
+        let providedViewController = existingState?.originalViewController ?? originalProvider()
+        guard activeGeneration === generation,
+              generation.identifier == requestedGenerationIdentifier else {
+            AnchorPagerLogger.log(
+                .debug,
+                category: .children,
+                event: "children.page.generation.cancel"
+            )
+            return nil
+        }
+
+        var originalViewController: UIViewController
+        if let providedViewController {
+            originalViewController = providedViewController
+        } else {
+            originalViewController = UIViewController()
+            AnchorPagerLogger.log(
+                .error,
+                category: .children,
+                event: "children.page.dataSourceMissing"
+            )
+        }
+        var originalIdentifier = ObjectIdentifier(originalViewController)
+        if let claimedIndex = generation.originalControllerIndexes[originalIdentifier],
+           claimedIndex != index {
+            AnchorPagerAssertions.failure(
+                "AnchorPager pages must not reuse one view controller at multiple indexes."
+            )
+            AnchorPagerLogger.log(
+                .debug,
+                category: .children,
+                event: "children.page.duplicateController"
+            )
+            originalViewController = UIViewController()
+            originalIdentifier = ObjectIdentifier(originalViewController)
+        }
+        let state = existingState
+            ?? migratedState(
+                for: originalViewController,
+                to: index,
+                in: generation
+            )
+            ?? PageState()
         generation.pages[index] = state
+        generation.originalControllerIndexes[originalIdentifier] = index
+
         if let livePage = state.actualPageViewController {
+            if let claimedIdentifier = state.claimedScrollViewIdentifier {
+                generation.claimedScrollViewIdentifiers.insert(claimedIdentifier)
+            }
             applyManagedInsets(context.managedInsetTarget, to: state)
+            reconcileRetention(in: generation)
             AnchorPagerLogger.log(.debug, category: .children, event: "children.page.reuse")
             return livePage
         }
@@ -101,17 +197,6 @@ final class AnchorPagerPageStateStore {
             state.claimedScrollViewIdentifier = nil
         }
 
-        let originalViewController: UIViewController
-        if let providedViewController = originalProvider() {
-            originalViewController = providedViewController
-        } else {
-            originalViewController = UIViewController()
-            AnchorPagerLogger.log(
-                .error,
-                category: .children,
-                event: "children.page.dataSourceMissing"
-            )
-        }
         originalViewController.loadViewIfNeeded()
         let actualPageViewController: UIViewController
         let scrollView: UIScrollView
@@ -153,6 +238,7 @@ final class AnchorPagerPageStateStore {
         }
 
         state.originalViewController = originalViewController
+        state.originalViewControllerIdentifier = originalIdentifier
         state.actualPageViewController = actualPageViewController
         state.scrollView = scrollView
         state.claimedScrollViewIdentifier = ObjectIdentifier(scrollView)
@@ -181,6 +267,14 @@ final class AnchorPagerPageStateStore {
 
     func childDistanceFromTop(at index: Int) -> CGFloat {
         activeGeneration?.pages[index]?.childDistanceFromTop ?? 0
+    }
+
+    func pageStateIdentifier(at index: Int) -> ObjectIdentifier? {
+        activeGeneration?.pages[index].map(ObjectIdentifier.init)
+    }
+
+    func isPageRetained(at index: Int) -> Bool {
+        activeGeneration?.pages[index]?.retainedPage != nil
     }
 
     func setKeepsAdjacentPagesLoaded(_ keepsAdjacentPagesLoaded: Bool) {
@@ -257,17 +351,33 @@ final class AnchorPagerPageStateStore {
     }
 
     func commitReload(generation: Int) {
-        guard pendingGeneration?.identifier == generation else { return }
+        guard pendingGeneration?.identifier == generation else {
+            AnchorPagerLogger.log(
+                .debug,
+                category: .children,
+                event: "children.page.generation.cancel"
+            )
+            return
+        }
+        let oldGeneration = committedGeneration
         committedGeneration = pendingGeneration
         pendingGeneration = nil
+        if let oldGeneration {
+            let preservedStateIdentifiers = Set(
+                committedGeneration?.pages.values.map(ObjectIdentifier.init) ?? []
+            )
+            release(oldGeneration, preserving: preservedStateIdentifiers)
+        }
         AnchorPagerLogger.log(.info, category: .children, event: "children.page.generation.commit")
     }
 
     func releaseAll() {
-        let scrollViews = [pendingGeneration, committedGeneration]
-            .compactMap { $0 }
-            .flatMap { $0.pages.values.compactMap(\.scrollView) }
-        scrollViews.forEach(managedInsetCoordinator.release)
+        var releasedStateIdentifiers: Set<ObjectIdentifier> = []
+        for generation in [pendingGeneration, committedGeneration].compactMap({ $0 }) {
+            let stateIdentifiers = Set(generation.pages.values.map(ObjectIdentifier.init))
+            release(generation, preserving: releasedStateIdentifiers)
+            releasedStateIdentifiers.formUnion(stateIdentifiers)
+        }
         pendingGeneration = nil
         committedGeneration = nil
     }
@@ -298,6 +408,26 @@ final class AnchorPagerPageStateStore {
         generation.claimedScrollViewIdentifiers.insert(ObjectIdentifier(fallbackHost.scrollView))
         state.fallbackHost = fallbackHost
         return fallbackHost
+    }
+
+    private func migratedState(
+        for originalViewController: UIViewController,
+        to newIndex: Int,
+        in generation: GenerationState
+    ) -> PageState? {
+        guard let committedGeneration,
+              committedGeneration !== generation,
+              let (oldIndex, state) = committedGeneration.pages.first(where: {
+                  $0.value.originalViewController === originalViewController
+              }) else {
+            return nil
+        }
+        let currentDistance = state.scrollView.map {
+            childDistanceFromTop(in: $0)
+        } ?? state.childDistanceFromTop
+        generation.migratedPreviousDistances[ObjectIdentifier(state)] = currentDistance
+        state.childDistanceFromTop = oldIndex == newIndex ? currentDistance : 0
+        return state
     }
 
     private func reconcileRetention(in generation: GenerationState) {
@@ -403,5 +533,34 @@ final class AnchorPagerPageStateStore {
             }
         }
         return indexes
+    }
+
+    private func release(
+        _ generation: GenerationState,
+        preserving preservedStateIdentifiers: Set<ObjectIdentifier>
+    ) {
+        for state in generation.pages.values
+        where !preservedStateIdentifiers.contains(ObjectIdentifier(state)) {
+            if let scrollView = state.scrollView {
+                managedInsetCoordinator.release(scrollView)
+            }
+            state.fallbackHost?.setManagedContentInsets(.zero)
+            state.fallbackHost?.removeContentForReloadData()
+            state.retentionReasons = []
+            state.retainedPage = nil
+        }
+        generation.pages.removeAll()
+        generation.claimedScrollViewIdentifiers.removeAll()
+        generation.originalControllerIndexes.removeAll()
+        generation.migratedPreviousDistances.removeAll()
+    }
+
+    private func restoreMigratedDistances(in generation: GenerationState) {
+        for state in generation.pages.values {
+            guard let distance = generation.migratedPreviousDistances[ObjectIdentifier(state)] else {
+                continue
+            }
+            state.childDistanceFromTop = distance
+        }
     }
 }

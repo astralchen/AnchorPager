@@ -87,6 +87,20 @@ final class AnchorPagerChildViewControllerStoreTests: XCTestCase {
     }
 
     @MainActor
+    func testFallbackPageScrollHostContentRemovalIsIdempotent() {
+        let child = UIViewController()
+        let host = AnchorPagerPageScrollHostViewController(contentViewController: child)
+        host.loadViewIfNeeded()
+
+        host.removeContentForReloadData()
+        host.removeContentForReloadData()
+
+        XCTAssertNil(child.parent)
+        XCTAssertNil(child.view.superview)
+        XCTAssertTrue(host.children.isEmpty)
+    }
+
+    @MainActor
     func testChildStoreAndFallbackHostWriteLogs() {
         let parent = UIViewController()
         parent.loadViewIfNeeded()
