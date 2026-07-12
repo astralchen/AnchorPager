@@ -182,7 +182,8 @@ README 增加构建要求；architecture 记录 Swift 6.2.4/x86_64 `isolated dei
 - [ ] **Step 2: 审查历史与当前文档边界**
 
 保留 v0.1–v0.4 已完成计划中的历史“Swift 6”执行文本；roadmap、requirements、task-list、AGENTS 和正在执行的
-generation atomicity plan 必须明确 Swift 6.2+。fixed-paging spec 当前析构契约改为 `isolated deinit`。
+generation atomicity plan 必须明确最低工具链 Swift 6.2+、语言模式 Swift 6。fixed-paging spec 当前析构契约继续使用
+已验证的 `deinit + MainActor.assumeIsolated`，并记录 `isolated deinit` 的 allocator crash 限制。
 
 - [ ] **Step 3: 运行文档与 manifest 一致性检查**
 
