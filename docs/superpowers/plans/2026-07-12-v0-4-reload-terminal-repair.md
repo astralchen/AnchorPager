@@ -4,7 +4,7 @@
 
 **Goal:** 修复非空到空 reload 的旧 Pageboy 内容残留，建立统一 page/empty terminal、public reload 重入保护，并补齐 v0.4 appearance cancel 和文档验收。
 
-**Architecture:** viewport 长期 contain `AnchorPagerPagingHostViewController`，host 按空/非空状态 contain 或移除 `AnchorPagerPagingAdapter`，并向主控制器发送领域无关 reload terminal。移除前由 adapter 的集中 Pageboy 5.0.2 兼容 shim 通过第三方 public reconfiguration 让 Pageboy 自己清空内部页面 containment。`AnchorPagerViewController.reloadData()` 使用 transaction token 采集局部数据快照，只有最新事务才能发布并开始 Store generation。
+**Architecture:** viewport 长期 contain `AnchorPagerPagingHostViewController`，host 按空/非空状态 contain 或移除 `AnchorPagerPagingAdapter`，并向主控制器发送领域无关 reload terminal。移除前由 adapter 的集中 Pageboy 5.0.2 兼容 shim 通过第三方 public delete-last-page 先解除业务页面，再清理只剩 plumbing 的 UIKit containment。`AnchorPagerViewController.reloadData()` 使用 transaction token 采集局部数据快照，只有最新事务才能发布并开始 Store generation。
 
 **Tech Stack:** Swift 6、UIKit、Swift Package Manager、XCTest、XCUITest、Tabman 4.0.1、Pageboy 5.0.2、iOS 14+
 
@@ -16,7 +16,8 @@
 - PagingHost 只管理 adapter containment，不管理页面 identity、snapshot 或 inset ownership。
 - Store 只在 paging host 的 page/empty terminal 后提交 pending generation。
 - 所有 data source、UIKit、paging host、Store 和 coordinator 操作保持 `@MainActor`。
-- 不使用 timer、异步延迟、sentinel page、手工 appearance forwarding 或第三方 internal API。
+- 不使用 timer、生产异步延迟、AnchorPager sentinel page、手工 appearance forwarding 或第三方 internal API；
+  允许 Pageboy public delete-last-page 内部使用其零页 reset controller，但不得把它暴露为业务 page。
 - Pageboy 5.0.2 空态 teardown 只能封装在 adapter 的单一兼容入口；依赖升级必须重审对应源码契约与回归测试。
 - 每项行为严格执行 RED → GREEN → REFACTOR。
 - 复用当前 `iPhone 17` simulator，不执行无必要 boot/shutdown。
@@ -156,14 +157,16 @@ Expected: 旧 adapter/page 仍存在，RED 失败。
 - [ ] **Step 3: 写 adapter teardown 兼容 RED 并实现集中 shim**
 
 先在真实 Pageboy containment 中断言：旧 scroll/fallback page 的 `parent`/view superview 被同步清空，且清理过程
-不发送 page/selection terminal。然后实现 adapter internal `prepareForRemoval()`：先清空自身 count/titles/pending
-selection，再以 `interPageSpacing = interPageSpacing` 调用 Pageboy 5.0.2 public reconfiguration。不得访问第三方
-internal `pageViewController`，不得由 AnchorPager 手拆业务 page。
+不发送 page/selection terminal。然后实现 adapter internal `prepareForRemoval()`：先清空自身 data source 状态，
+再调用 Pageboy 5.0.2 public `deletePage`。completion 只记录同步完成；delete 整体返回并确认 public count 0/current
+index nil 后，post-order 清理 adapter 剩余 direct-child plumbing。不得识别第三方类型、访问 third-party internal，
+也不得手拆原业务 page。
 
 - [ ] **Step 4: Host 清理必须先执行 adapter teardown**
 
 Host 只能在 `prepareForRemoval()` 返回后执行 adapter `willMove(nil)`、移除 view、`removeFromParent()`、barInsets
-归零和 `.empty` terminal。测试在 terminal 快照中同时断言 active adapter、Host children、旧业务 page parent 均为空。
+归零和 `.empty` terminal。测试在 terminal 快照中同时断言 active adapter、Host children、旧业务 page parent 均为空；
+另以测试端 main-queue turns 验证 adapter/inner/reset placeholder 最终 weak 释放，生产代码不得等待析构。
 
 - [ ] **Step 5: 把根布局 containment 改为稳定 Host**
 
