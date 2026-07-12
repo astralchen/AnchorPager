@@ -2,6 +2,14 @@
 
 本文档面向维护者，记录当前 v0.4 Child 生命周期与缓存阶段的架构边界和已固定契约。
 
+## 技术基线
+
+- Minimum toolchain：Swift 6.2
+- Language mode：Swift 6（`swiftLanguageModes: [.v6]`）
+- Minimum OS：iOS 14
+
+tools version 负责 SwiftPM/编译器最低工具链门禁，`.v6` 只选择 Swift 6 language mode；两者不能混为一谈。
+
 ## 模块划分
 
 ```text
@@ -19,7 +27,7 @@ Sources/AnchorPager/
 
 ## Core 基础设施
 
-`AnchorPagerAssertions` 是内部断言门面，不操作 UIKit 状态，因此不绑定 MainActor。测试需要临时关闭断言时通过 `@TaskLocal` 的 `isEnabled` 覆盖当前调用上下文，避免共享可变全局状态，也避免使用 `nonisolated(unsafe)` 压制 Swift 6 并发检查。
+`AnchorPagerAssertions` 是内部断言门面，不操作 UIKit 状态，因此不绑定 MainActor。测试需要临时关闭断言时通过 `@TaskLocal` 的 `isEnabled` 覆盖当前调用上下文，避免共享可变全局状态，也避免使用 `nonisolated(unsafe)` 压制 Swift 6 language mode 并发检查。
 
 ## Public API 契约
 
@@ -210,7 +218,7 @@ v0.4 由 PageStateStore 在页面第一次按需请求时加载该 child view，
 
 `AnchorPagerManagedInsetCoordinator` 以弱引用 record 管理每个 active page scroll view。managed content top 与 indicator top 等于 adapter 通过 public `barInsets.top` 回报的实际 bar obstruction，不包含 Header 或顶部 safe area；managed content bottom 和 indicator bottom 等于 LayoutEngine 输出的 child 本地底部遮挡。
 
-每次更新先用“当前总 inset - 上次 managed inset”分离 external，再叠加新 managed target，并按 `contentOffset.y + contentInset.top` 保存 distance-from-top。接管期间 content adjustment behavior 为 `.never`，同时关闭 UIKit 的自动 scroll indicator inset 调整，确保 top/bottom 只有一个 owner；页面退出 Store 保留窗口、reload 替换页面或控制器释放时，coordinator 只减去最后一次 managed 部分并恢复两项原始自动调整状态。相同 target 和 active scroll 集合不会重复写入；container 折叠热路径只更新 current/transition/已加载 adjacent 构成的有界集合，只在 bottom 实际变化时写入并抑制逐帧 inset/children 日志。Swift 6 的 controller `deinit` 通过 `MainActor.assumeIsolated` 同步归还，具体约束见 v0.3 设计文档。
+每次更新先用“当前总 inset - 上次 managed inset”分离 external，再叠加新 managed target，并按 `contentOffset.y + contentInset.top` 保存 distance-from-top。接管期间 content adjustment behavior 为 `.never`，同时关闭 UIKit 的自动 scroll indicator inset 调整，确保 top/bottom 只有一个 owner；页面退出 Store 保留窗口、reload 替换页面或控制器释放时，coordinator 只减去最后一次 managed 部分并恢复两项原始自动调整状态。相同 target 和 active scroll 集合不会重复写入；container 折叠热路径只更新 current/transition/已加载 adjacent 构成的有界集合，只在 bottom 实际变化时写入并抑制逐帧 inset/children 日志。Swift 6 language mode 下 controller 的普通 `deinit` 通过 `MainActor.assumeIsolated` 同步归还，具体约束见 v0.3 设计文档。
 
 ## 日志策略
 
@@ -240,6 +248,12 @@ v0.3 布局与 inset 事件：
 v0.4 页面状态事件包括 `children.page.load/reuse/recreate`、`children.page.retain/release`、`children.page.snapshot.save/restore/reset`、`children.page.generation.begin/commit/cancel`、`children.page.duplicateController` 和异常 data source/count 降级。缓存窗口或 snapshot 状态变化才会记录；单纯 managed inset 热路径不输出 children 日志。
 
 ## Known Limitations
+
+Xcode 26.3 / Swift 6.2.4 的 x86_64 iPhone 17 Simulator 中，控制器改用 `isolated deinit` 会在 lifecycle
+deinit 后稳定触发 allocator `pointer being freed was not allocated` 崩溃；恢复普通
+`deinit + MainActor.assumeIsolated` 后同一资源析构测试通过。当前析构契约必须同步归还 Store、fallback 与 managed
+inset ownership，不使用异步 Task、delay 或并发 unsafe 标记规避。后续 Xcode/Swift 升级只有在同一资源析构测试复验通过后，
+才可重新评估 `isolated deinit`。
 
 当前 v0.4 已完成固定分页 viewport、child inset ownership、按需 page state/cache window、offset snapshot、reload generation、稳定 paging host、page/empty terminal 和 Pageboy/UIKit appearance lifecycle 边界，仍不包含后续版本能力：
 

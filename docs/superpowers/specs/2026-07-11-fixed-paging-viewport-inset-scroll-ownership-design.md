@@ -4,6 +4,9 @@
 **状态：** v0.3 已实现；v0.4 修复实现与完整验收已通过，待最终独立复审；v0.5 尚未实现
 **适用版本：** v0.3、v0.4、v0.5
 
+当前技术基线为最低工具链 Swift 6.2、语言模式 Swift 6、最低系统版本 iOS 14；详见
+`2026-07-12-swift-6-2-toolchain-baseline-design.md`。
+
 ## 背景
 
 v0.2 已把主容器滚动范围与 Header/paging viewport 解耦，但当前
@@ -262,10 +265,15 @@ restoredIndicatorInset = currentIndicatorInset - lastManagedIndicatorInset
 然后恢复原始 `contentInsetAdjustmentBehavior` 和 `automaticallyAdjustsScrollIndicatorInsets`。
 如果 weak scroll view 已释放，直接丢弃 record。
 
-Swift 6 对 `deinit` 采用 nonisolated 编译检查，即使所属 `UIViewController` 整体标记为
+Swift 6 language mode 对普通 `deinit` 采用 nonisolated 编译检查，即使所属 `UIViewController` 整体标记为
 `@MainActor`。因此控制器释放时通过 `MainActor.assumeIsolated` 同步执行 `releaseAll()`；该断言
 建立在 UIKit 控制器创建、使用和释放均位于主线程的框架约束上。不得改成异步 Task、延迟归还、
 `nonisolated(unsafe)` 或 `@unchecked Sendable` 来绕开释放顺序。
+
+Xcode 26.3 / Swift 6.2.4 的 x86_64 iPhone 17 Simulator 中，改用 `isolated deinit` 会在 lifecycle
+deinit 后稳定触发 allocator `pointer being freed was not allocated` 崩溃；恢复上述普通
+`deinit + MainActor.assumeIsolated` 后同一资源析构测试通过。因此当前固定契约继续使用已验证实现，
+后续工具链升级也必须先用同一析构测试复验，不能直接把本文改写为 `isolated deinit`。
 
 ### Offset 与 Bar 高度变化
 

@@ -10,8 +10,9 @@
 ## 全局约束
 
 - [ ] 保持 Package name、Library product、Module name 均为 `AnchorPager`
+- [ ] 最低工具链保持 Swift 6.2
+- [ ] 语言模式保持 Swift 6
 - [ ] 最低系统版本保持 iOS 14
-- [ ] 语言目标保持 Swift 6
 - [ ] UI stack 保持 UIKit
 - [ ] 使用 Swift Package Manager
 - [ ] 横向分页使用 Tabman + Pageboy
@@ -52,6 +53,7 @@
 ### 工程与依赖
 
 - [x] 创建 `Package.swift`
+- [x] 配置最低 Swift 6.2 tools version
 - [x] 配置 iOS 14+ platform
 - [x] 配置 Swift 6 language mode
 - [x] 添加 Tabman 依赖，版本从 `4.0.1` 开始
@@ -374,7 +376,7 @@
 - [x] Pageboy 5.0.2 空态 teardown shim 集中在 Paging adapter，并建立依赖升级源码复审与回归门禁
 - [x] selection 活跃期间 latest pending reload 由 did/cancel 语义 terminal 驱动，不使用 timer/delay
 - [x] public reload transaction 覆盖 count、Header、每个 title 回调重入，过期事务零发布
-- [x] 完整框架测试 163 项、Example 5 项单测与 16 项 UI 测试通过
+- [x] Swift 6.2.4 完整验收：框架 182 项、Example 5 项单测与 16 项 UI 测试通过，均为 0 fail、0 skip
 - [ ] 最终独立代码复审清零 Critical/Important 后确认 v0.4 可合并并开放 v0.5 入口
 
 ## v0.5：纵向嵌套滚动协调版
@@ -542,7 +544,7 @@
 - [ ] README 覆盖日志过滤方式
 - [ ] 记录 Tabman/Pageboy 已验证版本
 - [ ] 清理 internal 状态命名，避免泄漏内部术语
-- [ ] 修复 Swift 6 并发警告
+- [ ] 在 Swift 6.2+ 工具链下修复 Swift 6 language mode 并发警告
 - [ ] 清理 KVO 生命周期
 - [ ] 清理 Notification 生命周期
 - [ ] 清理 gesture delegate 生命周期
@@ -600,6 +602,7 @@
 - [x] v0.3 Scroll Discovery 与 Inset Ownership 版已完成；验收记录见 `docs/superpowers/plans/2026-07-11-v0-3-fixed-paging-inset-ownership.md`
 - [x] v0.4 Child 生命周期与缓存主体实现已完成
 - [x] v0.4 reload terminal、空态 teardown、reload 重入与 appearance cancel 修复完整验收已通过
+- [x] 最低工具链已提升为 Swift 6.2，语言模式保持 Swift 6，iOS 14 运行基线不变
 - [ ] v0.4 最终独立复审完成前不开始 v0.5
 - [x] 实现时遵循测试先行
 - [x] 每个任务完成后运行对应测试

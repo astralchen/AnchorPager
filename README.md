@@ -4,6 +4,9 @@ AnchorPager 是一个 UIKit 容器框架，用于组合可变 Header、吸顶分
 
 ## 安装
 
+构建 AnchorPager 需要 Swift 6.2 或更高版本工具链；Package 使用 Swift 6 language mode，运行时最低支持 iOS 14。
+`swiftLanguageModes: [.v6]` 表示语言模式，不表示最低工具链仍为 Swift 6.0。
+
 ```swift
 .package(url: "<repo-url>", branch: "main")
 ```
@@ -215,3 +218,7 @@ log stream --predicate 'subsystem == "com.anchorpager.AnchorPager"'
 ## 当前限制
 
 v0.4 当前已交付固定分页 viewport、optional bar height、child/fallback managed inset ownership、按需页面身份、缓存窗口、滚动快照、reload generation、稳定 paging host 和 page/empty terminal。完整纵向嵌套滚动协调、顶部 overscroll owner、状态栏点击顶滚、尺寸变化恢复和完整手势状态机仍在后续版本。v0.5 只能依赖稳定 host、Store 已提交的 current child/scroll target 和标准化 selection/reload terminal，不能缓存 adapter 实例或重复管理 page identity。Tabman/Pageboy 仅出现在 internal adapter 层，Public API 不暴露第三方类型。
+
+在 Xcode 26.3 / Swift 6.2.4 的 x86_64 iPhone 17 Simulator 验证中，把控制器同步析构改为
+`isolated deinit` 会在生命周期析构后稳定触发 allocator `pointer being freed was not allocated` 崩溃。
+当前生产实现因此保留普通 `deinit + MainActor.assumeIsolated`，同步归还 Store 与 inset ownership；在后续工具链用同一资源析构测试复验通过前，不替换为 `isolated deinit`，也不使用异步 Task 或 unsafe 标记绕开清理顺序。

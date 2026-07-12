@@ -35,7 +35,7 @@
 - Keeps `swiftLanguageModes: [.v6]`。
 - Keeps verified `deinit + MainActor.assumeIsolated` for synchronous MainActor cleanup。
 
-- [ ] **Step 1: 恢复工作区中尚未经过 TDD 的工具链改动**
+- [x] **Step 1: 恢复工作区中尚未经过 TDD 的工具链改动**
 
 仅用 `apply_patch` 把本任务开始前未提交的工具链实验恢复到当前 HEAD 语义：
 
@@ -55,7 +55,7 @@ deinit {
 
 不得触碰同时存在的 PagingHost Task 1 文件。
 
-- [ ] **Step 2: 写工具链源码契约 RED 测试**
+- [x] **Step 2: 写工具链源码契约 RED 测试**
 
 创建 `AnchorPagerSwiftToolchainBaselineTests`：
 
@@ -93,7 +93,7 @@ final class AnchorPagerSwiftToolchainBaselineTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 3: 运行测试并确认 RED**
+- [x] **Step 3: 运行测试并确认 RED**
 
 ```bash
 xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17' \
@@ -102,7 +102,7 @@ xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 
 
 Expected: manifest tools version 断言失败；deinit 契约保持通过，证明工具链升级没有混入已知崩溃路径。
 
-- [ ] **Step 4: 提升 manifest 并保持已验证 deinit**
+- [x] **Step 4: 提升 manifest 并保持已验证 deinit**
 
 ```swift
 // swift-tools-version: 6.2
@@ -126,7 +126,7 @@ deinit {
 }
 ```
 
-- [ ] **Step 5: 运行工具链和资源析构回归**
+- [x] **Step 5: 运行工具链和资源析构回归**
 
 ```bash
 swift --version
@@ -138,7 +138,7 @@ xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 
 
 Expected: Swift 6.2+；源码契约和资源清理测试全部通过。
 
-- [ ] **Step 6: 提交工具链门禁**
+- [x] **Step 6: 提交工具链门禁**
 
 ```bash
 git add Package.swift Sources/AnchorPager/Public/AnchorPagerViewController.swift \
@@ -166,7 +166,7 @@ git commit -m "提升最低工具链到 Swift 6.2"
 - Documents the current normative baseline。
 - Historical completed plans remain unchanged except explicit links where they are still used as current guidance。
 
-- [ ] **Step 1: 同步技术基线表述**
+- [x] **Step 1: 同步技术基线表述**
 
 统一使用：
 
@@ -179,13 +179,13 @@ Minimum OS：iOS 14
 README 增加构建要求；architecture 记录 Swift 6.2.4/x86_64 `isolated deinit` allocator crash，并保留
 `MainActor.assumeIsolated` 的 UIKit 主线程析构约束。
 
-- [ ] **Step 2: 审查历史与当前文档边界**
+- [x] **Step 2: 审查历史与当前文档边界**
 
 保留 v0.1–v0.4 已完成计划中的历史“Swift 6”执行文本；roadmap、requirements、task-list、AGENTS 和正在执行的
 generation atomicity plan 必须明确最低工具链 Swift 6.2+、语言模式 Swift 6。fixed-paging spec 当前析构契约继续使用
 已验证的 `deinit + MainActor.assumeIsolated`，并记录 `isolated deinit` 的 allocator crash 限制。
 
-- [ ] **Step 3: 运行文档与 manifest 一致性检查**
+- [x] **Step 3: 运行文档与 manifest 一致性检查**
 
 ```bash
 rg -n "Minimum toolchain|最低工具链|swift-tools-version|swiftLanguageModes|MainActor.assumeIsolated|isolated deinit" \
@@ -196,7 +196,7 @@ git diff --check
 Expected: 当前规范全部指向 Swift 6.2；生产源码保留 `MainActor.assumeIsolated` 且不包含 `isolated deinit`；历史记录
 未被错误改写。
 
-- [ ] **Step 4: 运行完整 Swift 6.2 验收**
+- [x] **Step 4: 运行完整 Swift 6.2 验收**
 
 ```bash
 swift package resolve
@@ -209,7 +209,7 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExa
 
 记录 Swift 版本、tests/fail/skip、耗时和第三方 privacy warnings。
 
-- [ ] **Step 5: 自审并提交文档**
+- [x] **Step 5: 自审并提交文档**
 
 自审 Package/public API、iOS floor、Swift language mode、deinit 同步资源归还、已知 isolated deinit 工具链限制、
 并发 unsafe 标记、历史文档和当前计划。
@@ -218,6 +218,25 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExa
 git add AGENTS.md README.md docs
 git commit -m "同步 Swift 6.2 工具链文档基线"
 ```
+
+---
+
+## Task 2 实施记录（2026-07-12）
+
+- 稳定验收基线：`a8b9e62`（包含 generation atomicity cleanup snapshot 修复及独立复审 Approved）。
+- Swift：Apple Swift 6.2.4（`swiftlang-6.2.4.1.4`），host target 为 x86_64 macOS。
+- `swift package resolve`：通过，1.72 秒。
+- Framework 全量：182 tests、0 fail、0 skip；XCTest 29.811 秒，Xcode test operation 72.211 秒。
+- Example generic Simulator build：通过，约 24.67 秒。
+- Example 全量：5 项 Swift Testing 单测与 16 项 UI 测试，共 21 tests、0 fail、0 skip；单测 1.071 秒，
+  UI 测试 254.824 秒，Xcode test operation 372.818 秒。
+- Framework、Example build、Example test 均输出 Pageboy 与 Tabman 各一条未处理
+  `PrivacyInfo.xcprivacy` resource warning；不影响构建或测试结果。Example 构建路径另有未依赖 AppIntents 时跳过
+  metadata extraction 的常规 warning。
+- 一致性检查：brief 指定 `rg` 扫描与 `git diff --check` 通过；生产源码保留普通
+  `deinit + MainActor.assumeIsolated`，未出现 `isolated deinit`。
+- 自审：Package/public API、iOS 14 floor、Swift 6 language mode、同步 deinit 资源归还、Swift 6.2.4/x86_64
+  `isolated deinit` allocator crash 限制、并发 unsafe 标记、历史计划边界和当前 generation plan 均无新增问题。
 
 ---
 

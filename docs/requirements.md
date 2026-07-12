@@ -11,13 +11,14 @@ AnchorPager 是一个全新的独立 UIKit 容器框架，用于实现可变 Hea
 1. Package name：`AnchorPager`
 2. Library product：`AnchorPager`
 3. Module name：`AnchorPager`
-4. Minimum OS：iOS 14
-5. Language：Swift 6
-6. UI stack：UIKit
-7. Package manager：Swift Package Manager
-8. Horizontal paging：Tabman + Pageboy
-9. Vertical nested scrolling model：参考 JXPagingView + JXSegmentedView 的设计思路
-10. 核心框架保持领域无关，不包含具体应用场景、内容类型、数据模型或场景命名
+4. Minimum toolchain：Swift 6.2
+5. Language mode：Swift 6
+6. Minimum OS：iOS 14
+7. UI stack：UIKit
+8. Package manager：Swift Package Manager
+9. Horizontal paging：Tabman + Pageboy
+10. Vertical nested scrolling model：参考 JXPagingView + JXSegmentedView 的设计思路
+11. 核心框架保持领域无关，不包含具体应用场景、内容类型、数据模型或场景命名
 
 ## 3. 参考项目
 
@@ -439,7 +440,7 @@ README.md
 16. 创建示例工程，覆盖基础分页、不同 contentSize、Header 安全区域模式、Header 动态高度、顶部 overscroll、屏幕旋转。
 17. 补充 Swift Testing 和必要 UI tests。
 18. 补 README 和架构文档。
-19. 运行验证并修复 Swift 6 并发警告。
+19. 使用 Swift 6.2 或更高版本工具链运行验证，并修复 Swift 6 language mode 并发警告。
 
 ## 23. 测试要求
 
