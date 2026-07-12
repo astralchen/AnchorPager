@@ -344,7 +344,7 @@
 
 ## v0.4：Child 生命周期与缓存版
 
-设计基线：`docs/superpowers/specs/2026-07-12-v0-4-child-lifecycle-cache-design.md`。已于 2026-07-12 完成实现和自动化验收。
+设计基线：`docs/superpowers/specs/2026-07-12-v0-4-child-lifecycle-cache-design.md`。主体实现已完成；审查发现空数据 reload terminal、public reload 重入和 appearance cancel 验收缺口，当前暂停合并，修复设计见 `docs/superpowers/specs/2026-07-12-v0-4-reload-terminal-repair-design.md`。
 
 - [x] 实现 page state store
 - [x] 移除 `AnchorPagerChildViewControllerStore`，避免与 Tabman/Pageboy 双重 containment
@@ -356,20 +356,20 @@
 - [x] 卸载 child 前保存 scroll offset snapshot
 - [x] 卸载 child 时归还 managed inset ownership，不把派生 managed/external inset 写入 snapshot
 - [x] appearance lifecycle 由 Pageboy/UIKit 驱动，不因缓存强引用变化手工转发
-- [x] reloadData 清理旧 page state 和旧 fallback host content
-- [x] 使用 generation 和 Pageboy didReloadWith 确认点安全清理旧状态
+- [ ] reloadData 在非空、空数据 terminal 后清理旧 page state 和旧 fallback host content
+- [ ] 使用 generation 和 paging host page/empty terminal 安全清理旧状态
 - [x] reloadData 清理旧 generation offset snapshot
-- [x] reloadData 清理旧 Tabman/Pageboy 状态
-- [x] dataSource 返回负数 page count 时降级为零并记录日志
+- [ ] reloadData 清理旧 Tabman/Pageboy 状态，包括非空到空
+- [ ] dataSource 返回负数 page count 时通过 public 路径降级为零并记录日志
 - [x] dataSource 返回重复 viewController 时断言并降级为空白页面
 - [x] 为 cache window 更新加入 children 日志
 - [x] 为 offset snapshot 保存和恢复加入 children 日志
 - [x] 为重复 viewController 降级加入 children 日志
-- [x] 测试 Tabman/UIKit 驱动的 child appearance lifecycle
+- [ ] 测试 Tabman/UIKit 驱动的完成与取消 child appearance lifecycle
 - [x] 测试 child cache window
 - [x] 测试 unload offset snapshot
-- [x] 测试 reloadData 后旧 child 可释放及新 generation 可交互
-- [x] 更新 README、`docs/architecture.md` 和 v0.4 设计状态
+- [ ] 测试 reloadData 非空/空/重入后旧 child 可释放且新 generation 可交互
+- [ ] 更新 README、实施计划、`docs/architecture.md` 和 v0.4 设计状态
 
 ## v0.5：纵向嵌套滚动协调版
 

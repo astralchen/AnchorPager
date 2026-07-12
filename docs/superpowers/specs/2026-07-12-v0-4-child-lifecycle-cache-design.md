@@ -2,13 +2,17 @@
 
 **日期：** 2026-07-12
 
-**状态：** 已实现并验收
+**状态：** 已实现，审查发现 reload terminal 修复项，暂停合并
 
 **适用版本：** v0.4，并作为 v0.5 纵向滚动协调的 page state 基础
 
 **验收记录：** 2026-07-12 通过 AnchorPager 129 项框架测试、示例工程 generic simulator build、
 示例工程 15 项 UI 测试和 4 项示例单元测试；UI 验收覆盖完全折叠恢复页面 offset、未完全折叠目标页归顶、
 reload generation 替换和 Pageboy/UIKit appearance 次数。
+
+**审查修订：** 非空 reload 到空数据时，Pageboy 5.0.2 不发送 `didReloadWith` 且不清空旧页面；同时
+appearance cancel 和 public reload 重入尚缺闭环。修复设计见
+`docs/superpowers/specs/2026-07-12-v0-4-reload-terminal-repair-design.md`，修复验收完成前不得合并。
 
 ## 背景
 
