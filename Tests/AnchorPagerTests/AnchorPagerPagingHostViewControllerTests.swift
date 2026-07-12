@@ -27,6 +27,31 @@ final class AnchorPagerPagingHostViewControllerTests: XCTestCase {
         XCTAssertEqual(host.children.count, 1)
     }
 
+    func testNonemptyReloadEmitsOnePageTerminalWithoutSelectionCallbacks() {
+        let host = makeHost()
+        let delegate = RecordingPagingHostDelegate()
+        host.eventDelegate = delegate
+
+        host.reload(titles: ["First", "Second"], pageCount: 2, selectedIndex: 1)
+
+        XCTAssertEqual(delegate.events, [.reload(.page(index: 1))])
+    }
+
+    func testConsecutiveNonemptyReloadsEachEmitOnePageTerminalWithoutSelectionCallbacks() {
+        let host = makeHost()
+        let delegate = RecordingPagingHostDelegate()
+        host.eventDelegate = delegate
+
+        host.reload(titles: ["First", "Second"], pageCount: 2, selectedIndex: 0)
+        XCTAssertEqual(delegate.events, [.reload(.page(index: 0))])
+
+        delegate.events.removeAll()
+        delegate.terminalSnapshots.removeAll()
+        host.reload(titles: ["First", "Second", "Third"], pageCount: 3, selectedIndex: 2)
+
+        XCTAssertEqual(delegate.events, [.reload(.page(index: 2))])
+    }
+
     func testReloadingEmptyRemovesAdapterAndResetsBarBeforeEmptyTerminal() throws {
         let host = makeHost()
         let delegate = RecordingPagingHostDelegate()

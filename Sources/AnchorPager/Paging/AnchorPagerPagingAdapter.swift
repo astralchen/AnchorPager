@@ -45,6 +45,7 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
     private var barHeightConstraint: NSLayoutConstraint?
     private var requestedBarHeight: CGFloat?
     private var lastReportedBarInsets: UIEdgeInsets?
+    private var reloadSelectionCallbackSuppressionDepth = 0
 
     private struct ProgrammaticSelection: Equatable {
         let index: Int
@@ -67,7 +68,14 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
     }
 
     override func viewDidLoad() {
+        let shouldSuppressInitialReloadSelection = configuredPageCount > 0
+        if shouldSuppressInitialReloadSelection {
+            reloadSelectionCallbackSuppressionDepth += 1
+        }
         super.viewDidLoad()
+        if shouldSuppressInitialReloadSelection {
+            reloadSelectionCallbackSuppressionDepth -= 1
+        }
         installBarIfNeeded()
     }
 
@@ -114,9 +122,10 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
         pendingPageboySelectionIndex = nil
         pendingProgrammaticSelection = nil
 
-        dataSource = self
         if isViewLoaded {
+            reloadSelectionCallbackSuppressionDepth += 1
             reloadData()
+            reloadSelectionCallbackSuppressionDepth -= 1
             bars.forEach { bar in
                 if configuredPageCount > 0 {
                     bar.reloadData(at: 0...configuredPageCount - 1, context: .full)
@@ -186,6 +195,7 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
             direction: direction,
             animated: animated
         )
+        guard reloadSelectionCallbackSuppressionDepth == 0 else { return }
         AnchorPagerLogger.log(.info, category: .paging, event: "paging.willSelect")
         recordWillSelectCallback(at: index)
         eventDelegate?.pagingAdapter(self, willSelect: index, animated: animated)
@@ -203,6 +213,7 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
             direction: direction,
             animated: animated
         )
+        guard reloadSelectionCallbackSuppressionDepth == 0 else { return }
         AnchorPagerLogger.log(.info, category: .paging, event: "paging.didSelect")
         recordTerminalSelectionCallback(at: index)
         committedSelectedIndex = index
@@ -220,6 +231,7 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
             didCancelScrollToPageAt: index,
             returnToPageAt: previousIndex
         )
+        guard reloadSelectionCallbackSuppressionDepth == 0 else { return }
         AnchorPagerLogger.log(.info, category: .paging, event: "paging.didCancel")
         recordTerminalSelectionCallback(at: index)
         let didFinishProgrammaticSelection = finishProgrammaticSelection(at: index, finished: false)
