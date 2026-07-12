@@ -131,6 +131,9 @@ active request：已调用 willPerform、等待 page/empty terminal 的唯一 re
 7. 不使用 timer；推进只来自 did/cancel、programmatic completion 或 reload terminal。
 8. request-aware ViewController 接入完成后，删除 Host/Adapter 的无 request identifier reload 与 terminal 兼容桥；
    internal 层只保留一条带 request identifier 的 reload/terminal 契约，避免双 terminal 语义长期并存。
+9. active reload 期间产生的 bar insets（包括 empty 的 `.zero`）属于该 request 的 staged geometry，不得先通过
+   `didUpdateBarInsets` 写入旧 committed scroll；Host 必须在 matching terminal 中携带最终 bar insets，非 reload 期间的
+   bar insets 变化才允许即时发布。
 
 ### ViewController 激活与提交
 
@@ -140,8 +143,9 @@ active request：已调用 willPerform、等待 page/empty terminal 的唯一 re
 2. Host deferred 时，`pageCount`、`selectedIndex`、`effectiveSelectedIndex`、Header 和当前 Store visible state 均保持旧值。
 3. Host `willPerform` 到达且 request ID 等于 latest snapshot 时，Store 创建 provider generation；public state仍不发布。
 4. Pageboy 在 reload 中请求 page 时只从 provider generation 取值。
-5. 匹配的 page/empty terminal 到达后，Store commit provider generation；随后一次性发布 snapshot 的 public fields、
-   安装 Header、更新布局并按 terminal index 收敛 committed current。
+5. 匹配的 page/empty terminal 到达后，Store commit provider generation；随后一次性发布 snapshot 的 public fields 与
+   terminal bar insets、安装 Header、更新布局并按 terminal index 收敛 committed current。empty terminal 的 bar insets
+   必须为 `.zero`，旧 committed scroll 在 terminal 进入前保持原 inset/ownership。
 6. 不匹配、迟到或已被 supersede 的 request 不得 commit。
 
 #### view 尚未加载且没有 committed visible generation

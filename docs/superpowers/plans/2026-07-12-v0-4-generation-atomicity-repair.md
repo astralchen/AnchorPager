@@ -311,6 +311,8 @@ git commit -m "隔离页面代际 retention 与 ownership"
 - Consumes Task 2 Store provider generation and committed-current accessors.
 - Produces private `ReloadSnapshot` and request lifecycle helpers.
 - Removes Task 1 为旧 ViewController 暂留的无 request identifier Host/Adapter reload 与 terminal bridge。
+- Extends the internal matching terminal with its request-scoped final bar insets；active reload 内的 bar callback 只暂存，
+  非 reload 期间继续即时发布。
 
 - [ ] **Step 1: 写 deferred 端到端 RED 测试**
 
@@ -318,21 +320,26 @@ git commit -m "隔离页面代际 retention 与 ownership"
 func testDeferredReloadKeepsCommittedPublicAndVisibleStoreStateUntilTerminal()
 func testDeferredLatestReloadDoesNotLetOldAdapterFetchPendingGeneration()
 func testDeferredEmptyKeepsOldOwnershipUntilEmptyTerminal()
-func testFirstTerminalCannotCommitSupersedingSnapshot()
+func testActiveTerminalCannotCommitSupersedingSnapshotAndAdvancesLatest()
+func testDeferredEmptyStagesZeroBarInsetsUntilMatchingTerminal()
 ```
 
 使用真实 ViewController + Host + Adapter + Store 路径：programmatic selection 保持 busy，调用多次 reload；terminal 前
-断言旧 effective selection、Header、actual page、scroll target、inset ownership和 provider identity均不变。
+断言旧 effective selection、Header、actual page、scroll target、bar/child inset ownership和 provider identity均不变；
+superseded active request 必须通过真实 Host terminal 推进 latest pending request，empty 必须同时断言 terminal 后
+effective nil、adapter removal、bar zero 与旧 ownership 归还。
 
 - [ ] **Step 2: 写 pre-load RED 回归**
 
 ```swift
 func testPreloadReloadPublishesInitialMetadataWithoutLoadingPagingView()
 func testPreloadSelectionUpdatesStagedRequestUsedAtFirstTerminal()
+func testMultiplePreloadReloadsUseLatestSnapshotWithoutDuplicateProviderActivation()
 ```
 
 保持现有行为：view 未加载时 reloadData 后 public selection 可读，`setSelectedIndex` 可更新；不得因此加载 Host/adapter
-view。view load 后首个 Host request 使用最终 selected index。
+view。多次 preload reload 只保留 latest snapshot；view load 后首个 Host request 使用最终 selected index 和同一个
+request identifier，不重复 begin provider generation。
 
 - [ ] **Step 3: 运行 ViewController 测试并确认 RED**
 
@@ -384,8 +391,10 @@ func pagingHost(
 
 - [ ] **Step 6: 实现匹配 terminal 原子 commit**
 
-terminal 必须同时匹配 active ID 和 staged snapshot。顺序：Store commit → publish snapshot fields → page terminal index
-收敛 Store committed current → 安装 Header/更新布局 → 清 active/staged。empty 保持 selectedIndex 0/effective nil。
+Host 在 active request 内暂存 adapter bar insets，empty 明确暂存 `.zero`，不得提前调用 ViewController 的即时 bar 更新。
+terminal 必须同时携带 active ID、最终 bar insets并匹配 staged snapshot。顺序：Store commit → publish snapshot fields 与
+bar insets → page terminal index 收敛 Store committed current → 安装 Header/更新布局 → 按 ID 清 active/staged。empty
+保持 selectedIndex 0/effective nil。
 
 迟到或不匹配 terminal 记录 `paging.reload.stale` 并 no-op，不能提交 latest snapshot。
 
