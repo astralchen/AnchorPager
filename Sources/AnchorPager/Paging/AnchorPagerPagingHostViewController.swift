@@ -90,6 +90,7 @@ final class AnchorPagerPagingHostViewController: UIViewController {
     private var activeAdapterConstraints: [NSLayoutConstraint] = []
     private var pendingReloadRequest: ReloadRequest?
     private var activeReloadRequest: ReloadRequest?
+    private var finishingReloadRequestIdentifier: AnchorPagerPagingReloadRequestIdentifier?
     private var isStartingReloadRequest = false
     private var nextCompatibilityRequestIdentifier = -1
 
@@ -159,13 +160,14 @@ final class AnchorPagerPagingHostViewController: UIViewController {
             }
             reportZeroBarInsetsIfNeeded()
             AnchorPagerLogger.log(.info, category: .paging, event: "paging.reload.empty")
-            finishActiveReload(with: .empty)
+            finishActiveReload(with: .empty, requestIdentifier: request.identifier)
             return true
         }
 
         let adapter = activeAdapter ?? installAdapter()
         adapter.pageProvider = pageProvider
         adapter.reload(
+            requestIdentifier: request.identifier,
             titles: request.titles,
             pageCount: request.pageCount,
             selectedIndex: request.selectedIndex
@@ -254,14 +256,24 @@ final class AnchorPagerPagingHostViewController: UIViewController {
         return true
     }
 
-    private func finishActiveReload(with terminal: AnchorPagerPagingReloadTerminal) {
-        guard let request = activeReloadRequest else { return }
+    private func finishActiveReload(
+        with terminal: AnchorPagerPagingReloadTerminal,
+        requestIdentifier: AnchorPagerPagingReloadRequestIdentifier
+    ) {
+        guard finishingReloadRequestIdentifier == nil,
+              let request = activeReloadRequest,
+              request.identifier == requestIdentifier else {
+            AnchorPagerLogger.log(.debug, category: .paging, event: "paging.reload.stale")
+            return
+        }
+        finishingReloadRequestIdentifier = requestIdentifier
         eventDelegate?.pagingHost(
             self,
             didReload: terminal,
             requestIdentifier: request.identifier
         )
         activeReloadRequest = nil
+        finishingReloadRequestIdentifier = nil
         _ = performPendingReloadIfNeeded()
     }
 
@@ -317,7 +329,19 @@ extension AnchorPagerPagingHostViewController: AnchorPagerPagingAdapterDelegate 
 
     func pagingAdapter(_ adapter: AnchorPagerPagingAdapter, didReloadAt index: Int) {
         guard adapter === activeAdapter else { return }
-        finishActiveReload(with: .page(index: index))
+        AnchorPagerLogger.log(.debug, category: .paging, event: "paging.reload.stale")
+    }
+
+    func pagingAdapter(
+        _ adapter: AnchorPagerPagingAdapter,
+        didReloadAt index: Int,
+        requestIdentifier: AnchorPagerPagingReloadRequestIdentifier
+    ) {
+        guard adapter === activeAdapter else { return }
+        finishActiveReload(
+            with: .page(index: index),
+            requestIdentifier: requestIdentifier
+        )
     }
 
     func pagingAdapterDidBecomeReadyForReload(_ adapter: AnchorPagerPagingAdapter) {
