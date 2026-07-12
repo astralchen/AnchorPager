@@ -1,6 +1,6 @@
 # AnchorPager
 
-AnchorPager 是一个 UIKit 容器框架，用于组合可变 Header、吸顶分段栏、多页面横向分页和 child scroll view 接入。当前仓库已完成 v0.4 Child 生命周期与缓存：在 v0.3 固定分页 viewport 和 managed inset ownership 基础上，实现按需页面创建、稳定页面身份、可选相邻页缓存、reload generation 安全收敛，以及页面卸载后的滚动位置恢复。
+AnchorPager 是一个 UIKit 容器框架，用于组合可变 Header、吸顶分段栏、多页面横向分页和 child scroll view 接入。当前仓库已完成 v0.4 Child 生命周期与缓存实现及 reload terminal 修复验收：在 v0.3 固定分页 viewport 和 managed inset ownership 基础上，实现按需页面创建、稳定页面身份、可选相邻页缓存、reload generation 安全收敛，以及页面卸载后的滚动位置恢复。v0.4 还在固定的 paging host 内标准化了非空 page 和 empty terminal，确保 public 空页状态、PageStateStore 与真实 UIKit containment 同时收敛。
 
 ## 安装
 
@@ -187,6 +187,8 @@ final class PlainPageViewController: UIViewController {
 
 页面离开缓存窗口时，AnchorPager 会保存其 `childDistanceFromTop` 并归还 managed inset ownership。之后若 data source 为该 index 提供新实例：当主容器已经完全折叠时，页面恢复自己的滚动位置；当主容器尚未完全折叠时，目标页面归到顶部，以维持当前阶段唯一纵向 owner 的约束。Pageboy/UIKit 仍是普通页面 containment 和 appearance lifecycle 的唯一执行者，缓存强引用变化不会触发手工 appearance forwarding。Pageboy/UIKit 可能暂时持有临近页面，因此离开 AnchorPager 缓存窗口不等于承诺页面立即释放。
 
+`reloadData()` 的元数据采集使用 latest-wins transaction；count、Header 或 title 回调中重入 reload 时，过期事务不会发布部分快照。非空 reload 由 Pageboy `didReloadWith` 产生 page terminal；非空到空时，internal adapter 使用当前锁定 Pageboy 5.0.2 的 public delete-last-page 路径先退出业务页 containment，稳定 paging host 再移除 adapter 并发出 empty terminal。这是集中在 `Paging/` 内的版本兼容点；升级 Pageboy 前必须重审 delete/reload 源码顺序，并重跑空态 containment、appearance、事件静默和延迟释放测试。
+
 ## 示例工程
 
 仓库包含 `Examples/AnchorPagerExample.xcodeproj`，用于验证示例 App 能接入本地 `AnchorPager` package、以 `UITabBarController` 作为 window root、首屏直接显示 AnchorPager 示例页，并可通过导航按钮 push 另一个 AnchorPager 示例页来验证 `hidesBottomBarWhenPushed` 隐藏 tab bar。示例页保持默认自适应 bar，通过 public API 提供 Header、真实 scroll view child 和 fallback child；UI test 同时验证两类页面在 managed inset 生效后仍可见。
@@ -212,4 +214,4 @@ log stream --predicate 'subsystem == "com.anchorpager.AnchorPager"'
 
 ## 当前限制
 
-v0.4 当前已交付固定分页 viewport、optional bar height、child/fallback managed inset ownership、按需页面身份、缓存窗口、滚动快照和 reload generation。完整纵向嵌套滚动协调、顶部 overscroll owner、状态栏点击顶滚、尺寸变化恢复和完整手势状态机仍在后续版本。Tabman/Pageboy 仅出现在 internal adapter 层，Public API 不暴露第三方类型。
+v0.4 当前已交付固定分页 viewport、optional bar height、child/fallback managed inset ownership、按需页面身份、缓存窗口、滚动快照、reload generation、稳定 paging host 和 page/empty terminal。完整纵向嵌套滚动协调、顶部 overscroll owner、状态栏点击顶滚、尺寸变化恢复和完整手势状态机仍在后续版本。v0.5 只能依赖稳定 host、Store 已提交的 current child/scroll target 和标准化 selection/reload terminal，不能缓存 adapter 实例或重复管理 page identity。Tabman/Pageboy 仅出现在 internal adapter 层，Public API 不暴露第三方类型。

@@ -8,6 +8,8 @@
 
 **Tech Stack:** Swift 6、UIKit、Swift Package Manager、XCTest、Tabman 4.0.1、Pageboy 5.0.2、iOS 14+
 
+**Current Status:** 主体实现与原验收已完成；后续审查发现的空数据 reload terminal、public reload 重入和 appearance cancel 缺口已按 repair plan 修复。2026-07-12 新鲜完整验收通过；最终独立复审通过前不启动 v0.5。
+
 ## Global Constraints
 
 - 所有 UIKit、data source、delegate、page state 和 coordinator 操作保持 `@MainActor`。
@@ -58,7 +60,7 @@
   - `pagingAdapter(_:didReloadAt:)` delegate terminal event
 - Consumes: 现有 Pageboy data source、selection callback 和 Tabman bar API。
 
-- [ ] **Step 1: 写 provider RED 测试**
+- [x] **Step 1: 写 provider RED 测试**
 
 在 `AnchorPagerPagingAdapterTests` 增加 recording provider，并把旧数组测试替换为：
 
@@ -94,7 +96,7 @@ private final class RecordingPageProvider: AnchorPagerPageProviding {
 }
 ```
 
-- [ ] **Step 2: 运行测试并确认预期失败**
+- [x] **Step 2: 运行测试并确认预期失败**
 
 Run:
 
@@ -104,7 +106,7 @@ xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 
 
 Expected: 编译失败，提示 `AnchorPagerPageProviding`、`pageProvider` 或新 `reload` 签名不存在。
 
-- [ ] **Step 3: 实现最小 provider 边界**
+- [x] **Step 3: 实现最小 provider 边界**
 
 在 adapter 文件定义：
 
@@ -154,7 +156,7 @@ func viewController(
 
 所有 `setSelectedIndex`/default page 范围判断统一改为 `0..<pageCount`。
 
-- [ ] **Step 4: 增加 reload terminal RED 测试**
+- [x] **Step 4: 增加 reload terminal RED 测试**
 
 测试：
 
@@ -163,13 +165,13 @@ adapter.pageboyViewController(adapter, didReloadWith: first, currentPageIndex: 0
 XCTAssertTrue(delegate.events.contains(.didReload(0)))
 ```
 
-- [ ] **Step 5: 运行 reload terminal 测试并确认失败**
+- [x] **Step 5: 运行 reload terminal 测试并确认失败**
 
 Run 同 Step 2。
 
 Expected: delegate 没有 `didReload` event 或 adapter 没有转发回调。
 
-- [ ] **Step 6: 实现 reload terminal 转发**
+- [x] **Step 6: 实现 reload terminal 转发**
 
 扩展 delegate：
 
@@ -179,13 +181,13 @@ func pagingAdapter(_ adapter: AnchorPagerPagingAdapter, didReloadAt index: Int)
 
 adapter override 必须先调用 super，再转发 internal index，不把 Pageboy 类型传出 adapter 文件。
 
-- [ ] **Step 7: 运行 adapter 全量测试**
+- [x] **Step 7: 运行 adapter 全量测试**
 
 Run 同 Step 2。
 
 Expected: `AnchorPagerPagingAdapterTests` 全部通过；现有 selection、bar height 和日志测试无回归。
 
-- [ ] **Step 8: 提交 adapter 边界**
+- [x] **Step 8: 提交 adapter 边界**
 
 ```bash
 git add Sources/AnchorPager/Paging/AnchorPagerPagingAdapter.swift Tests/AnchorPagerTests/AnchorPagerPagingAdapterTests.swift
@@ -239,7 +241,7 @@ final class AnchorPagerPageStateStore {
 static let zero = Target(content: .zero, indicators: .zero)
 ```
 
-- [ ] **Step 1: 写同 index 稳定身份 RED 测试**
+- [x] **Step 1: 写同 index 稳定身份 RED 测试**
 
 ```swift
 @MainActor
@@ -267,7 +269,7 @@ func testRepeatedAccessReturnsSameLivePageAndCallsProviderOnce() {
 
 测试 helper 的 `.zero` 明确定义为 content/indicator `.zero` 且 `containerIsCollapsed == false`。
 
-- [ ] **Step 2: 运行 Store 测试确认失败**
+- [x] **Step 2: 运行 Store 测试确认失败**
 
 ```bash
 xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:AnchorPagerTests/AnchorPagerPageStateStoreTests test
@@ -275,7 +277,7 @@ xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 
 
 Expected: 编译失败，提示 Store 类型不存在。
 
-- [ ] **Step 3: 实现最小 generation 和 weak PageState**
+- [x] **Step 3: 实现最小 generation 和 weak PageState**
 
 文件内建立 private reference state：
 
@@ -299,7 +301,7 @@ private final class PageState {
 Store 同时保存 committed/pending generation；`pageViewController` 只访问 pending（存在时）或 committed。
 首次 current page 自动获得 `.current` reason，weak actual 存活时直接复用。
 
-- [ ] **Step 4: 写 scroll discovery/fallback RED 测试**
+- [x] **Step 4: 写 scroll discovery/fallback RED 测试**
 
 覆盖：
 
@@ -312,7 +314,7 @@ XCTAssertTrue(plainChild.parent === plainPageResult)
 
 并验证请求单页时其他 index 的 provider 未执行、view 未加载。
 
-- [ ] **Step 5: 实现页面准备和 ownership**
+- [x] **Step 5: 实现页面准备和 ownership**
 
 `prepare` 顺序固定为：加载 original view、显式 scroll 优先、确定性 default lookup、collision 检查、fallback。
 新增 internal 只读访问器供测试和 ViewController 集成：
@@ -325,24 +327,24 @@ func livePageViewController(at index: Int) -> UIViewController?
 为 resolved scroll 应用 context target；fallback host 同时调用 `setManagedContentInsets`。同一请求幂等复用
 ownership，不创建第二个 host。
 
-- [ ] **Step 6: 写共享 scroll 和 data source 缺失 RED 测试**
+- [x] **Step 6: 写共享 scroll 和 data source 缺失 RED 测试**
 
 测试同一 generation 两个业务控制器声明同一 explicit scroll：后请求页降级 fallback，并捕获
 `inset.targetCollision`。provider 返回 nil 时返回稳定 internal blank page，并捕获
 `children.page.dataSourceMissing`。
 
-- [ ] **Step 7: 运行新增测试并确认预期失败**
+- [x] **Step 7: 运行新增测试并确认预期失败**
 
 Run Store-only command。
 
 Expected: 共享 scroll 尚未降级或 nil provider 仍返回 nil。
 
-- [ ] **Step 8: 实现共享 scroll 与空白页降级**
+- [x] **Step 8: 实现共享 scroll 与空白页降级**
 
 generation state 使用 `Set<ObjectIdentifier>` 登记已声明的 scroll target；冲突时尝试非冲突 default
 lookup，否则创建 fallback。nil provider 创建并按 index 弱复用 internal blank page，写稳定 children 日志。
 
-- [ ] **Step 9: 运行 Store 与现有 inset/fallback 测试**
+- [x] **Step 9: 运行 Store 与现有 inset/fallback 测试**
 
 ```bash
 xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:AnchorPagerTests/AnchorPagerPageStateStoreTests -only-testing:AnchorPagerTests/AnchorPagerManagedInsetCoordinatorTests -only-testing:AnchorPagerTests/AnchorPagerChildViewControllerStoreTests test
@@ -350,7 +352,7 @@ xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 
 
 Expected: 全部通过。
 
-- [ ] **Step 10: 提交 PageStateStore 基础**
+- [x] **Step 10: 提交 PageStateStore 基础**
 
 ```bash
 git add Sources/AnchorPager/Children Tests/AnchorPagerTests/AnchorPagerPageStateStoreTests.swift
@@ -376,7 +378,7 @@ func setKeepsAdjacentPagesLoaded(_ keepsAdjacentPagesLoaded: Bool)
 func updateManagedInsets(_ target: AnchorPagerManagedInsetCoordinator.Target, logsChanges: Bool)
 ```
 
-- [ ] **Step 1: 写默认/current/adjacent retention RED 测试**
+- [x] **Step 1: 写默认/current/adjacent retention RED 测试**
 
 使用 weak probes 验证：
 
@@ -396,13 +398,13 @@ func retentionReasons(at index: Int) -> Set<RetentionReason>
 
 该接口保持 internal，`RetentionReason` 也保持 internal。
 
-- [ ] **Step 2: 运行并确认 retention 测试失败**
+- [x] **Step 2: 运行并确认 retention 测试失败**
 
 Run Store-only command。
 
 Expected: 缺少 retention API 或非 current 页面被错误强持有。
 
-- [ ] **Step 3: 实现 reason reconciliation**
+- [x] **Step 3: 实现 reason reconciliation**
 
 reason 定义：
 
@@ -418,7 +420,7 @@ enum RetentionReason: Hashable {
 只对已存在 PageState 计算相邻 reason；`retainedPage` 仅在 reason set 非空时指向 actual page。
 reason 清空前保存 snapshot、归还 ownership，然后清除 `retainedPage`，保留 weak identity。
 
-- [ ] **Step 4: 写 transition pin/commit/cancel RED 测试**
+- [x] **Step 4: 写 transition pin/commit/cancel RED 测试**
 
 分别断言：
 
@@ -434,7 +436,7 @@ store.didCancelSelection(at: 1, returningTo: 0, context: context)
 XCTAssertEqual(store.retentionReasons(at: 0), [.current])
 ```
 
-- [ ] **Step 5: 写 offset 恢复/归顶 RED 测试**
+- [x] **Step 5: 写 offset 恢复/归顶 RED 测试**
 
 创建带 top inset 的 scroll page，设置：
 
@@ -449,7 +451,7 @@ scrollView.contentOffset.y = -scrollView.contentInset.top + 120
 
 `childDistanceFromTop(at:)` 作为 internal 测试 accessor。
 
-- [ ] **Step 6: 实现 snapshot 和目标页 offset 策略**
+- [x] **Step 6: 实现 snapshot 和目标页 offset 策略**
 
 统一 helper：
 
@@ -469,12 +471,12 @@ private func applySnapshot(_ state: PageState, context: AccessContext) {
 普通非当前 Pageboy prefetch 只建立页面和 inset，不清零 snapshot；只在 initial current、willSelect target、
 didSelect terminal 时调用 `applySnapshot`。
 
-- [ ] **Step 7: 写 active-window inset 复杂度测试**
+- [x] **Step 7: 写 active-window inset 复杂度测试**
 
 创建大量轻量 PageState，但只让 current/transition/adjacent live；通过 injectable test hook 或 internal
 `lastManagedUpdateCount` 断言一次 `updateManagedInsets` 的访问数不超过 active window，不等于 pageCount。
 
-- [ ] **Step 8: 运行 Store 全量测试**
+- [x] **Step 8: 运行 Store 全量测试**
 
 ```bash
 xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:AnchorPagerTests/AnchorPagerPageStateStoreTests test
@@ -482,7 +484,7 @@ xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 
 
 Expected: Store 全量测试通过。
 
-- [ ] **Step 9: 提交缓存窗口与 offset**
+- [x] **Step 9: 提交缓存窗口与 offset**
 
 ```bash
 git add Sources/AnchorPager/Children/AnchorPagerPageStateStore.swift Tests/AnchorPagerTests/AnchorPagerPageStateStoreTests.swift
@@ -507,7 +509,7 @@ var committedGenerationIdentifier: Int? { get }
 var pendingGenerationIdentifier: Int? { get }
 ```
 
-- [ ] **Step 1: 写 didReload 前后释放 RED 测试**
+- [x] **Step 1: 写 didReload 前后释放 RED 测试**
 
 ```swift
 store.beginReload(generation: 1, pageCount: 1, selectedIndex: 0, keepsAdjacentPagesLoaded: false)
@@ -528,7 +530,7 @@ XCTAssertNil(oldWeak)
 
 旧 fallback content 也必须在 generation 2 commit 后从 parent 移除。
 
-- [ ] **Step 2: 实现 pending/committed 双 generation**
+- [x] **Step 2: 实现 pending/committed 双 generation**
 
 `beginReload` 不立即释放 committed generation；新请求只进入 pending。`commitReload` 必须：
 
@@ -541,12 +543,12 @@ XCTAssertNil(oldWeak)
 
 重复/过期 commit 只记录诊断，不破坏当前 generation。
 
-- [ ] **Step 3: 写同 index migration 与 index 移动 RED 测试**
+- [x] **Step 3: 写同 index migration 与 index 移动 RED 测试**
 
 同 index 返回相同业务 controller：actual/fallback/ownership/snapshot 迁移且 provider 不产生第二个 host。
 移动到不同 index：live actual 原子转移，旧 key 退出可请求集合，新 snapshot 为 0。
 
-- [ ] **Step 4: 写 duplicate controller RED 测试**
+- [x] **Step 4: 写 duplicate controller RED 测试**
 
 同 generation 的两个 index 返回同一业务实例：在
 `AnchorPagerAssertions.$isEnabled.withValue(false)` 下，第二页是 internal blank page，事件包含：
@@ -557,27 +559,27 @@ XCTAssertNil(oldWeak)
 
 Expected: 旧实现错误复用同一业务控制器，测试失败。
 
-- [ ] **Step 5: 实现 duplicate controller 降级**
+- [x] **Step 5: 实现 duplicate controller 降级**
 
 按 original controller 的 `ObjectIdentifier` 建立 generation 内唯一索引；不得用两个 fallback host
 掩盖冲突。
 
-- [ ] **Step 6: 写过期请求/重入 generation RED 测试**
+- [x] **Step 6: 写过期请求/重入 generation RED 测试**
 
 provider 闭包中调用 `beginReload(generation: 3, ...)`，generation 2 的创建结果不得提交；刚建立的
 ownership 必须归还。
 
-- [ ] **Step 7: 实现请求 generation 二次校验**
+- [x] **Step 7: 实现请求 generation 二次校验**
 
 使用请求开始时捕获的 generation id，在 provider 返回后再次校验；失效结果不写入 pending/committed
 state，并归还刚建立的 ownership/fallback content。
 
-- [ ] **Step 8: 写 generation 与降级日志测试**
+- [x] **Step 8: 写 generation 与降级日志测试**
 
 验证 begin/commit/cancel、duplicate、dataSourceMissing 使用设计文档中的稳定事件名，不输出业务标题或
 controller class。
 
-- [ ] **Step 9: 运行 Store/fallback/inset 测试**
+- [x] **Step 9: 运行 Store/fallback/inset 测试**
 
 ```bash
 xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:AnchorPagerTests/AnchorPagerPageStateStoreTests -only-testing:AnchorPagerTests/AnchorPagerManagedInsetCoordinatorTests -only-testing:AnchorPagerTests/AnchorPagerChildViewControllerStoreTests test
@@ -585,7 +587,7 @@ xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 
 
 Expected: 全部通过。
 
-- [ ] **Step 10: 提交 reload generation**
+- [x] **Step 10: 提交 reload generation**
 
 ```bash
 git add Sources/AnchorPager/Children Tests/AnchorPagerTests/AnchorPagerPageStateStoreTests.swift Tests/AnchorPagerTests/AnchorPagerChildViewControllerStoreTests.swift
@@ -607,7 +609,7 @@ git commit -m "实现页面重载代际与身份冲突处理"
 - `AnchorPagerViewController` conforms to `AnchorPagerPageProviding`。
 - Consumes Store Task 2–4 API and adapter Task 1 callbacks。
 
-- [ ] **Step 1: 写 reload 不全量加载 RED 测试**
+- [x] **Step 1: 写 reload 不全量加载 RED 测试**
 
 扩展 StubDataSource：
 
@@ -626,7 +628,7 @@ XCTAssertFalse(dataSource.requestedViewControllerIndexes.contains(99))
 
 允许 Pageboy/UIKit 按需预取当前相邻页，因此不把请求数硬编码为仅 1；必须断言远端页面未请求、未加载。
 
-- [ ] **Step 2: 运行 ViewController 测试确认旧实现失败**
+- [x] **Step 2: 运行 ViewController 测试确认旧实现失败**
 
 ```bash
 xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests test
@@ -634,7 +636,7 @@ xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 
 
 Expected: 旧实现请求全部 100 页，RED 断言失败。
 
-- [ ] **Step 3: 用 Store 替换全量数组和 fallback 字典**
+- [x] **Step 3: 用 Store 替换全量数组和 fallback 字典**
 
 删除：
 
@@ -670,7 +672,7 @@ pagingAdapter.reload(
 )
 ```
 
-- [ ] **Step 4: 实现 AnchorPagerPageProviding**
+- [x] **Step 4: 实现 AnchorPagerPageProviding**
 
 ```swift
 func pageViewController(at index: Int) -> UIViewController? {
@@ -687,7 +689,7 @@ func pageViewController(at index: Int) -> UIViewController? {
 `pageAccessContext` 使用 `lastManagedInsetTarget ?? .zero`，container collapsed 判定采用
 `collapseOffset >= collapsibleDistance - 0.5`，零折叠距离视为 collapsed。
 
-- [ ] **Step 5: 集成 will/did/cancel/reload callbacks**
+- [x] **Step 5: 集成 will/did/cancel/reload callbacks**
 
 ```swift
 func pagingAdapter(_ adapter: AnchorPagerPagingAdapter, willSelect index: Int, animated: Bool) {
@@ -714,7 +716,7 @@ func pagingAdapter(_ adapter: AnchorPagerPagingAdapter, didReloadAt index: Int) 
 }
 ```
 
-- [ ] **Step 6: 把布局 inset 更新改为 Store active window**
+- [x] **Step 6: 把布局 inset 更新改为 Store active window**
 
 `applyManagedInsets` 只计算 target、缓存 target 并调用：
 
@@ -725,7 +727,7 @@ pageStateStore.updateManagedInsets(target, logsChanges: logsChanges)
 不再 zip/遍历全量页面数组。配置变化时调用
 `pageStateStore.setKeepsAdjacentPagesLoaded(configuration.paging.keepsAdjacentPagesLoaded)`。
 
-- [ ] **Step 7: 修复并扩展既有 ViewController 测试**
+- [x] **Step 7: 修复并扩展既有 ViewController 测试**
 
 更新直接检查 adapter page 的测试，使其显式请求对应 index；补充：
 
@@ -736,7 +738,7 @@ pageStateStore.updateManagedInsets(target, logsChanges: logsChanges)
 - deinit 仍归还所有 live ownership；
 - 100 页 container scroll 的 managed update count 受 active window 限制。
 
-- [ ] **Step 8: 运行 package 全量测试**
+- [x] **Step 8: 运行 package 全量测试**
 
 ```bash
 xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17' test
@@ -745,7 +747,7 @@ git diff --check
 
 Expected: package 全量测试 0 failure；无 Tabman/Pageboy public 泄漏。
 
-- [ ] **Step 9: 提交主控制器集成**
+- [x] **Step 9: 提交主控制器集成**
 
 ```bash
 git add Sources/AnchorPager Tests/AnchorPagerTests
@@ -769,7 +771,7 @@ git commit -m "集成页面生命周期与懒加载缓存"
 - 不新增 public API。
 - 示例只增加 accessibility identifiers / debug counters，不引入业务命名到框架。
 
-- [ ] **Step 1: 写 appearance/offset/reload UI RED 测试**
+- [x] **Step 1: 写 appearance/offset/reload UI RED 测试**
 
 新增稳定 UI 路径：
 
@@ -787,24 +789,24 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExa
 
 Expected: 新测试因缺少标识或行为失败。
 
-- [ ] **Step 2: 最小化补充示例观测点**
+- [x] **Step 2: 最小化补充示例观测点**
 
 只在 Example target 增加 identifier/label，不给 AnchorPager public API 增加调试字段。业务测试控制器用标准
 `viewWillAppear`/`viewDidAppear`/`viewWillDisappear`/`viewDidDisappear` 累计并更新 accessibility value；
 框架不得手工调用 appearance transition。
 
-- [ ] **Step 3: 运行 UI 测试并确认转绿**
+- [x] **Step 3: 运行 UI 测试并确认转绿**
 
 Run 同 Step 1。
 
 Expected: 新增 UI 流程全部通过。
 
-- [ ] **Step 4: 完成日志测试**
+- [x] **Step 4: 完成日志测试**
 
 通过 `AnchorPagerLogger.sink` 验证 load/reuse/recreate/retain/release/snapshot/generation/降级事件；滚动
 热路径测试断言没有逐帧 `children.page.*` 噪声。
 
-- [ ] **Step 5: 更新 DocC、README 和架构状态**
+- [x] **Step 5: 更新 DocC、README 和架构状态**
 
 `keepsAdjacentPagesLoaded` DocC 明确：
 
@@ -818,7 +820,7 @@ README 记录按需创建、data source 可在释放后返回新实例、offset 
 `docs/architecture.md` 从“尚未实现”更新为真实装配；`docs/task-list.md` 只勾选有测试证据的 v0.4 项。
 设计文档状态改为“已实现”仅在完整验收通过后执行。
 
-- [ ] **Step 6: 运行完整验收**
+- [x] **Step 6: 运行完整验收**
 
 ```bash
 git diff --check
@@ -830,7 +832,7 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExa
 
 Expected: 所有命令 exit 0；记录测试数量、耗时和仅剩的第三方已知 warning。
 
-- [ ] **Step 7: 最终自审**
+- [x] **Step 7: 最终自审**
 
 逐项检查并记录：
 
@@ -844,7 +846,7 @@ Expected: 所有命令 exit 0；记录测试数量、耗时和仅剩的第三方
 - Swift 6 MainActor 和 deinit 归还顺序无绕过；
 - 日志、测试、示例和文档同步。
 
-- [ ] **Step 8: 提交 v0.4 收尾**
+- [x] **Step 8: 提交 v0.4 收尾**
 
 ```bash
 git add Sources/AnchorPager/Public/AnchorPagerConfiguration.swift Examples README.md docs Tests
@@ -861,3 +863,13 @@ git commit -m "完成 v0.4 页面生命周期与缓存验收"
 4. Task 4 完成后审查 generation commit 前后 ownership 和 fallback 的释放顺序。
 5. Task 5 完成后运行 package 全量测试，确认旧 v0.3 inset/safe-area 行为无回归。
 6. Task 6 完成后运行 Example UI 全量测试和完整自审，才允许标记 v0.4 完成。
+
+## 修复后最终验收记录
+
+- 原主体实现验收曾通过 129 项框架测试、4 项示例单元测试和 15 项 UI 测试；repair 新增 stable Host、empty terminal、重入和取消路径后，以 repair plan 的新鲜全量结果为最终证据。
+- 2026-07-12 框架全量：163 项通过，0 失败、0 跳过；xcresult 总区间 79.585 秒，测试执行 56.435 秒。
+- Example generic simulator build：exit 0，15.465 秒。
+- Example 全量测试（parallel NO）：21 项通过，其中示例单元测试 5 项、UI 测试 16 项，0 失败、0 跳过；xcresult 总区间 287.116 秒，测试执行 276.938 秒。
+- Swift package resolve 提升权限后 exit 0，6.444 秒；git diff --check exit 0。
+- warning：框架编译有 2 条测试局部 weak variable 未变更提示；框架测试、Example build/test 均有 Pageboy/Tabman PrivacyInfo.xcprivacy unhandled resource 上游提示。没有 Swift 6、框架源码或 Example 源码 warning。
+- 最终自审确认 public API 未扩大、Public 目录无 Tabman/Pageboy、普通业务页没有双重 containment 或手工 appearance、fallback host 只有一条 containment、Store generation/identity/snapshot/ownership 单向、MainActor/deinit 归还路径未绕过、日志与测试覆盖同步。v0.5 入口只允许消费稳定 Host、Store committed current child/scroll target 和标准化 terminal。

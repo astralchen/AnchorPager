@@ -115,9 +115,18 @@ paging adapter 的 top 跟随当前 Header bottom，但 `pagingFrame.height` 固
 
 - `verticalScrollView`：主容器纵向滚动入口
 - Header host：承载 `.view` 或 `.viewController` Header
+- `AnchorPagerPagingHostViewController`：稳定 viewport child，在非空状态内含 `AnchorPagerPagingAdapter`，空状态不含 adapter
 - `AnchorPagerPagingAdapter`：内部 Tabman/Pageboy adapter，负责分段栏、横向分页内容和 page containment 执行
 
-主容器只持有内部 adapter，不向 Public API 暴露 Tabman/Pageboy 类型。页面控制器由 `AnchorPagerPageStateStore` 在 adapter 按 index 请求时按需提供，不在 reload 时全量预加载。当前装配已通过 UI test 验证分段栏点击、横向滑动、public API 程序化切页、真实 scroll/fallback 页面、reload 页面代际替换、滚动位置恢复和标准 UIKit appearance 回调。完整纵向嵌套滚动协调将在 v0.5 推进。
+主容器只持有稳定 internal host，不向 Public API 暴露 Tabman/Pageboy 类型。页面控制器由 `AnchorPagerPageStateStore` 在 adapter 按 index 请求时按需提供，不在 reload 时全量预加载。当前装配已通过 UI test 验证分段栏点击、横向滑动、public API 程序化切页、真实 scroll/fallback 页面、空/非空 reload 代际替换、滚动位置恢复和完成/取消的标准 UIKit appearance 回调。完整纵向嵌套滚动协调将在 v0.5 推进。
+
+### Reload terminal 与稳定 Paging Host
+
+`AnchorPagerPagingHostViewController` 是 Header 下方布局约束的长期 owner，只管理 adapter containment 和事件转发，不管理业务页身份、snapshot 或 inset。它将 reload 终态统一为 `.page(index:)` 与 `.empty`；Store 只在该 terminal 后提交 pending generation。selection 事务活跃时，host 仅保留最新 reload request，由 adapter did/cancel 语义 terminal（程序化路径还要等 public completion）继续，不使用 timer 或主队列 delay 猜测第三方完成时机。
+
+Pageboy 5.0.2 的空 count `reloadData()` 会早退，不清空旧 `UIPageViewController` 业务页。adapter 因此在唯一 `prepareForRemoval()` 兼容点内使用 Pageboy public delete-last-page，同步验证 `pageCount == 0` 和 `currentIndex == nil`，再 post-order 清理只剩的第三方 plumbing。host 之后以标准 UIKit 顺序移除 adapter、归零 barInsets 并发出 `.empty`。该 shim 只对锁定的 Pageboy 5.0.2 验证；任何 Pageboy 升级都必须先重审 delete-last-page、零页 update 和 reload 源码，并通过 containment、appearance、事件静默与延迟释放回归门禁。
+
+Public `reloadData()` 在第一个 data source 回调前预留 transaction identifier，count、Header 和每个 title 回调后都验证 token。发生重入时只有最新事务能原子发布元数据并开始 Store generation；过期事务零写入。
 
 v0.2 会在基础布局更新和 `reloadHeaderLayout()` 时发送 `AnchorPagerLayoutContext`。当前 context 覆盖有效 selectedIndex、Header frame、bar frame 和内容 frame，用于调试和接入验证。
 
@@ -169,7 +178,7 @@ recognition；完整横向、返回手势和 interaction state 仍属于 v0.7。
 
 横向 page containment 的执行层是 Tabman/Pageboy adapter。AnchorPager 的职责是维护 page lifecycle 策略和对外语义，而不是在主容器中重复 `addChild` 每个横向 page。`AnchorPagerPagingAdapter` 通过弱 `AnchorPagerPageProviding` 按 index 请求页面，不持有业务页面数组；`AnchorPagerPageStateStore` 以 reload generation + index 管理 weak live identity、current/transition/可选 adjacent 强保留、fallback host、scroll target 和 `childDistanceFromTop` snapshot。
 
-Store 同时维护 committed generation 和至多一个 pending generation。`reloadData()` 建立 pending generation，Pageboy `didReloadWith` 作为 terminal 确认点提交新 generation 并释放旧状态；新的 reload 抢占尚未确认的 pending generation 时会取消它并恢复迁移过的 snapshot。负 page count 降级为零；同一 generation 内 data source 若把同一个控制器实例用于多个 index，后一个 index 会断言、记录日志并使用空白 fallback 页面，避免 Pageboy containment 身份冲突。
+Store 同时维护 committed generation 和至多一个 pending generation。`reloadData()` 建立 pending generation；非空由 Pageboy `didReloadWith` 形成 `.page` terminal，空态由 paging host 完成真实 teardown 后形成 `.empty` terminal，两者才能提交新 generation 并释放旧状态。新的 reload 抢占尚未确认的 pending generation 时会取消它并恢复迁移过的 snapshot。负 page count 在最新 public transaction 发布时断言、记录 `children.page.invalidCount` 并降级为零；同一 generation 内 data source 若把同一个控制器实例用于多个 index，后一个 index 会断言、记录日志并使用空白 fallback 页面，避免 Pageboy containment 身份冲突。
 
 同一 generation、同一 index 的实际页面仍存活时，Store 始终复用同一实例。默认只强保留 current 和 transition source/target；`keepsAdjacentPagesLoaded` 开启后额外保留已经加载过的当前页相邻页面，不主动预取。页面退出保留窗口时，Store 保存 `childDistanceFromTop`、归还 managed inset 并释放 AnchorPager 强引用。重新创建目标页面时，container 完全折叠则恢复 snapshot，尚未完全折叠则归顶。该规则为 v0.5 的唯一纵向 owner 不变量提供稳定页面状态基础。
 
@@ -232,7 +241,7 @@ v0.4 页面状态事件包括 `children.page.load/reuse/recreate`、`children.pa
 
 ## Known Limitations
 
-当前 v0.4 已完成固定分页 viewport、child inset ownership、按需 page state/cache window、offset snapshot、reload generation 和 Pageboy/UIKit appearance lifecycle 边界，仍不包含后续版本能力：
+当前 v0.4 已完成固定分页 viewport、child inset ownership、按需 page state/cache window、offset snapshot、reload generation、稳定 paging host、page/empty terminal 和 Pageboy/UIKit appearance lifecycle 边界，仍不包含后续版本能力：
 
 - 纵向嵌套滚动协调
 - 顶部 overscroll owner
@@ -240,3 +249,4 @@ v0.4 页面状态事件包括 `children.page.load/reuse/recreate`、`children.pa
 - 状态栏点击顶滚 owner
 - 尺寸变化恢复
 - `AnchorPagerConfiguration.topOverscrollHandlingMode` 等后续版本配置项只保留 public skeleton 和默认值；`paging.keepsAdjacentPagesLoaded` 已在 v0.4 生效
+- v0.5 尚未实现；其入口只能消费稳定 paging host、Store 的 committed current child/scroll target 和标准化 terminal，不得缓存 adapter 实例、复制 page identity/selection transaction 或绕过空态语义

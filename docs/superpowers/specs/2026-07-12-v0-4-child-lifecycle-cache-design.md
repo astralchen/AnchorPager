@@ -2,7 +2,7 @@
 
 **日期：** 2026-07-12
 
-**状态：** 已实现，审查发现 reload terminal 修复项，暂停合并
+**状态：** 已实现；reload terminal 修复与完整验收已通过，待最终独立复审
 
 **适用版本：** v0.4，并作为 v0.5 纵向滚动协调的 page state 基础
 
@@ -10,9 +10,8 @@
 示例工程 15 项 UI 测试和 4 项示例单元测试；UI 验收覆盖完全折叠恢复页面 offset、未完全折叠目标页归顶、
 reload generation 替换和 Pageboy/UIKit appearance 次数。
 
-**审查修订：** 非空 reload 到空数据时，Pageboy 5.0.2 不发送 `didReloadWith` 且不清空旧页面；同时
-appearance cancel 和 public reload 重入尚缺闭环。修复设计见
-`docs/superpowers/specs/2026-07-12-v0-4-reload-terminal-repair-design.md`，修复验收完成前不得合并。
+**审查修订：** 非空 reload 到空数据时，Pageboy 5.0.2 不发送 `didReloadWith` 且不清空旧页面。已按
+`docs/superpowers/specs/2026-07-12-v0-4-reload-terminal-repair-design.md` 增加稳定 paging host、page/empty terminal、集中 teardown shim、latest pending reload 和 public reload transaction，并补齐 appearance cancel 验收。完整验收已通过；最终独立复审通过前不启动 v0.5。
 
 ## 背景
 

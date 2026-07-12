@@ -2,7 +2,7 @@
 
 **日期：** 2026-07-12
 
-**状态：** 实施中；已按 Pageboy 5.0.2 实际 teardown 能力修订
+**状态：** 实现与完整验收已通过；已按 Pageboy 5.0.2 实际 teardown 能力修订，待最终独立复审
 
 **适用范围：** v0.4 合并前修复，并为 v0.5 的 current child/scroll owner 提供可信空页状态
 

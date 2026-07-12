@@ -344,7 +344,7 @@
 
 ## v0.4：Child 生命周期与缓存版
 
-设计基线：`docs/superpowers/specs/2026-07-12-v0-4-child-lifecycle-cache-design.md`。主体实现已完成；审查发现空数据 reload terminal、public reload 重入和 appearance cancel 验收缺口，当前暂停合并，修复设计见 `docs/superpowers/specs/2026-07-12-v0-4-reload-terminal-repair-design.md`。
+设计基线：`docs/superpowers/specs/2026-07-12-v0-4-child-lifecycle-cache-design.md`。主体实现及 reload terminal 修复完整验收已通过，最终独立复审完成前不启动 v0.5；修复设计见 `docs/superpowers/specs/2026-07-12-v0-4-reload-terminal-repair-design.md`。
 
 - [x] 实现 page state store
 - [x] 移除 `AnchorPagerChildViewControllerStore`，避免与 Tabman/Pageboy 双重 containment
@@ -356,22 +356,30 @@
 - [x] 卸载 child 前保存 scroll offset snapshot
 - [x] 卸载 child 时归还 managed inset ownership，不把派生 managed/external inset 写入 snapshot
 - [x] appearance lifecycle 由 Pageboy/UIKit 驱动，不因缓存强引用变化手工转发
-- [ ] reloadData 在非空、空数据 terminal 后清理旧 page state 和旧 fallback host content
-- [ ] 使用 generation 和 paging host page/empty terminal 安全清理旧状态
+- [x] reloadData 在非空、空数据 terminal 后清理旧 page state 和旧 fallback host content
+- [x] 使用 generation 和 paging host page/empty terminal 安全清理旧状态
 - [x] reloadData 清理旧 generation offset snapshot
-- [ ] reloadData 清理旧 Tabman/Pageboy 状态，包括非空到空
-- [ ] dataSource 返回负数 page count 时通过 public 路径降级为零并记录日志
+- [x] reloadData 清理旧 Tabman/Pageboy 状态，包括非空到空
+- [x] dataSource 返回负数 page count 时通过 public 路径降级为零并记录日志
 - [x] dataSource 返回重复 viewController 时断言并降级为空白页面
 - [x] 为 cache window 更新加入 children 日志
 - [x] 为 offset snapshot 保存和恢复加入 children 日志
 - [x] 为重复 viewController 降级加入 children 日志
-- [ ] 测试 Tabman/UIKit 驱动的完成与取消 child appearance lifecycle
+- [x] 测试 Tabman/UIKit 驱动的完成与取消 child appearance lifecycle
 - [x] 测试 child cache window
 - [x] 测试 unload offset snapshot
-- [ ] 测试 reloadData 非空/空/重入后旧 child 可释放且新 generation 可交互
-- [ ] 更新 README、实施计划、`docs/architecture.md` 和 v0.4 设计状态
+- [x] 测试 reloadData 非空/空/重入后旧 child 可释放且新 generation 可交互
+- [x] 更新 README、实施计划、`docs/architecture.md` 和 v0.4 设计状态
+- [x] 稳定 paging host 只管理可替换 adapter containment，不接管 page identity、snapshot 或 inset
+- [x] Pageboy 5.0.2 空态 teardown shim 集中在 Paging adapter，并建立依赖升级源码复审与回归门禁
+- [x] selection 活跃期间 latest pending reload 由 did/cancel 语义 terminal 驱动，不使用 timer/delay
+- [x] public reload transaction 覆盖 count、Header、每个 title 回调重入，过期事务零发布
+- [x] 完整框架测试 163 项、Example 5 项单测与 16 项 UI 测试通过
+- [ ] 最终独立代码复审清零 Critical/Important 后确认 v0.4 可合并并开放 v0.5 入口
 
 ## v0.5：纵向嵌套滚动协调版
+
+启动门禁：当前不可启动。必须先完成 v0.4 最终独立复审并清零 Critical/Important；实现只能依赖稳定 paging host、Store committed current child/scroll target 和标准化 reload/selection terminal，不得缓存 adapter 实例或复制 page identity/cache/generation 职责。
 
 - [ ] 创建 `Sources/AnchorPager/Core/AnchorPagerScrollCoordinator.swift`
 - [ ] Header 未完全折叠时优先响应向上滚动
@@ -590,6 +598,9 @@
 - [x] v0.2 Header 与布局稳定版已完成；后续从 v0.3 Scroll Discovery 与 Inset Ownership 版继续
 - [x] v0.3–v0.5 固定分页视口、optional bar height、inset ownership 和纵向 owner 架构已确认；设计见 `docs/superpowers/specs/2026-07-11-fixed-paging-viewport-inset-scroll-ownership-design.md`
 - [x] v0.3 Scroll Discovery 与 Inset Ownership 版已完成；验收记录见 `docs/superpowers/plans/2026-07-11-v0-3-fixed-paging-inset-ownership.md`
+- [x] v0.4 Child 生命周期与缓存主体实现已完成
+- [x] v0.4 reload terminal、空态 teardown、reload 重入与 appearance cancel 修复完整验收已通过
+- [ ] v0.4 最终独立复审完成前不开始 v0.5
 - [x] 实现时遵循测试先行
 - [x] 每个任务完成后运行对应测试
 - [x] 每个任务完成时确认是否需要 UI 测试
