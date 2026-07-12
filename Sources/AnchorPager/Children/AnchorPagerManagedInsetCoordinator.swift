@@ -3,6 +3,8 @@ import UIKit
 @MainActor
 final class AnchorPagerManagedInsetCoordinator {
     struct Target: Equatable {
+        static let zero = Target(content: .zero, indicators: .zero)
+
         var content: UIEdgeInsets
         var indicators: UIEdgeInsets
     }
