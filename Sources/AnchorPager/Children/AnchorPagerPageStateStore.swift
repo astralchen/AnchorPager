@@ -61,6 +61,30 @@ final class AnchorPagerPageStateStore {
         }
     }
 
+    private struct CleanupPlan {
+        struct Entry {
+            let state: GenerationPageState
+            let actualPageViewController: UIViewController?
+            let scrollView: UIScrollView?
+            let fallbackHost: AnchorPagerPageScrollHostViewController?
+        }
+
+        let generation: GenerationState
+        let entries: [Entry]
+
+        init(generation: GenerationState) {
+            self.generation = generation
+            entries = generation.pages.values.map { state in
+                Entry(
+                    state: state,
+                    actualPageViewController: state.identity.actualPageViewController,
+                    scrollView: state.identity.scrollView,
+                    fallbackHost: state.identity.fallbackHost
+                )
+            }
+        }
+    }
+
     private let managedInsetCoordinator: AnchorPagerManagedInsetCoordinator
     private var committedGeneration: GenerationState?
     private var pendingGeneration: GenerationState?
@@ -392,6 +416,7 @@ final class AnchorPagerPageStateStore {
         let oldGeneration = committedGeneration
         committedGeneration = pendingGeneration
         pendingGeneration = nil
+        let oldCleanupPlan = oldGeneration.map(CleanupPlan.init)
         if let oldGeneration {
             releaseLeases(in: oldGeneration)
         }
@@ -401,9 +426,9 @@ final class AnchorPagerPageStateStore {
                 forceOwnershipReconciliation: true
             )
         }
-        if let oldGeneration {
+        if let oldCleanupPlan {
             cleanup(
-                oldGeneration,
+                oldCleanupPlan,
                 preservingContainment: containmentPreservation(in: committedGeneration),
                 preservingOwnership: ownershipPreservation(in: committedGeneration)
             )
@@ -412,16 +437,20 @@ final class AnchorPagerPageStateStore {
     }
 
     func releaseAll() {
-        if let pendingGeneration {
-            release(
-                pendingGeneration,
+        let pendingCleanupPlan = pendingGeneration.map(CleanupPlan.init)
+        let committedCleanupPlan = committedGeneration.map(CleanupPlan.init)
+        if let pendingCleanupPlan {
+            releaseLeases(in: pendingCleanupPlan.generation)
+            cleanup(
+                pendingCleanupPlan,
                 preservingContainment: containmentPreservation(in: committedGeneration),
                 preservingOwnership: ownershipPreservation(in: committedGeneration)
             )
         }
-        if let committedGeneration {
-            release(
-                committedGeneration,
+        if let committedCleanupPlan {
+            releaseLeases(in: committedCleanupPlan.generation)
+            cleanup(
+                committedCleanupPlan,
                 preservingContainment: .empty,
                 preservingOwnership: []
             )
@@ -563,16 +592,32 @@ final class AnchorPagerPageStateStore {
         in generation: GenerationState,
         preserving explicitPreservation: Set<ObjectIdentifier>? = nil
     ) {
+        releaseOwnership(
+            for: state,
+            scrollView: state.identity.scrollView,
+            fallbackHost: state.identity.fallbackHost,
+            in: generation,
+            preserving: explicitPreservation
+        )
+    }
+
+    private func releaseOwnership(
+        for state: GenerationPageState,
+        scrollView: UIScrollView?,
+        fallbackHost: AnchorPagerPageScrollHostViewController?,
+        in generation: GenerationState,
+        preserving explicitPreservation: Set<ObjectIdentifier>?
+    ) {
         guard state.ownsManagedInset else {
             return
         }
         state.ownsManagedInset = false
-        guard let scrollView = state.identity.scrollView else { return }
+        guard let scrollView else { return }
         let preservation = explicitPreservation
             ?? ownershipPreservation(in: otherGeneration(for: generation))
         guard !preservation.contains(ObjectIdentifier(scrollView)) else { return }
         managedInsetCoordinator.release(scrollView)
-        state.identity.fallbackHost?.setManagedContentInsets(.zero)
+        fallbackHost?.setManagedContentInsets(.zero)
     }
 
     private func applySnapshot(
@@ -631,11 +676,21 @@ final class AnchorPagerPageStateStore {
         static let empty = ContainmentPreservation()
 
         func contains(_ identity: PageIdentityPayload) -> Bool {
-            if let page = identity.actualPageViewController,
+            contains(
+                actualPageViewController: identity.actualPageViewController,
+                fallbackHost: identity.fallbackHost
+            )
+        }
+
+        func contains(
+            actualPageViewController: UIViewController?,
+            fallbackHost: AnchorPagerPageScrollHostViewController?
+        ) -> Bool {
+            if let page = actualPageViewController,
                pageIdentifiers.contains(ObjectIdentifier(page)) {
                 return true
             }
-            if let fallbackHost = identity.fallbackHost,
+            if let fallbackHost,
                fallbackHostIdentifiers.contains(ObjectIdentifier(fallbackHost)) {
                 return true
             }
@@ -688,9 +743,10 @@ final class AnchorPagerPageStateStore {
         preservingContainment containmentPreservation: ContainmentPreservation,
         preservingOwnership ownershipPreservation: Set<ObjectIdentifier>
     ) {
+        let cleanupPlan = CleanupPlan(generation: generation)
         releaseLeases(in: generation)
         cleanup(
-            generation,
+            cleanupPlan,
             preservingContainment: containmentPreservation,
             preservingOwnership: ownershipPreservation
         )
@@ -704,21 +760,27 @@ final class AnchorPagerPageStateStore {
     }
 
     private func cleanup(
-        _ generation: GenerationState,
+        _ plan: CleanupPlan,
         preservingContainment containmentPreservation: ContainmentPreservation,
         preservingOwnership ownershipPreservation: Set<ObjectIdentifier>
     ) {
-        for state in generation.pages.values {
+        for entry in plan.entries {
             releaseOwnership(
-                for: state,
-                in: generation,
+                for: entry.state,
+                scrollView: entry.scrollView,
+                fallbackHost: entry.fallbackHost,
+                in: plan.generation,
                 preserving: ownershipPreservation
             )
-            if !containmentPreservation.contains(state.identity) {
-                state.identity.fallbackHost?.setManagedContentInsets(.zero)
-                state.identity.fallbackHost?.removeContentForReloadData()
+            if !containmentPreservation.contains(
+                actualPageViewController: entry.actualPageViewController,
+                fallbackHost: entry.fallbackHost
+            ) {
+                entry.fallbackHost?.setManagedContentInsets(.zero)
+                entry.fallbackHost?.removeContentForReloadData()
             }
         }
+        let generation = plan.generation
         generation.pages.removeAll()
         generation.claimedScrollViewIdentifiers.removeAll()
         generation.originalControllerIndexes.removeAll()
