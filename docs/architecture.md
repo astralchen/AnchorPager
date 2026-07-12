@@ -167,11 +167,11 @@ recognition；完整横向、返回手势和 interaction state 仍属于 v0.7。
 
 ## Child Lifecycle
 
-横向 page containment 的执行层是 Tabman/Pageboy adapter。AnchorPager 的职责是维护 page lifecycle 策略和对外语义，而不是在主容器中重复 `addChild` 每个横向 page。后续 v0.4 的 child lifecycle 工作应围绕 page identity、cache window、offset snapshot、reload 清理、重复 view controller 策略和 selection commit/cancel 展开。
+横向 page containment 的执行层是 Tabman/Pageboy adapter。AnchorPager 的职责是维护 page lifecycle 策略和对外语义，而不是在主容器中重复 `addChild` 每个横向 page。v0.4 已确认采用单一 `PageStateStore` 设计：PagingAdapter 只按 index 请求页面；Store 以 generation + index 管理 weak live identity、current/transition/可选 adjacent 强保留、fallback host 和 `childDistanceFromTop` snapshot。完整契约见 `docs/superpowers/specs/2026-07-12-v0-4-child-lifecycle-cache-design.md`，当前尚未实现。
 
-`AnchorPagerChildViewControllerStore` 是 v0.1 保留的独立基础 containment 工具，不接入横向分页主路径。后续 v0.4 可以将其重定位或替换为 page state store；如果继续保留，也只能用于 AnchorPager 自有 wrapper 场景，不能与 Tabman/Pageboy 对同一个 page view controller 形成双重 containment。
+`AnchorPagerChildViewControllerStore` 是 v0.1 保留的独立基础 containment 工具，不接入横向分页主路径。v0.4 将其移除或重定位；如果继续保留，也只能用于 AnchorPager 自有 wrapper 场景，不能与 Tabman/Pageboy 对同一个 page view controller 形成双重 containment。
 
-`AnchorPagerPageScrollHostViewController` 为无 scroll view child 提供内部 fallback scroll host。fallback host 使用与真实 scroll page 相同的 managed inset target，并把普通 child 的最小高度约束为扣除 managed top/bottom 后的可用 viewport，避免 inset 额外扩大内容高度。`AnchorPagerViewController.reloadData()` 会清理不再使用的旧 fallback host content，并记录 `children` 日志。完整 page cache window、Tabman 驱动的 appearance lifecycle 语义和 offset snapshot 将在后续版本实现。
+`AnchorPagerPageScrollHostViewController` 为无 scroll view child 提供内部 fallback scroll host。fallback host 使用与真实 scroll page 相同的 managed inset target，并把普通 child 的最小高度约束为扣除 managed top/bottom 后的可用 viewport，避免 inset 额外扩大内容高度。只有 fallback host 对其内部业务 child 执行 AnchorPager 自有 containment；普通页面的 appearance 完全由 Pageboy/UIKit 驱动。v0.4 实现前，`reloadData()` 仍保留当前全量页面准备行为。
 
 ## Scroll Discovery
 
