@@ -73,6 +73,7 @@ open class AnchorPagerViewController: UIViewController {
         managedInsetCoordinator: managedInsetCoordinator
     )
     private var reloadGeneration = 0
+    private var reloadTransactionIdentifier = 0
     private var pendingReloadGeneration: Int?
     private var lastLayoutContext: AnchorPagerLayoutContext?
     private var lastLayoutOutput: AnchorPagerLayoutEngine.Output?
@@ -125,38 +126,75 @@ open class AnchorPagerViewController: UIViewController {
 
     /// 重新加载页面、标题和 Header 数据。
     public func reloadData() {
-        AnchorPagerLogger.log(.info, category: .lifecycle, event: "reloadData.begin")
+        reloadTransactionIdentifier &+= 1
+        let transactionIdentifier = reloadTransactionIdentifier
+        let reloadDataSource = dataSource
 
-        let requestedCount = dataSource?.numberOfViewControllers(in: self) ?? 0
+        let requestedCount = reloadDataSource?.numberOfViewControllers(in: self) ?? 0
+        guard isCurrentReloadTransaction(transactionIdentifier) else { return }
+
+        let resolvedPageCount: Int
         if requestedCount < 0 {
             AnchorPagerAssertions.failure("AnchorPager page count must not be negative.")
-            pageCount = 0
+            AnchorPagerLogger.log(
+                .error,
+                category: .children,
+                event: "children.page.invalidCount"
+            )
+            resolvedPageCount = 0
         } else {
-            pageCount = requestedCount
+            resolvedPageCount = requestedCount
         }
 
-        if pageCount == 0 {
-            selectedIndex = 0
-            currentTitles = []
-        } else if selectedIndex >= pageCount {
-            selectedIndex = pageCount - 1
+        let resolvedHeaderContent = reloadDataSource?.headerContent(in: self)
+        guard isCurrentReloadTransaction(transactionIdentifier) else { return }
+
+        var resolvedTitles: [String] = []
+        resolvedTitles.reserveCapacity(resolvedPageCount)
+        for index in 0..<resolvedPageCount {
+            let title = reloadDataSource?.pagerViewController(
+                self,
+                titleForViewControllerAt: index
+            ) ?? ""
+            guard isCurrentReloadTransaction(transactionIdentifier) else { return }
+            resolvedTitles.append(title)
         }
 
-        currentHeaderContent = dataSource?.headerContent(in: self)
-        currentTitles = (0..<pageCount).map { index in
-            dataSource?.pagerViewController(self, titleForViewControllerAt: index) ?? ""
+        let resolvedSelectedIndex: Int
+        if resolvedPageCount == 0 {
+            resolvedSelectedIndex = 0
+        } else {
+            resolvedSelectedIndex = Swift.min(selectedIndex, resolvedPageCount - 1)
         }
+
+        AnchorPagerLogger.log(.info, category: .lifecycle, event: "reloadData.begin")
+        pageCount = resolvedPageCount
+        selectedIndex = resolvedSelectedIndex
+        currentHeaderContent = resolvedHeaderContent
+        currentTitles = resolvedTitles
         reloadGeneration &+= 1
         pendingReloadGeneration = reloadGeneration
         pageStateStore.beginReload(
             generation: reloadGeneration,
-            pageCount: pageCount,
-            selectedIndex: selectedIndex,
+            pageCount: resolvedPageCount,
+            selectedIndex: resolvedSelectedIndex,
             keepsAdjacentPagesLoaded: configuration.paging.keepsAdjacentPagesLoaded
         )
 
         reloadVisibleContentIfNeeded()
         AnchorPagerLogger.log(.info, category: .lifecycle, event: "reloadData.end")
+    }
+
+    private func isCurrentReloadTransaction(_ transactionIdentifier: Int) -> Bool {
+        guard transactionIdentifier == reloadTransactionIdentifier else {
+            AnchorPagerLogger.log(
+                .debug,
+                category: .lifecycle,
+                event: "lifecycle.reloadData.cancelled"
+            )
+            return false
+        }
+        return true
     }
 
     /// 设置当前选中页面。

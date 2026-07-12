@@ -428,9 +428,8 @@ final class AnchorPagerPageStateStoreTests: XCTestCase {
     func testReleasedPageIsRecreatedAndRestoresItsSavedDistance() {
         let coordinator = AnchorPagerManagedInsetCoordinator()
         let store = AnchorPagerPageStateStore(managedInsetCoordinator: coordinator)
-        var source: PageStateScrollViewController? = PageStateScrollViewController()
         let target = PageStateScrollViewController()
-        weak let weakSource = source
+        weak var weakSource: PageStateScrollViewController?
         var events: [AnchorPagerLogger.Event] = []
         AnchorPagerLogger.sink = { events.append($0) }
         defer { AnchorPagerLogger.sink = nil }
@@ -441,18 +440,21 @@ final class AnchorPagerPageStateStoreTests: XCTestCase {
             ),
             containerIsCollapsed: true
         )
-        store.beginReload(
-            generation: 1,
-            pageCount: 2,
-            selectedIndex: 0,
-            keepsAdjacentPagesLoaded: false
-        )
-        _ = store.pageViewController(at: 0, context: context) { source }
-        _ = store.pageViewController(at: 1, context: context) { target }
-        source?.scrollView.contentOffset.y = -(source?.scrollView.contentInset.top ?? 0) + 120
-        store.willSelect(from: 0, to: 1, context: context)
-        store.didSelect(1, context: context)
-        source = nil
+        autoreleasepool {
+            let source = PageStateScrollViewController()
+            weakSource = source
+            store.beginReload(
+                generation: 1,
+                pageCount: 2,
+                selectedIndex: 0,
+                keepsAdjacentPagesLoaded: false
+            )
+            _ = store.pageViewController(at: 0, context: context) { source }
+            _ = store.pageViewController(at: 1, context: context) { target }
+            source.scrollView.contentOffset.y = -source.scrollView.contentInset.top + 120
+            store.willSelect(from: 0, to: 1, context: context)
+            store.didSelect(1, context: context)
+        }
         XCTAssertNil(weakSource)
         let recreated = PageStateScrollViewController()
         var providerCalls = 0
@@ -484,37 +486,40 @@ final class AnchorPagerPageStateStoreTests: XCTestCase {
     func testCommittedGenerationStaysRetainedUntilPendingReloadCommits() {
         let coordinator = AnchorPagerManagedInsetCoordinator()
         let store = AnchorPagerPageStateStore(managedInsetCoordinator: coordinator)
-        var oldPage: PageStateScrollViewController? = PageStateScrollViewController()
-        weak let weakOldPage = oldPage
-        store.beginReload(
-            generation: 1,
-            pageCount: 1,
-            selectedIndex: 0,
-            keepsAdjacentPagesLoaded: false
-        )
-        var returnedOldPage = store.pageViewController(at: 0, context: .testZero) { oldPage }
-        XCTAssertTrue(returnedOldPage === oldPage)
-        store.commitReload(generation: 1)
+        weak var weakOldPage: PageStateScrollViewController?
+        autoreleasepool {
+            var oldPage: PageStateScrollViewController? = PageStateScrollViewController()
+            weakOldPage = oldPage
+            store.beginReload(
+                generation: 1,
+                pageCount: 1,
+                selectedIndex: 0,
+                keepsAdjacentPagesLoaded: false
+            )
+            var returnedOldPage = store.pageViewController(at: 0, context: .testZero) { oldPage }
+            XCTAssertTrue(returnedOldPage === oldPage)
+            store.commitReload(generation: 1)
 
-        store.beginReload(
-            generation: 2,
-            pageCount: 1,
-            selectedIndex: 0,
-            keepsAdjacentPagesLoaded: false
-        )
-        let newPage = PageStateScrollViewController()
-        _ = store.pageViewController(at: 0, context: .testZero) { newPage }
-        oldPage = nil
-        returnedOldPage = nil
+            store.beginReload(
+                generation: 2,
+                pageCount: 1,
+                selectedIndex: 0,
+                keepsAdjacentPagesLoaded: false
+            )
+            let newPage = PageStateScrollViewController()
+            _ = store.pageViewController(at: 0, context: .testZero) { newPage }
+            oldPage = nil
+            returnedOldPage = nil
 
-        XCTAssertEqual(store.committedGenerationIdentifier, 1)
-        XCTAssertEqual(store.pendingGenerationIdentifier, 2)
-        XCTAssertNotNil(weakOldPage)
+            XCTAssertEqual(store.committedGenerationIdentifier, 1)
+            XCTAssertEqual(store.pendingGenerationIdentifier, 2)
+            XCTAssertNotNil(weakOldPage)
 
-        store.commitReload(generation: 2)
+            store.commitReload(generation: 2)
 
-        XCTAssertEqual(store.committedGenerationIdentifier, 2)
-        XCTAssertNil(store.pendingGenerationIdentifier)
+            XCTAssertEqual(store.committedGenerationIdentifier, 2)
+            XCTAssertNil(store.pendingGenerationIdentifier)
+        }
         XCTAssertNil(weakOldPage)
     }
 

@@ -1,4 +1,5 @@
 import Pageboy
+import Tabman
 import UIKit
 import XCTest
 @testable import AnchorPager
@@ -31,6 +32,161 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         pager.reloadData()
 
         XCTAssertEqual(pager.selectedIndex, 0)
+        XCTAssertNil(pager.effectiveSelectedIndex)
+    }
+
+    @MainActor
+    func testReloadDataCountCallbackReentryKeepsLatestTransactionSnapshot() throws {
+        let outerHeader = UIView()
+        let latestHeader = UIView()
+        let outerFirst = ScrollChildViewController()
+        let outerSecond = ScrollChildViewController()
+        let latestChild = ScrollChildViewController()
+        let latestDataSource = StubDataSource(
+            count: 1,
+            titles: ["Latest"],
+            viewControllers: [latestChild],
+            headerContent: .view(latestHeader)
+        )
+        let dataSource = StubDataSource(
+            count: 2,
+            titles: ["Outer 0", "Outer 1"],
+            viewControllers: [outerFirst, outerSecond],
+            headerContent: .view(outerHeader)
+        )
+        let pager = AnchorPagerViewController()
+        pager.dataSource = dataSource
+        pager.reloadData()
+        pager.setSelectedIndex(1, animated: false)
+        XCTAssertEqual(pager.selectedIndex, 1)
+        pager.loadViewIfNeeded()
+
+        dataSource.resetCallbackRecords()
+        dataSource.onNumberOfViewControllers = {
+            pager.dataSource = latestDataSource
+            pager.reloadData()
+        }
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+
+        pager.reloadData()
+
+        let adapter = try XCTUnwrap(installedAdapter(in: pager))
+        XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 1)
+        XCTAssertEqual(adapter.barItem(for: TMBarView.ButtonBar(), at: 0).title, "Latest")
+        XCTAssertTrue(adapter.viewController(for: adapter, at: 0) === latestChild)
+        XCTAssertTrue(latestHeader.isDescendant(of: pager.view))
+        XCTAssertFalse(outerHeader.isDescendant(of: pager.view))
+        XCTAssertEqual(pager.selectedIndex, 0)
+        XCTAssertEqual(pager.effectiveSelectedIndex, 0)
+        XCTAssertEqual(dataSource.numberOfViewControllersCallCount, 1)
+        XCTAssertEqual(dataSource.headerContentCallCount, 0)
+        XCTAssertEqual(dataSource.requestedTitleIndexes, [])
+        XCTAssertEqual(latestDataSource.numberOfViewControllersCallCount, 1)
+        XCTAssertEqual(latestDataSource.headerContentCallCount, 1)
+        XCTAssertEqual(latestDataSource.requestedTitleIndexes, [0])
+        XCTAssertEqual(events.filter { $0.event == "lifecycle.reloadData.cancelled" }.count, 1)
+        XCTAssertEqual(events.filter { $0.event == "reloadData.begin" }.count, 1)
+        XCTAssertEqual(events.filter { $0.event == "children.page.generation.begin" }.count, 1)
+        XCTAssertEqual(events.filter { $0.event == "reloadData.end" }.count, 1)
+    }
+
+    @MainActor
+    func testReloadDataHeaderCallbackReentryKeepsLatestTransactionSnapshot() throws {
+        let outerHeader = UIView()
+        let latestHeader = UIView()
+        let latestChild = ScrollChildViewController()
+        let dataSource = StubDataSource(
+            count: 2,
+            titles: ["Outer 0", "Outer 1"],
+            viewControllers: [ScrollChildViewController(), ScrollChildViewController()],
+            headerContent: .view(outerHeader)
+        )
+        let pager = AnchorPagerViewController()
+        pager.dataSource = dataSource
+        pager.loadViewIfNeeded()
+
+        dataSource.onHeaderContent = {
+            dataSource.count = 1
+            dataSource.titles = ["Latest"]
+            dataSource.viewControllers = [latestChild]
+            dataSource.headerContent = .view(latestHeader)
+            pager.reloadData()
+        }
+
+        pager.reloadData()
+
+        let adapter = try XCTUnwrap(installedAdapter(in: pager))
+        XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 1)
+        XCTAssertEqual(adapter.barItem(for: TMBarView.ButtonBar(), at: 0).title, "Latest")
+        XCTAssertTrue(adapter.viewController(for: adapter, at: 0) === latestChild)
+        XCTAssertTrue(latestHeader.isDescendant(of: pager.view))
+        XCTAssertFalse(outerHeader.isDescendant(of: pager.view))
+        XCTAssertEqual(dataSource.numberOfViewControllersCallCount, 2)
+        XCTAssertEqual(dataSource.headerContentCallCount, 2)
+        XCTAssertEqual(dataSource.requestedTitleIndexes, [0])
+    }
+
+    @MainActor
+    func testReloadDataTitleCallbackReentryKeepsLatestTransactionSnapshot() throws {
+        let outerHeader = UIView()
+        let latestHeader = UIView()
+        let latestChild = ScrollChildViewController()
+        let dataSource = StubDataSource(
+            count: 2,
+            titles: ["Outer 0", "Outer 1"],
+            viewControllers: [ScrollChildViewController(), ScrollChildViewController()],
+            headerContent: .view(outerHeader)
+        )
+        let pager = AnchorPagerViewController()
+        pager.dataSource = dataSource
+        pager.loadViewIfNeeded()
+
+        dataSource.onTitle = {
+            dataSource.count = 1
+            dataSource.titles = ["Latest"]
+            dataSource.viewControllers = [latestChild]
+            dataSource.headerContent = .view(latestHeader)
+            pager.reloadData()
+        }
+
+        pager.reloadData()
+
+        let adapter = try XCTUnwrap(installedAdapter(in: pager))
+        XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 1)
+        XCTAssertEqual(adapter.barItem(for: TMBarView.ButtonBar(), at: 0).title, "Latest")
+        XCTAssertTrue(adapter.viewController(for: adapter, at: 0) === latestChild)
+        XCTAssertTrue(latestHeader.isDescendant(of: pager.view))
+        XCTAssertFalse(outerHeader.isDescendant(of: pager.view))
+        XCTAssertEqual(dataSource.numberOfViewControllersCallCount, 2)
+        XCTAssertEqual(dataSource.headerContentCallCount, 2)
+        XCTAssertEqual(dataSource.requestedTitleIndexes, [0, 0])
+    }
+
+    @MainActor
+    func testReloadDataNegativeCountWritesSingleChildrenInvalidCountLog() {
+        let pager = AnchorPagerViewController()
+        let dataSource = StubDataSource(count: -1)
+        pager.dataSource = dataSource
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+
+        AnchorPagerAssertions.$isEnabled.withValue(false) {
+            pager.reloadData()
+        }
+
+        XCTAssertEqual(
+            events.filter { $0.event == "children.page.invalidCount" },
+            [
+                AnchorPagerLogger.Event(
+                    category: .children,
+                    level: .error,
+                    event: "children.page.invalidCount"
+                )
+            ]
+        )
         XCTAssertNil(pager.effectiveSelectedIndex)
     }
 
@@ -1608,6 +1764,12 @@ private final class StubDataSource: AnchorPagerViewControllerDataSource {
     var viewControllers: [UIViewController]
     var headerContent: AnchorPagerHeaderContent
     var requestedViewControllerIndexes: [Int] = []
+    var requestedTitleIndexes: [Int] = []
+    var numberOfViewControllersCallCount = 0
+    var headerContentCallCount = 0
+    var onNumberOfViewControllers: (() -> Void)?
+    var onTitle: (() -> Void)?
+    var onHeaderContent: (() -> Void)?
 
     init(
         count: Int,
@@ -1622,14 +1784,24 @@ private final class StubDataSource: AnchorPagerViewControllerDataSource {
     }
 
     func numberOfViewControllers(in pagerViewController: AnchorPagerViewController) -> Int {
-        count
+        numberOfViewControllersCallCount += 1
+        let result = count
+        let hook = onNumberOfViewControllers
+        onNumberOfViewControllers = nil
+        hook?()
+        return result
     }
 
     func pagerViewController(
         _ pagerViewController: AnchorPagerViewController,
         titleForViewControllerAt index: Int
     ) -> String {
-        titles.indices.contains(index) ? titles[index] : "Page \(index)"
+        requestedTitleIndexes.append(index)
+        let result = titles.indices.contains(index) ? titles[index] : "Page \(index)"
+        let hook = onTitle
+        onTitle = nil
+        hook?()
+        return result
     }
 
     func pagerViewController(
@@ -1641,7 +1813,19 @@ private final class StubDataSource: AnchorPagerViewControllerDataSource {
     }
 
     func headerContent(in pagerViewController: AnchorPagerViewController) -> AnchorPagerHeaderContent {
-        headerContent
+        headerContentCallCount += 1
+        let result = headerContent
+        let hook = onHeaderContent
+        onHeaderContent = nil
+        hook?()
+        return result
+    }
+
+    func resetCallbackRecords() {
+        requestedViewControllerIndexes.removeAll()
+        requestedTitleIndexes.removeAll()
+        numberOfViewControllersCallCount = 0
+        headerContentCallCount = 0
     }
 }
 
