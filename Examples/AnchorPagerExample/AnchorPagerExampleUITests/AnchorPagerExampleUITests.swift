@@ -191,6 +191,89 @@ final class AnchorPagerExampleUITests: XCTestCase {
     }
 
     @MainActor
+    func testCollapsedContainerRestoresLongPagePositionAfterSwitchingAway() throws {
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "--anchorPagerInitialIndex", "2",
+            "--anchorPagerInitialContainerCollapsed"
+        ]
+        app.launch()
+        let row = app.staticTexts["长页 - 20"]
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.76))
+        let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.34))
+        for _ in 0..<5 where !row.isHittable {
+            start.press(forDuration: 0.05, thenDragTo: end)
+        }
+        XCTAssertTrue(row.waitForExistence(timeout: 3))
+        XCTAssertTrue(row.isHittable)
+        let savedMinY = row.frame.minY
+
+        app.descendants(matching: .any)["短页"].tap()
+        XCTAssertTrue(app.staticTexts["短页 - 1"].waitForExistence(timeout: 3))
+        app.descendants(matching: .any)["长页"].tap()
+
+        XCTAssertTrue(row.waitForExistence(timeout: 3))
+        XCTAssertTrue(row.isHittable)
+        XCTAssertEqual(row.frame.minY, savedMinY, accuracy: 2)
+    }
+
+    @MainActor
+    func testExpandedContainerResetsPreviouslyScrolledTargetPageToTop() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--anchorPagerInitialIndex", "2"]
+        app.launch()
+        let twentiethRow = app.staticTexts["长页 - 20"]
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.76))
+        let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.34))
+        for _ in 0..<5 where !twentiethRow.isHittable {
+            start.press(forDuration: 0.05, thenDragTo: end)
+        }
+        XCTAssertTrue(twentiethRow.isHittable)
+
+        app.descendants(matching: .any)["短页"].tap()
+        XCTAssertTrue(app.staticTexts["短页 - 1"].waitForExistence(timeout: 3))
+        app.descendants(matching: .any)["长页"].tap()
+
+        XCTAssertTrue(app.staticTexts["长页 - 1"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["长页 - 1"].isHittable)
+        XCTAssertFalse(twentiethRow.isHittable)
+    }
+
+    @MainActor
+    func testReloadReplacesOldPageGenerationAndKeepsPageInteractive() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--anchorPagerInitialIndex", "2"]
+        app.launch()
+        let oldGeneration = app.staticTexts["page-generation-1-long"]
+        XCTAssertTrue(oldGeneration.waitForExistence(timeout: 3))
+
+        let reloadButton = app.navigationBars["AnchorPager"].buttons["重新加载页面"]
+        XCTAssertTrue(reloadButton.waitForExistence(timeout: 3))
+        reloadButton.tap()
+
+        XCTAssertTrue(app.staticTexts["page-generation-2-long"].waitForExistence(timeout: 3))
+        XCTAssertFalse(oldGeneration.exists)
+        XCTAssertTrue(app.staticTexts["长页 - 1"].exists)
+    }
+
+    @MainActor
+    func testCompletedPageSwitchProducesOneAdditionalDidAppear() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--anchorPagerInitialIndex", "2"]
+        app.launch()
+        let appearance = app.staticTexts["page-appearance-long"]
+        XCTAssertTrue(appearance.waitForExistence(timeout: 3))
+        XCTAssertTrue((appearance.value as? String)?.contains("didAppear=1") == true)
+
+        app.descendants(matching: .any)["短页"].tap()
+        XCTAssertTrue(app.staticTexts["短页 - 1"].waitForExistence(timeout: 3))
+        app.descendants(matching: .any)["长页"].tap()
+
+        XCTAssertTrue(appearance.waitForExistence(timeout: 3))
+        XCTAssertTrue((appearance.value as? String)?.contains("didAppear=2") == true)
+    }
+
+    @MainActor
     private func pushAnchorPagerExample(in app: XCUIApplication) {
         XCTAssertTrue(app.tabBars.buttons["AnchorPager"].waitForExistence(timeout: 3))
         app.navigationBars["AnchorPager"].buttons["打开 AnchorPager"].tap()

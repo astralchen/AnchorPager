@@ -2,9 +2,13 @@
 
 **日期：** 2026-07-12
 
-**状态：** 已确认设计，尚未实现
+**状态：** 已实现并验收
 
 **适用版本：** v0.4，并作为 v0.5 纵向滚动协调的 page state 基础
+
+**验收记录：** 2026-07-12 通过 AnchorPager 129 项框架测试、示例工程 generic simulator build、
+示例工程 15 项 UI 测试和 4 项示例单元测试；UI 验收覆盖完全折叠恢复页面 offset、未完全折叠目标页归顶、
+reload generation 替换和 Pageboy/UIKit appearance 次数。
 
 ## 背景
 

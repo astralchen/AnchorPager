@@ -344,32 +344,32 @@
 
 ## v0.4：Child 生命周期与缓存版
 
-设计基线：`docs/superpowers/specs/2026-07-12-v0-4-child-lifecycle-cache-design.md`。当前仅完成设计确认，以下实现与验收项仍未开始。
+设计基线：`docs/superpowers/specs/2026-07-12-v0-4-child-lifecycle-cache-design.md`。已于 2026-07-12 完成实现和自动化验收。
 
-- [ ] 实现 page state store
-- [ ] 重定位或替换 `AnchorPagerChildViewControllerStore`，避免与 Tabman/Pageboy 双重 containment
-- [ ] Paging adapter 改为按 index 请求 PageStateStore，不再强持有全量页面数组
-- [ ] reloadData 只同步 page count、titles 和 Header，不再预加载全部 child view
-- [ ] 实现 current、transition source/target 和可选 adjacent retention reasons
-- [ ] 默认至少保留 current page
-- [ ] 支持配置是否保留相邻 page
-- [ ] 卸载 child 前保存 scroll offset snapshot
-- [ ] 卸载 child 时归还 managed inset ownership，不把派生 managed/external inset 写入 snapshot
-- [ ] appearance lifecycle 由 Pageboy/UIKit 驱动，不因缓存强引用变化手工转发
-- [ ] reloadData 清理旧 page state 和旧 fallback host content
-- [ ] 使用 generation 和 Pageboy didReloadWith 确认点安全清理旧状态
-- [ ] reloadData 清理旧 generation offset snapshot
-- [ ] reloadData 清理旧 Tabman/Pageboy 状态
-- [ ] dataSource 返回负数 page count 时固定策略
-- [ ] dataSource 返回重复 viewController 时固定策略
-- [ ] 为 cache window 更新加入 children 日志
-- [ ] 为 offset snapshot 保存和恢复加入 children 日志
-- [ ] 为重复 viewController 降级加入 children 日志
-- [ ] 测试 Tabman 驱动的 child appearance lifecycle 顺序
-- [ ] 测试 child cache window
-- [ ] 测试 unload offset snapshot
-- [ ] 测试 reloadData 后旧 child 可释放
-- [ ] 更新 `docs/architecture.md` 的 child lifecycle 章节
+- [x] 实现 page state store
+- [x] 移除 `AnchorPagerChildViewControllerStore`，避免与 Tabman/Pageboy 双重 containment
+- [x] Paging adapter 改为按 index 请求 PageStateStore，不再强持有全量页面数组
+- [x] reloadData 只同步 page count、titles 和 Header，不再预加载全部 child view
+- [x] 实现 current、transition source/target 和可选 adjacent retention reasons
+- [x] 默认至少保留 current page
+- [x] 支持配置是否保留相邻 page
+- [x] 卸载 child 前保存 scroll offset snapshot
+- [x] 卸载 child 时归还 managed inset ownership，不把派生 managed/external inset 写入 snapshot
+- [x] appearance lifecycle 由 Pageboy/UIKit 驱动，不因缓存强引用变化手工转发
+- [x] reloadData 清理旧 page state 和旧 fallback host content
+- [x] 使用 generation 和 Pageboy didReloadWith 确认点安全清理旧状态
+- [x] reloadData 清理旧 generation offset snapshot
+- [x] reloadData 清理旧 Tabman/Pageboy 状态
+- [x] dataSource 返回负数 page count 时降级为零并记录日志
+- [x] dataSource 返回重复 viewController 时断言并降级为空白页面
+- [x] 为 cache window 更新加入 children 日志
+- [x] 为 offset snapshot 保存和恢复加入 children 日志
+- [x] 为重复 viewController 降级加入 children 日志
+- [x] 测试 Tabman/UIKit 驱动的 child appearance lifecycle
+- [x] 测试 child cache window
+- [x] 测试 unload offset snapshot
+- [x] 测试 reloadData 后旧 child 可释放及新 generation 可交互
+- [x] 更新 README、`docs/architecture.md` 和 v0.4 设计状态
 
 ## v0.5：纵向嵌套滚动协调版
 

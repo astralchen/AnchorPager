@@ -4,12 +4,9 @@ import UIKit
 final class ExamplePagerViewController: UIViewController {
     private let pagerViewController = AnchorPagerViewController()
     private var headerTopBehaviorItem: UIBarButtonItem?
-    private let pages: [UIViewController] = [
-        ExampleScrollPageViewController(title: "无内容页", rows: 0),
-        ExampleScrollPageViewController(title: "短页", rows: 6),
-        ExampleScrollPageViewController(title: "长页", rows: 30),
-        ExamplePlainPageViewController(title: "无滚动页")
-    ]
+    private var pageGeneration = 1
+    private lazy var pages = makePages()
+    private var didApplyInitialContainerState = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -18,6 +15,15 @@ final class ExamplePagerViewController: UIViewController {
         view.backgroundColor = .systemBackground
         installNavigationItem()
         installPager()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        guard !didApplyInitialContainerState else { return }
+        didApplyInitialContainerState = true
+        if ProcessInfo.processInfo.arguments.contains("--anchorPagerInitialContainerCollapsed") {
+            pagerViewController.reloadHeaderLayout(offsetAdjustment: .resetToCollapsed)
+        }
     }
 
     private func installNavigationItem() {
@@ -31,7 +37,20 @@ final class ExamplePagerViewController: UIViewController {
 
         let headerTopBehaviorItem = makeHeaderTopBehaviorItem()
         self.headerTopBehaviorItem = headerTopBehaviorItem
-        navigationItem.rightBarButtonItems = [pushItem, headerTopBehaviorItem]
+        let reloadItem = UIBarButtonItem(
+            image: UIImage(systemName: "arrow.clockwise"),
+            style: .plain,
+            target: self,
+            action: #selector(reloadPages)
+        )
+        reloadItem.accessibilityLabel = "重新加载页面"
+        navigationItem.rightBarButtonItems = [pushItem, headerTopBehaviorItem, reloadItem]
+    }
+
+    @objc private func reloadPages() {
+        pageGeneration += 1
+        pages = makePages()
+        pagerViewController.reloadData()
     }
 
     @objc private func pushAnchorPagerExample() {
@@ -125,6 +144,30 @@ final class ExamplePagerViewController: UIViewController {
         }
         return min(max(0, requestedIndex), pages.count - 1)
     }
+
+    private func makePages() -> [UIViewController] {
+        [
+            ExampleScrollPageViewController(
+                title: "无内容页",
+                identifier: "empty",
+                rows: 0,
+                generation: pageGeneration
+            ),
+            ExampleScrollPageViewController(
+                title: "短页",
+                identifier: "short",
+                rows: 6,
+                generation: pageGeneration
+            ),
+            ExampleScrollPageViewController(
+                title: "长页",
+                identifier: "long",
+                rows: 30,
+                generation: pageGeneration
+            ),
+            ExamplePlainPageViewController(title: "无滚动页")
+        ]
+    }
 }
 
 extension ExamplePagerViewController: AnchorPagerViewControllerDataSource {
@@ -213,12 +256,21 @@ private final class ExampleHeaderView: UIView {
 
 private final class ExampleScrollPageViewController: UIViewController {
     private let pageTitle: String
+    private let pageIdentifier: String
     private let rows: Int
+    private let generation: Int
     private let scrollView = UIScrollView()
+    private let appearanceLabel = UILabel()
+    private var willAppearCount = 0
+    private var didAppearCount = 0
+    private var willDisappearCount = 0
+    private var didDisappearCount = 0
 
-    init(title: String, rows: Int) {
+    init(title: String, identifier: String, rows: Int, generation: Int) {
         self.pageTitle = title
+        self.pageIdentifier = identifier
         self.rows = rows
+        self.generation = generation
         super.init(nibName: nil, bundle: nil)
         self.title = title
     }
@@ -235,6 +287,30 @@ private final class ExampleScrollPageViewController: UIViewController {
         installScrollView()
     }
 
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        willAppearCount += 1
+        updateAppearanceLabel()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        didAppearCount += 1
+        updateAppearanceLabel()
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        willDisappearCount += 1
+        updateAppearanceLabel()
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        didDisappearCount += 1
+        updateAppearanceLabel()
+    }
+
     private func installScrollView() {
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(scrollView)
@@ -244,6 +320,20 @@ private final class ExampleScrollPageViewController: UIViewController {
         stackView.spacing = 12
         stackView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.addSubview(stackView)
+
+        let generationLabel = UILabel()
+        generationLabel.text = "页面代际 \(generation)"
+        generationLabel.accessibilityIdentifier = "page-generation-\(generation)-\(pageIdentifier)"
+        generationLabel.font = .preferredFont(forTextStyle: .caption1)
+        generationLabel.textColor = .secondaryLabel
+        stackView.addArrangedSubview(generationLabel)
+
+        appearanceLabel.text = "页面生命周期"
+        appearanceLabel.accessibilityIdentifier = "page-appearance-\(pageIdentifier)"
+        appearanceLabel.font = .preferredFont(forTextStyle: .caption2)
+        appearanceLabel.textColor = .tertiaryLabel
+        stackView.addArrangedSubview(appearanceLabel)
+        updateAppearanceLabel()
 
         for row in 0..<rows {
             let label = UILabel()
@@ -272,6 +362,15 @@ private final class ExampleScrollPageViewController: UIViewController {
             stackView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor, constant: -16),
             stackView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor, constant: -32)
         ])
+    }
+
+    private func updateAppearanceLabel() {
+        appearanceLabel.accessibilityValue = [
+            "willAppear=\(willAppearCount)",
+            "didAppear=\(didAppearCount)",
+            "willDisappear=\(willDisappearCount)",
+            "didDisappear=\(didDisappearCount)"
+        ].joined(separator: ",")
     }
 }
 

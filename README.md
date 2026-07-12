@@ -1,6 +1,6 @@
 # AnchorPager
 
-AnchorPager 是一个 UIKit 容器框架，用于组合可变 Header、吸顶分段栏、多页面横向分页和 child scroll view 接入。当前仓库处于 v0.3 Scroll Discovery 与 Inset Ownership 阶段，已实现固定分页 viewport、分段栏自适应/显式高度、child managed inset 差量所有权、fallback 统一接入，以及 reload/deinit 归还语义。
+AnchorPager 是一个 UIKit 容器框架，用于组合可变 Header、吸顶分段栏、多页面横向分页和 child scroll view 接入。当前仓库已完成 v0.4 Child 生命周期与缓存：在 v0.3 固定分页 viewport 和 managed inset ownership 基础上，实现按需页面创建、稳定页面身份、可选相邻页缓存、reload generation 安全收敛，以及页面卸载后的滚动位置恢复。
 
 ## 安装
 
@@ -181,20 +181,26 @@ final class PlainPageViewController: UIViewController {
 
 无候选 `UIScrollView` 时，AnchorPager 会先使用内部 fallback scroll host 包装普通 child，再交给横向分页 adapter。fallback 与真实 scroll page 使用同一套 managed inset 规则；普通 child 的最小高度按扣除 managed top/bottom 后的可用 viewport 计算。
 
+## 页面生命周期与缓存
+
+`reloadData()` 只同步 Header、标题和页面数量，不会预先创建全部页面。Tabman/Pageboy 需要某个 index 时，内部 `PageStateStore` 才会向 data source 请求对应控制器；同一 reload generation、同一 index 的控制器只要仍存活，就会保持稳定身份。AnchorPager 默认强保留当前页和进行中的切页 source/target；设置 `configuration.paging.keepsAdjacentPagesLoaded = true` 后，还会保留已经加载过的当前页相邻页面。
+
+页面离开缓存窗口时，AnchorPager 会保存其 `childDistanceFromTop` 并归还 managed inset ownership。之后若 data source 为该 index 提供新实例：当主容器已经完全折叠时，页面恢复自己的滚动位置；当主容器尚未完全折叠时，目标页面归到顶部，以维持当前阶段唯一纵向 owner 的约束。Pageboy/UIKit 仍是普通页面 containment 和 appearance lifecycle 的唯一执行者，缓存强引用变化不会触发手工 appearance forwarding。Pageboy/UIKit 可能暂时持有临近页面，因此离开 AnchorPager 缓存窗口不等于承诺页面立即释放。
+
 ## 示例工程
 
 仓库包含 `Examples/AnchorPagerExample.xcodeproj`，用于验证示例 App 能接入本地 `AnchorPager` package、以 `UITabBarController` 作为 window root、首屏直接显示 AnchorPager 示例页，并可通过导航按钮 push 另一个 AnchorPager 示例页来验证 `hidesBottomBarWhenPushed` 隐藏 tab bar。示例页保持默认自适应 bar，通过 public API 提供 Header、真实 scroll view child 和 fallback child；UI test 同时验证两类页面在 managed inset 生效后仍可见。
 
 ```bash
 xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'generic/platform=iOS Simulator' build
-xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test
+xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,name=iPhone 17' -parallel-testing-enabled NO test
 ```
 
 ## 日志
 
 AnchorPager 通过内部 `AnchorPagerLogger` 使用 `os.Logger` 输出关键事件，subsystem 为 `com.anchorpager.AnchorPager`。`AnchorPagerLogger.log` 可从非主线程内部路径调用；测试用 sink 会回到 MainActor 记录事件。当前 category 包括 `lifecycle`、`layout`、`header`、`paging`、`children`、`scroll`、`inset`、`overscroll`、`gesture`、`accessibility`、`resource`。
 
-v0.3 布局日志包括 Header 高度解析、Header frame、bar frame、safe area 和 bounds 变化；inset 日志记录 ownership begin/update/end/skip 与 scroll target collision。日志只在状态变化时输出，避免普通布局 pass 或滚动热路径产生重复噪声。
+布局日志包括 Header 高度解析、Header frame、bar frame、safe area 和 bounds 变化；inset 日志记录 ownership begin/update/end/skip 与 scroll target collision。v0.4 的 children 日志记录页面 load/reuse/recreate、缓存 retain/release、snapshot save/restore/reset、reload generation begin/commit/cancel 和重复控制器降级。日志只在状态变化时输出，managed inset 与滚动热路径不会逐帧产生 children 日志。
 
 建议使用 Console.app 或 `log stream` 按 subsystem/category 过滤：
 
@@ -206,4 +212,4 @@ log stream --predicate 'subsystem == "com.anchorpager.AnchorPager"'
 
 ## 当前限制
 
-v0.3 当前已交付固定分页 viewport、optional bar height、真实 bar obstruction、child/fallback managed inset ownership 和归还语义。完整纵向嵌套滚动协调、顶部 overscroll owner、状态栏点击顶滚、尺寸变化恢复、page cache window 和 Tabman 驱动的 appearance lifecycle 语义仍在后续版本。Tabman/Pageboy 仅出现在 internal adapter 层，Public API 不暴露第三方类型。
+v0.4 当前已交付固定分页 viewport、optional bar height、child/fallback managed inset ownership、按需页面身份、缓存窗口、滚动快照和 reload generation。完整纵向嵌套滚动协调、顶部 overscroll owner、状态栏点击顶滚、尺寸变化恢复和完整手势状态机仍在后续版本。Tabman/Pageboy 仅出现在 internal adapter 层，Public API 不暴露第三方类型。

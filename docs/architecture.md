@@ -1,6 +1,6 @@
 # AnchorPager 架构说明
 
-本文档面向维护者，记录当前 v0.3 Scroll Discovery 与 Inset Ownership 阶段的架构边界和已固定契约。
+本文档面向维护者，记录当前 v0.4 Child 生命周期与缓存阶段的架构边界和已固定契约。
 
 ## 模块划分
 
@@ -111,13 +111,13 @@ paging adapter 的 top 跟随当前 Header bottom，但 `pagingFrame.height` 固
 
 ## 主容器可视装配
 
-`AnchorPagerViewController.reloadData()` 会从 data source 收集 Header、标题和 child view controller，并在 view loaded 后安装：
+`AnchorPagerViewController.reloadData()` 会从 data source 同步 Header、标题和页面数量，并在 view loaded 后安装：
 
 - `verticalScrollView`：主容器纵向滚动入口
 - Header host：承载 `.view` 或 `.viewController` Header
 - `AnchorPagerPagingAdapter`：内部 Tabman/Pageboy adapter，负责分段栏、横向分页内容和 page containment 执行
 
-主容器只持有内部 adapter，不向 Public API 暴露 Tabman/Pageboy 类型。当前装配已通过 UI test 验证分段栏点击、横向滑动、public API 程序化切页，以及真实 scroll/fallback 页面在 managed inset 生效后的可见性。完整 page state store 和纵向嵌套滚动协调将在后续版本推进。
+主容器只持有内部 adapter，不向 Public API 暴露 Tabman/Pageboy 类型。页面控制器由 `AnchorPagerPageStateStore` 在 adapter 按 index 请求时按需提供，不在 reload 时全量预加载。当前装配已通过 UI test 验证分段栏点击、横向滑动、public API 程序化切页、真实 scroll/fallback 页面、reload 页面代际替换、滚动位置恢复和标准 UIKit appearance 回调。完整纵向嵌套滚动协调将在 v0.5 推进。
 
 v0.2 会在基础布局更新和 `reloadHeaderLayout()` 时发送 `AnchorPagerLayoutContext`。当前 context 覆盖有效 selectedIndex、Header frame、bar frame 和内容 frame，用于调试和接入验证。
 
@@ -167,11 +167,15 @@ recognition；完整横向、返回手势和 interaction state 仍属于 v0.7。
 
 ## Child Lifecycle
 
-横向 page containment 的执行层是 Tabman/Pageboy adapter。AnchorPager 的职责是维护 page lifecycle 策略和对外语义，而不是在主容器中重复 `addChild` 每个横向 page。v0.4 已确认采用单一 `PageStateStore` 设计：PagingAdapter 只按 index 请求页面；Store 以 generation + index 管理 weak live identity、current/transition/可选 adjacent 强保留、fallback host 和 `childDistanceFromTop` snapshot。完整契约见 `docs/superpowers/specs/2026-07-12-v0-4-child-lifecycle-cache-design.md`，当前尚未实现。
+横向 page containment 的执行层是 Tabman/Pageboy adapter。AnchorPager 的职责是维护 page lifecycle 策略和对外语义，而不是在主容器中重复 `addChild` 每个横向 page。`AnchorPagerPagingAdapter` 通过弱 `AnchorPagerPageProviding` 按 index 请求页面，不持有业务页面数组；`AnchorPagerPageStateStore` 以 reload generation + index 管理 weak live identity、current/transition/可选 adjacent 强保留、fallback host、scroll target 和 `childDistanceFromTop` snapshot。
 
-`AnchorPagerChildViewControllerStore` 是 v0.1 保留的独立基础 containment 工具，不接入横向分页主路径。v0.4 将其移除或重定位；如果继续保留，也只能用于 AnchorPager 自有 wrapper 场景，不能与 Tabman/Pageboy 对同一个 page view controller 形成双重 containment。
+Store 同时维护 committed generation 和至多一个 pending generation。`reloadData()` 建立 pending generation，Pageboy `didReloadWith` 作为 terminal 确认点提交新 generation 并释放旧状态；新的 reload 抢占尚未确认的 pending generation 时会取消它并恢复迁移过的 snapshot。负 page count 降级为零；同一 generation 内 data source 若把同一个控制器实例用于多个 index，后一个 index 会断言、记录日志并使用空白 fallback 页面，避免 Pageboy containment 身份冲突。
 
-`AnchorPagerPageScrollHostViewController` 为无 scroll view child 提供内部 fallback scroll host。fallback host 使用与真实 scroll page 相同的 managed inset target，并把普通 child 的最小高度约束为扣除 managed top/bottom 后的可用 viewport，避免 inset 额外扩大内容高度。只有 fallback host 对其内部业务 child 执行 AnchorPager 自有 containment；普通页面的 appearance 完全由 Pageboy/UIKit 驱动。v0.4 实现前，`reloadData()` 仍保留当前全量页面准备行为。
+同一 generation、同一 index 的实际页面仍存活时，Store 始终复用同一实例。默认只强保留 current 和 transition source/target；`keepsAdjacentPagesLoaded` 开启后额外保留已经加载过的当前页相邻页面，不主动预取。页面退出保留窗口时，Store 保存 `childDistanceFromTop`、归还 managed inset 并释放 AnchorPager 强引用。重新创建目标页面时，container 完全折叠则恢复 snapshot，尚未完全折叠则归顶。该规则为 v0.5 的唯一纵向 owner 不变量提供稳定页面状态基础。
+
+旧 `AnchorPagerChildViewControllerStore` 已移除。普通横向业务页面只由 Pageboy/UIKit 执行 containment 和 appearance lifecycle；AnchorPager 不因缓存 retain/release 手工转发 appearance。
+
+`AnchorPagerPageScrollHostViewController` 为无 scroll view child 提供内部 fallback scroll host。fallback host 使用与真实 scroll page 相同的 managed inset target，并把普通 child 的最小高度约束为扣除 managed top/bottom 后的可用 viewport，避免 inset 额外扩大内容高度。只有 fallback host 对其内部业务 child 执行 AnchorPager 自有 containment；普通页面的 appearance 完全由 Pageboy/UIKit 驱动。
 
 ## Scroll Discovery
 
@@ -191,13 +195,13 @@ recognition；完整横向、返回手势和 interaction state 仍属于 v0.7。
 
 查找不会跨 child view controller 边界：当前 view controller 的直接 child view controller 根 view 会作为边界被跳过。
 
-当前 v0.3 主容器在 `reloadData()` 收集页面时会加载 child view，并且每个 reload 周期只解析一次 scroll target。若两个页面声明同一 scroll view，后出现的页面尝试非冲突默认目标，否则降级到 fallback host，并记录 `inset.targetCollision`。该同步点保证 ownership target 稳定，但不是最终 page cache/window 策略；v0.4 应把 discovery 与 page state store、懒加载和 offset snapshot 统一。
+v0.4 由 PageStateStore 在页面第一次按需请求时加载该 child view，并且每个存活实例只解析一次 scroll target。若两个页面声明同一 scroll view，后出现的页面尝试非冲突默认目标，否则降级到 fallback host，并记录 `inset.targetCollision`。scroll target claim 的生命周期与 generation/page state 一致，页面淘汰或 reload 清理时同步归还。
 
 ## Inset Ownership
 
 `AnchorPagerManagedInsetCoordinator` 以弱引用 record 管理每个 active page scroll view。managed content top 与 indicator top 等于 adapter 通过 public `barInsets.top` 回报的实际 bar obstruction，不包含 Header 或顶部 safe area；managed content bottom 和 indicator bottom 等于 LayoutEngine 输出的 child 本地底部遮挡。
 
-每次更新先用“当前总 inset - 上次 managed inset”分离 external，再叠加新 managed target，并按 `contentOffset.y + contentInset.top` 保存 distance-from-top。接管期间 content adjustment behavior 为 `.never`，同时关闭 UIKit 的自动 scroll indicator inset 调整，确保 top/bottom 只有一个 owner；reload 替换页面或控制器释放时，coordinator 只减去最后一次 managed 部分并恢复两项原始自动调整状态。相同 target 和 active scroll 集合不会重复写入；container 折叠热路径只在 bottom 实际变化时更新且抑制逐帧 inset 日志。Swift 6 的 controller `deinit` 通过 `MainActor.assumeIsolated` 同步归还，具体约束见 v0.3 设计文档。
+每次更新先用“当前总 inset - 上次 managed inset”分离 external，再叠加新 managed target，并按 `contentOffset.y + contentInset.top` 保存 distance-from-top。接管期间 content adjustment behavior 为 `.never`，同时关闭 UIKit 的自动 scroll indicator inset 调整，确保 top/bottom 只有一个 owner；页面退出 Store 保留窗口、reload 替换页面或控制器释放时，coordinator 只减去最后一次 managed 部分并恢复两项原始自动调整状态。相同 target 和 active scroll 集合不会重复写入；container 折叠热路径只更新 current/transition/已加载 adjacent 构成的有界集合，只在 bottom 实际变化时写入并抑制逐帧 inset/children 日志。Swift 6 的 controller `deinit` 通过 `MainActor.assumeIsolated` 同步归还，具体约束见 v0.3 设计文档。
 
 ## 日志策略
 
@@ -224,14 +228,15 @@ v0.3 布局与 inset 事件：
 
 这些事件只在对应状态变化时记录，不在无变化的 layout pass、`reloadHeaderLayout` 或滚动热路径中重复输出。事件名不携带几何数值，避免泄漏用户界面内容或完整层级信息。
 
+v0.4 页面状态事件包括 `children.page.load/reuse/recreate`、`children.page.retain/release`、`children.page.snapshot.save/restore/reset`、`children.page.generation.begin/commit/cancel`、`children.page.duplicateController` 和异常 data source/count 降级。缓存窗口或 snapshot 状态变化才会记录；单纯 managed inset 热路径不输出 children 日志。
+
 ## Known Limitations
 
-当前 v0.3 已完成固定分页 viewport 与 child inset ownership，仍不包含后续版本能力：
+当前 v0.4 已完成固定分页 viewport、child inset ownership、按需 page state/cache window、offset snapshot、reload generation 和 Pageboy/UIKit appearance lifecycle 边界，仍不包含后续版本能力：
 
-- 完整 page cache window 和 Tabman 驱动的 appearance lifecycle 语义
 - 纵向嵌套滚动协调
 - 顶部 overscroll owner
 - 手势状态机
 - 状态栏点击顶滚 owner
 - 尺寸变化恢复
-- `AnchorPagerConfiguration` 中 `topOverscrollHandlingMode`、`paging.keepsAdjacentPagesLoaded` 等后续版本配置项只保留 public skeleton 和默认值，完整行为按版本路线推进
+- `AnchorPagerConfiguration.topOverscrollHandlingMode` 等后续版本配置项只保留 public skeleton 和默认值；`paging.keepsAdjacentPagesLoaded` 已在 v0.4 生效
