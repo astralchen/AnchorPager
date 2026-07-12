@@ -274,10 +274,80 @@ final class AnchorPagerExampleUITests: XCTestCase {
     }
 
     @MainActor
+    func testCancelledInteractivePagingKeepsAppearanceAndSelectionConsistent() throws {
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "--anchorPagerInitialIndex", "2",
+            "--anchorPagerAppearanceRecorder"
+        ]
+        app.launch()
+
+        let longPage = app.staticTexts["长页 - 1"]
+        let appearanceEvents = app.buttons["page-appearance-events"]
+        XCTAssertTrue(longPage.waitForExistence(timeout: 3))
+        XCTAssertTrue(appearanceEvents.waitForExistence(timeout: 3))
+
+        XCTAssertTrue(appearanceEvents.isHittable)
+        appearanceEvents.tap()
+        XCTAssertEqual((appearanceEvents.value as? String) ?? "", "")
+
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.35, dy: 0.62))
+        let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.55, dy: 0.62))
+        start.press(
+            forDuration: 0.2,
+            thenDragTo: end,
+            withVelocity: .slow,
+            thenHoldForDuration: 0.1
+        )
+
+        let cancelSettled = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in
+                let events = (appearanceEvents.value as? String)?.split(separator: "|").map(String.init) ?? []
+                return events.contains("long.viewDidAppear")
+                    && events.contains("short.viewDidDisappear")
+            },
+            object: nil
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [cancelSettled], timeout: 3), .completed)
+
+        let cancelledEvents = appearanceEventSequence(from: appearanceEvents)
+        XCTAssertEqual(
+            cancelledEvents.filter { $0 == "long.viewDidAppear" }.count,
+            1,
+            "取消事件：\(cancelledEvents)"
+        )
+        XCTAssertEqual(
+            cancelledEvents.filter { $0 == "short.viewDidDisappear" }.count,
+            1,
+            "取消事件：\(cancelledEvents)"
+        )
+        XCTAssertFalse(cancelledEvents.contains("short.viewDidAppear"))
+        XCTAssertFalse(cancelledEvents.contains("long.viewDidDisappear"))
+        XCTAssertTrue(longPage.exists)
+        XCTAssertTrue(app.frame.intersects(longPage.frame))
+
+        app.descendants(matching: .any)["短页"].tap()
+        XCTAssertTrue(app.staticTexts["短页 - 1"].waitForExistence(timeout: 3))
+
+        let completedEvents = appearanceEventSequence(from: appearanceEvents)
+        XCTAssertEqual(completedEvents.filter { $0 == "long.viewDidAppear" }.count, 1)
+        XCTAssertEqual(completedEvents.filter { $0 == "long.viewDidDisappear" }.count, 1)
+        XCTAssertEqual(completedEvents.filter { $0 == "short.viewDidAppear" }.count, 1)
+        XCTAssertEqual(completedEvents.filter { $0 == "short.viewDidDisappear" }.count, 1)
+    }
+
+    @MainActor
     private func pushAnchorPagerExample(in app: XCUIApplication) {
         XCTAssertTrue(app.tabBars.buttons["AnchorPager"].waitForExistence(timeout: 3))
         app.navigationBars["AnchorPager"].buttons["打开 AnchorPager"].tap()
         XCTAssertTrue(app.navigationBars["AnchorPager"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.staticTexts["AnchorPager Example"].waitForExistence(timeout: 3))
+    }
+
+    @MainActor
+    private func appearanceEventSequence(from element: XCUIElement) -> [String] {
+        ((element.value as? String) ?? "")
+            .split(separator: "|")
+            .map(String.init)
     }
 }

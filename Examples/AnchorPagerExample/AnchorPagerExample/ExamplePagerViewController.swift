@@ -3,6 +3,7 @@ import UIKit
 
 final class ExamplePagerViewController: UIViewController {
     private let pagerViewController = AnchorPagerViewController()
+    private let appearanceRecorder = ExampleAppearanceRecorder()
     private var headerTopBehaviorItem: UIBarButtonItem?
     private var pageGeneration = 1
     private lazy var pages = makePages()
@@ -15,6 +16,9 @@ final class ExamplePagerViewController: UIViewController {
         view.backgroundColor = .systemBackground
         installNavigationItem()
         installPager()
+        if ProcessInfo.processInfo.arguments.contains("--anchorPagerAppearanceRecorder") {
+            installAppearanceRecorderControl()
+        }
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -51,6 +55,10 @@ final class ExamplePagerViewController: UIViewController {
         pageGeneration += 1
         pages = makePages()
         pagerViewController.reloadData()
+    }
+
+    @objc private func resetAppearanceRecorder() {
+        appearanceRecorder.reset()
     }
 
     @objc private func pushAnchorPagerExample() {
@@ -135,6 +143,27 @@ final class ExamplePagerViewController: UIViewController {
         pagerViewController.setSelectedIndex(initialSelectedIndex(), animated: false)
     }
 
+    private func installAppearanceRecorderControl() {
+        let control = UIButton(type: .custom)
+        control.accessibilityIdentifier = "page-appearance-events"
+        control.accessibilityLabel = "页面生命周期事件"
+        control.accessibilityValue = appearanceRecorder.serializedEvents
+        control.addTarget(self, action: #selector(resetAppearanceRecorder), for: .touchUpInside)
+        control.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(control)
+
+        appearanceRecorder.didUpdate = { [weak control] events in
+            control?.accessibilityValue = events
+        }
+
+        NSLayoutConstraint.activate([
+            control.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -4),
+            control.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            control.widthAnchor.constraint(equalToConstant: 20),
+            control.heightAnchor.constraint(equalToConstant: 20)
+        ])
+    }
+
     private func initialSelectedIndex() -> Int {
         let arguments = ProcessInfo.processInfo.arguments
         guard let argumentIndex = arguments.firstIndex(of: "--anchorPagerInitialIndex"),
@@ -151,22 +180,53 @@ final class ExamplePagerViewController: UIViewController {
                 title: "无内容页",
                 identifier: "empty",
                 rows: 0,
-                generation: pageGeneration
+                generation: pageGeneration,
+                appearanceRecorder: appearanceRecorder
             ),
             ExampleScrollPageViewController(
                 title: "短页",
                 identifier: "short",
                 rows: 6,
-                generation: pageGeneration
+                generation: pageGeneration,
+                appearanceRecorder: appearanceRecorder
             ),
             ExampleScrollPageViewController(
                 title: "长页",
                 identifier: "long",
                 rows: 30,
-                generation: pageGeneration
+                generation: pageGeneration,
+                appearanceRecorder: appearanceRecorder
             ),
-            ExamplePlainPageViewController(title: "无滚动页")
+            ExamplePlainPageViewController(
+                title: "无滚动页",
+                identifier: "plain",
+                appearanceRecorder: appearanceRecorder
+            )
         ]
+    }
+}
+
+private final class ExampleAppearanceRecorder {
+    var didUpdate: ((String) -> Void)? {
+        didSet {
+            didUpdate?(serializedEvents)
+        }
+    }
+
+    private var events: [String] = []
+
+    var serializedEvents: String {
+        events.joined(separator: "|")
+    }
+
+    func record(page: String, callback: String) {
+        events.append("\(page).\(callback)")
+        didUpdate?(serializedEvents)
+    }
+
+    func reset() {
+        events.removeAll(keepingCapacity: true)
+        didUpdate?(serializedEvents)
     }
 }
 
@@ -259,6 +319,7 @@ private final class ExampleScrollPageViewController: UIViewController {
     private let pageIdentifier: String
     private let rows: Int
     private let generation: Int
+    private let appearanceRecorder: ExampleAppearanceRecorder
     private let scrollView = UIScrollView()
     private let appearanceLabel = UILabel()
     private var willAppearCount = 0
@@ -266,11 +327,18 @@ private final class ExampleScrollPageViewController: UIViewController {
     private var willDisappearCount = 0
     private var didDisappearCount = 0
 
-    init(title: String, identifier: String, rows: Int, generation: Int) {
+    init(
+        title: String,
+        identifier: String,
+        rows: Int,
+        generation: Int,
+        appearanceRecorder: ExampleAppearanceRecorder
+    ) {
         self.pageTitle = title
         self.pageIdentifier = identifier
         self.rows = rows
         self.generation = generation
+        self.appearanceRecorder = appearanceRecorder
         super.init(nibName: nil, bundle: nil)
         self.title = title
     }
@@ -291,24 +359,28 @@ private final class ExampleScrollPageViewController: UIViewController {
         super.viewWillAppear(animated)
         willAppearCount += 1
         updateAppearanceLabel()
+        appearanceRecorder.record(page: pageIdentifier, callback: "viewWillAppear")
     }
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         didAppearCount += 1
         updateAppearanceLabel()
+        appearanceRecorder.record(page: pageIdentifier, callback: "viewDidAppear")
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         willDisappearCount += 1
         updateAppearanceLabel()
+        appearanceRecorder.record(page: pageIdentifier, callback: "viewWillDisappear")
     }
 
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
         didDisappearCount += 1
         updateAppearanceLabel()
+        appearanceRecorder.record(page: pageIdentifier, callback: "viewDidDisappear")
     }
 
     private func installScrollView() {
@@ -376,15 +448,43 @@ private final class ExampleScrollPageViewController: UIViewController {
 
 private final class ExamplePlainPageViewController: UIViewController {
     private let pageTitle: String
+    private let pageIdentifier: String
+    private let appearanceRecorder: ExampleAppearanceRecorder
 
-    init(title: String) {
+    init(
+        title: String,
+        identifier: String,
+        appearanceRecorder: ExampleAppearanceRecorder
+    ) {
         self.pageTitle = title
+        self.pageIdentifier = identifier
+        self.appearanceRecorder = appearanceRecorder
         super.init(nibName: nil, bundle: nil)
         self.title = title
     }
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) 未实现")
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        appearanceRecorder.record(page: pageIdentifier, callback: "viewWillAppear")
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        appearanceRecorder.record(page: pageIdentifier, callback: "viewDidAppear")
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        appearanceRecorder.record(page: pageIdentifier, callback: "viewWillDisappear")
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        appearanceRecorder.record(page: pageIdentifier, callback: "viewDidDisappear")
     }
 
     override func viewDidLoad() {
