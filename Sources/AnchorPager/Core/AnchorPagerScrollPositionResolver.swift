@@ -15,7 +15,7 @@ struct AnchorPagerScrollPositionResolver {
         var fallback: Position
     }
 
-    static func resolve(_ input: Input) -> Position {
+    static func unclampedDesiredTotal(_ input: Input) -> CGFloat? {
         let values = [
             input.gestureStartTotal,
             input.gestureStartTranslationY,
@@ -23,13 +23,21 @@ struct AnchorPagerScrollPositionResolver {
             input.containerCollapsedOffset,
             input.childMaximumDistance
         ]
-        guard values.allSatisfy(\.isFinite) else { return input.fallback }
+        guard values.allSatisfy(\.isFinite) else { return nil }
+
+        let upwardDelta = input.gestureStartTranslationY - input.currentTranslationY
+        return input.gestureStartTotal + upwardDelta
+    }
+
+    static func resolve(_ input: Input) -> Position {
+        guard let rawDesiredTotal = unclampedDesiredTotal(input) else {
+            return input.fallback
+        }
 
         let collapsedOffset = max(0, input.containerCollapsedOffset)
         let maximumChildDistance = max(0, input.childMaximumDistance)
-        let upwardDelta = input.gestureStartTranslationY - input.currentTranslationY
         let desiredTotal = min(
-            max(0, input.gestureStartTotal + upwardDelta),
+            max(0, rawDesiredTotal),
             collapsedOffset + maximumChildDistance
         )
 

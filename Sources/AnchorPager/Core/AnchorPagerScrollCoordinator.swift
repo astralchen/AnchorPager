@@ -8,6 +8,7 @@ final class AnchorPagerScrollCoordinator {
     }
 
     private let containerScrollView: AnchorPagerContainerScrollView
+    private let overscrollCoordinator: AnchorPagerOverscrollCoordinator
     private var childBinding: AnchorPagerChildScrollBinding?
     private weak var committedChildScrollView: UIScrollView?
     private var bindingToken = 0
@@ -19,9 +20,13 @@ final class AnchorPagerScrollCoordinator {
     private(set) var owner: Owner = .container
 
     var bindingTokenForTesting: Int { bindingToken }
+    var activeBoundaryForTesting: AnchorPagerOverscrollCoordinator.ActiveOwner? {
+        overscrollCoordinator.activeOwner
+    }
 
     init(containerScrollView: AnchorPagerContainerScrollView) {
         self.containerScrollView = containerScrollView
+        self.overscrollCoordinator = AnchorPagerOverscrollCoordinator(topMode: .container)
         containerScrollView.panGestureRecognizer.addTarget(
             self,
             action: #selector(handleContainerPan(_:))
@@ -29,22 +34,25 @@ final class AnchorPagerScrollCoordinator {
     }
 
     func updateGeometry(collapsibleDistance: CGFloat) {
-        self.collapsibleDistance = max(
-            0,
-            collapsibleDistance.isFinite ? collapsibleDistance : 0
-        )
+        let next = max(0, collapsibleDistance.isFinite ? collapsibleDistance : 0)
+        if abs(self.collapsibleDistance - next) > epsilon {
+            overscrollCoordinator.cancel()
+        }
+        self.collapsibleDistance = next
         settleStableOffsets()
     }
 
     func bindCommittedChild(_ scrollView: UIScrollView?) {
         guard !isInvalidated, committedChildScrollView !== scrollView else { return }
 
+        overscrollCoordinator.cancel()
         endCurrentBindingIfNeeded()
         committedChildScrollView = scrollView
         containerScrollView.bindCurrentChildPan(scrollView?.panGestureRecognizer)
         bindingToken &+= 1
         guard let scrollView else {
             transitionOwnerIfNeeded(to: .container)
+            settleStableOffsets()
             return
         }
 
@@ -76,11 +84,10 @@ final class AnchorPagerScrollCoordinator {
             )
             return
         }
-        if containerScrollView.contentOffset.y < 0 {
-            pinChildToTop()
-        } else {
-            settleStableOffsets()
+        if handleObservedBoundaryIfNeeded() {
+            return
         }
+        settleStableOffsets()
     }
 
     func handlePan(state: UIGestureRecognizer.State, translationY: CGFloat) {
@@ -91,17 +98,37 @@ final class AnchorPagerScrollCoordinator {
             gestureStartTranslationY = translationY
         case .changed:
             guard let gestureStartTotal else { return }
-            apply(AnchorPagerScrollPositionResolver.resolve(.init(
+            let input = AnchorPagerScrollPositionResolver.Input(
                 gestureStartTotal: gestureStartTotal,
                 gestureStartTranslationY: gestureStartTranslationY,
                 currentTranslationY: translationY,
                 containerCollapsedOffset: collapsibleDistance,
                 childMaximumDistance: childMaximumDistance,
                 fallback: currentStablePosition()
-            )))
+            )
+            guard let desiredTotal = AnchorPagerScrollPositionResolver
+                .unclampedDesiredTotal(input) else {
+                apply(AnchorPagerScrollPositionResolver.resolve(input))
+                return
+            }
+            let maximumStableTotal = collapsibleDistance + childMaximumDistance
+            if desiredTotal < -boundaryEpsilon {
+                beginBoundary(.top)
+            } else if desiredTotal > maximumStableTotal + boundaryEpsilon {
+                beginBoundary(.bottom)
+            } else if overscrollCoordinator.activeOwner == nil {
+                overscrollCoordinator.reachedStableRange()
+                apply(AnchorPagerScrollPositionResolver.resolve(input))
+            } else {
+                enforceAndObserveActiveBoundary()
+            }
         case .ended, .cancelled, .failed:
             gestureStartTotal = nil
-            settleStableOffsets()
+            if overscrollCoordinator.endInteraction() {
+                settleStableOffsets()
+            } else if overscrollCoordinator.activeOwner == nil {
+                settleStableOffsets()
+            }
         default:
             break
         }
@@ -111,9 +138,17 @@ final class AnchorPagerScrollCoordinator {
         childDidChange(token: token)
     }
 
+    func cancelBoundaryHandling() {
+        let didCancel = overscrollCoordinator.cancel()
+        if didCancel {
+            apply(currentStablePosition())
+        }
+    }
+
     func invalidate() {
         guard !isInvalidated else { return }
         isInvalidated = true
+        overscrollCoordinator.cancel()
         bindingToken &+= 1
         endCurrentBindingIfNeeded()
         committedChildScrollView = nil
@@ -129,6 +164,7 @@ final class AnchorPagerScrollCoordinator {
 @MainActor
 private extension AnchorPagerScrollCoordinator {
     var epsilon: CGFloat { 0.001 }
+    var boundaryEpsilon: CGFloat { 0.5 }
 
     var childTopOffset: CGFloat {
         guard let committedChildScrollView else { return 0 }
@@ -216,8 +252,8 @@ private extension AnchorPagerScrollCoordinator {
     }
 
     func settleStableOffsets() {
-        if containerScrollView.contentOffset.y < 0 {
-            pinChildToTop()
+        if overscrollCoordinator.activeOwner != nil {
+            enforceAndObserveActiveBoundary()
             return
         }
         let current = currentStablePosition()
@@ -252,6 +288,101 @@ private extension AnchorPagerScrollCoordinator {
         )
     }
 
+    func beginBoundary(_ boundary: AnchorPagerOverscrollCoordinator.Boundary) {
+        let route = overscrollCoordinator.begin(
+            boundary: boundary,
+            hasChild: committedChildScrollView != nil
+        )
+        switch route {
+        case let .clampStableBoundary(boundary):
+            switch boundary {
+            case .top:
+                apply(.init(containerOffset: 0, childDistance: 0))
+            case .bottom:
+                apply(.init(
+                    containerOffset: collapsibleDistance,
+                    childDistance: childMaximumDistance
+                ))
+            }
+        case .passThrough:
+            enforceAndObserveActiveBoundary()
+        }
+    }
+
+    func enforceAndObserveActiveBoundary() {
+        guard let active = overscrollCoordinator.activeOwner else { return }
+        switch (active.boundary, active.owner) {
+        case (.top, .container):
+            pinChildToTop()
+        case (.top, .child):
+            writeContainerBoundary(0)
+        case (.bottom, .child):
+            writeContainerBoundary(collapsibleDistance)
+        case (.bottom, .container):
+            break
+        }
+
+        let result = overscrollCoordinator.observeActiveOverflow(
+            activeOverflowDistance(active)
+        )
+        if result == .finished {
+            settleStableOffsets()
+        }
+    }
+
+    func activeOverflowDistance(
+        _ active: AnchorPagerOverscrollCoordinator.ActiveOwner
+    ) -> CGFloat {
+        switch (active.boundary, active.owner) {
+        case (.top, .container):
+            return max(0, -containerScrollView.contentOffset.y)
+        case (.top, .child):
+            let distance = (committedChildScrollView?.contentOffset.y ?? childTopOffset)
+                - childTopOffset
+            return max(0, -distance)
+        case (.bottom, .child):
+            let distance = (committedChildScrollView?.contentOffset.y ?? childTopOffset)
+                - childTopOffset
+            return max(0, distance - childMaximumDistance)
+        case (.bottom, .container):
+            return max(0, containerScrollView.contentOffset.y - collapsibleDistance)
+        }
+    }
+
+    func writeContainerBoundary(_ target: CGFloat) {
+        guard abs(containerScrollView.contentOffset.y - target) > epsilon else { return }
+        isApplyingGuardedOffsets = true
+        containerScrollView.contentOffset.y = target
+        isApplyingGuardedOffsets = false
+        AnchorPagerLogger.log(
+            .debug,
+            category: .scroll,
+            event: "scroll.offset.guard.apply"
+        )
+    }
+
+    func handleObservedBoundaryIfNeeded() -> Bool {
+        let childDistance = committedChildScrollView.map {
+            $0.contentOffset.y + $0.contentInset.top
+        }
+        if overscrollCoordinator.activeOwner == nil {
+            if containerScrollView.contentOffset.y < -boundaryEpsilon
+                || (childDistance ?? 0) < -boundaryEpsilon {
+                beginBoundary(.top)
+            } else if let childDistance,
+                      childDistance > childMaximumDistance + boundaryEpsilon {
+                beginBoundary(.bottom)
+            } else if committedChildScrollView == nil,
+                      containerScrollView.contentOffset.y
+                        > collapsibleDistance + boundaryEpsilon {
+                beginBoundary(.bottom)
+            }
+        }
+        guard overscrollCoordinator.activeOwner != nil else { return false }
+        enforceAndObserveActiveBoundary()
+        return true
+    }
+
     func childDidChange(token: Int) {
         guard token == bindingToken else {
             AnchorPagerLogger.log(
@@ -267,6 +398,9 @@ private extension AnchorPagerScrollCoordinator {
                 category: .scroll,
                 event: "scroll.offset.guard.skip"
             )
+            return
+        }
+        if handleObservedBoundaryIfNeeded() {
             return
         }
         if containerScrollView.contentOffset.y < collapsibleDistance - epsilon {

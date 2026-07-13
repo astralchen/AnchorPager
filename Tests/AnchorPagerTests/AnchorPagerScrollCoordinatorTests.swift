@@ -49,7 +49,7 @@ final class AnchorPagerScrollCoordinatorTests: XCTestCase {
         XCTAssertEqual(fixture.container.contentOffset.y, 50, accuracy: 0.001)
     }
 
-    func testExpandedTopBouncePinsChildAndKeepsContainerNegativeOffset() {
+    func testDefaultContainerTopPassThroughKeepsNegativeContainerAndPinsChild() {
         let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
         fixture.container.contentOffset.y = -24
         fixture.child.contentOffset.y = -fixture.child.contentInset.top - 12
@@ -62,6 +62,43 @@ final class AnchorPagerScrollCoordinatorTests: XCTestCase {
             -fixture.child.contentInset.top,
             accuracy: 0.001
         )
+    }
+
+    func testPlainBottomPassThroughKeepsContainerOverflow() {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        fixture.coordinator.bindCommittedChild(nil)
+        fixture.container.contentOffset.y = 124
+
+        fixture.coordinator.containerDidScroll()
+
+        XCTAssertEqual(fixture.container.contentOffset.y, 124, accuracy: 0.001)
+    }
+
+    func testRealChildBottomPassThroughKeepsChildOverflowAndPinsContainer() {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        fixture.container.contentOffset.y = 112
+        fixture.child.contentOffset.y = -fixture.child.contentInset.top + 524
+
+        fixture.coordinator.handleChildChangeForTesting(
+            token: fixture.coordinator.bindingTokenForTesting
+        )
+
+        XCTAssertEqual(fixture.container.contentOffset.y, 100, accuracy: 0.001)
+        XCTAssertEqual(
+            fixture.child.contentOffset.y + fixture.child.contentInset.top,
+            524,
+            accuracy: 0.001
+        )
+    }
+
+    func testActiveNativeBoundaryIsNotClampedByGeometryRefresh() {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        fixture.container.contentOffset.y = -24
+        fixture.coordinator.containerDidScroll()
+
+        fixture.coordinator.updateGeometry(collapsibleDistance: 100)
+
+        XCTAssertEqual(fixture.container.contentOffset.y, -24, accuracy: 0.001)
     }
 
     func testSameChildRebindIsIdempotentAndOldChildStopsAffectingReplacement() {
