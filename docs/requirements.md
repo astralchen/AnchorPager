@@ -270,6 +270,7 @@ extension UIViewController {
 9. reloadData 必须清理旧 page state、旧 fallback host content、旧 offset snapshot 和旧 Tabman/Pageboy 状态。
 10. Tabman/Pageboy 事件必须通过 adapter 标准化后再驱动 AnchorPager 的 public selection、scroll/inset 和 lifecycle 策略。
 11. 测试必须覆盖 Tabman 驱动下的生命周期语义、selection cancel、reloadData 后旧 child 可释放，以及 fallback host containment 顺序。
+12. AnchorPager 不得设置横向业务 child 的 `UIScrollView.delegate`；纵向协调对 child offset、contentSize 和 pan state 的观察必须保留接入方原 delegate 身份与回调语义。
 
 ## 10. API Contract 要求
 

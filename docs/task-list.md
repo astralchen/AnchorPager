@@ -18,6 +18,7 @@
 - [ ] 横向分页使用 Tabman + Pageboy
 - [ ] Tabman/Pageboy 类型只出现在 internal adapter 层
 - [ ] 横向 page 的实际 UIKit containment 由 Tabman/Pageboy adapter 执行，AnchorPager 不对同一 page view controller 重复 `addChild`
+- [ ] 任何时候都不设置横向业务 child 的 `UIScrollView.delegate`，包括临时代理和恢复式接管
 - [ ] Public API 不暴露第三方库类型
 - [ ] Public API、data source、delegate、coordinator 状态更新保持 `@MainActor`
 - [ ] 只有直接操作 UIKit 状态或维护 UI lifecycle/coordinator 状态的内部类型整体使用 `@MainActor`
@@ -388,7 +389,7 @@
 
 ## v0.5：纵向嵌套滚动协调版
 
-启动门禁：已满足，可以开始开发。ScrollCoordinator 只读 Store committed current page/scroll target，empty 时两者为 nil，并在 matching reload/selection terminal 后重新绑定。不得缓存 Host/adapter/provider、读取 provider pending，或复制 page identity/cache/generation 职责。
+设计门禁：`docs/superpowers/specs/2026-07-13-v0-5-scroll-coordination-design.md` 草案已写入，等待用户审阅；审阅通过后仍须创建并登记详细实施计划。ScrollCoordinator 只读 Store committed current page/scroll target，empty 时两者为 nil，并在 matching reload/selection complete/cancel terminal 后重新绑定。任何时刻都不得设置业务 child 的 `UIScrollView.delegate`，也不得替换 child pan delegate、缓存 Host/adapter/provider、读取 provider pending，或复制 page identity/cache/generation 职责。
 
 - [ ] 创建 `Sources/AnchorPager/Core/AnchorPagerScrollCoordinator.swift`
 - [ ] Header 未完全折叠时优先响应向上滚动
@@ -400,6 +401,8 @@
 - [ ] 处理 child top boundary rubber-band 抖动
 - [ ] 实现 guarded contentOffset update
 - [ ] 当前 container 与当前 child 支持受限纵向 simultaneous recognition
+- [ ] container pan forwarding proxy 保留并转发原 gesture delegate，且不修改 child pan delegate
+- [ ] child contentOffset/contentSize observation 与 pan target 在 rebind、empty、reload 和 deinit 时同步清理
 - [ ] 同一 pan 在 container/child 边界转移剩余 delta
 - [ ] container 未完全折叠时当前 child 保持顶部
 - [ ] child 离开顶部时 container 保持完全折叠
@@ -417,6 +420,9 @@
 - [ ] 测试向上和向下 handoff 不丢失剩余 delta
 - [ ] 测试 Header 折叠热路径不改变 Pageboy child bounds
 - [ ] 测试 contentSize 变化不震荡
+- [ ] Example UI test 使用真实连续 drag 验证 container-to-child 与 child-to-container handoff
+- [ ] Example UI test 覆盖短内容、fallback、页面切换和完全展开后仅 container bounce
+- [ ] UIKit 集成测试验证 child scroll delegate 与 child pan delegate 在绑定/解绑后保持原实例
 
 ## v0.6：顶部 Overscroll 事件处理版
 
@@ -612,7 +618,7 @@
 - [x] v0.2 follow-up：示例 Header 蓝色背景保持顶部行为语义，标题栈上下改用 safe area 并保留 20 pt 间距；验证记录见 `docs/superpowers/plans/2026-07-11-example-header-safe-area-content.md`
 - [x] v0.2 follow-up：示例 Header 标题栈 bottom 改为 safe area 上限约束，文本组顶部对齐并在下拉中保持固定 8 pt 间距；验证记录见 `docs/superpowers/plans/2026-07-11-example-header-safe-area-content.md`
 - [x] v0.2 Header 与布局稳定版已完成；后续从 v0.3 Scroll Discovery 与 Inset Ownership 版继续
-- [x] v0.3–v0.5 固定分页视口、optional bar height、inset ownership 和纵向 owner 架构已确认；设计见 `docs/superpowers/specs/2026-07-11-fixed-paging-viewport-inset-scroll-ownership-design.md`
+- [x] v0.3–v0.5 固定分页视口、optional bar height、inset ownership 与纵向 owner 基础不变量已确认；v0.5 代理所有权、canonical distance 和顶部下拉边界改由 `docs/superpowers/specs/2026-07-13-v0-5-scroll-coordination-design.md` 草案收口
 - [x] v0.3 Scroll Discovery 与 Inset Ownership 版已完成；验收记录见 `docs/superpowers/plans/2026-07-11-v0-3-fixed-paging-inset-ownership.md`
 - [x] v0.4 Child 生命周期与缓存主体实现已完成
 - [x] v0.4 reload terminal、空态 teardown、reload 重入与 appearance cancel 修复完整验收已通过
@@ -620,7 +626,7 @@
 - [x] v0.4 generation atomicity Task 2：payload/generation lease、committed current 与强 CleanupPlan 已完成
 - [x] v0.4 generation atomicity Task 3：staged public/provider/bar terminal、pre-load 与跨层 superseded request 已完成
 - [x] 最低工具链已提升为 Swift 6.2，语言模式保持 Swift 6，iOS 14 运行基线不变
-- [x] v0.4 最终独立复审已完成，Critical/Important/Minor 均为零；允许开始 v0.5
+- [x] v0.4 最终独立复审已完成，Critical/Important/Minor 均为零；允许进入 v0.5 设计与计划阶段
 - [x] 实现时遵循测试先行
 - [x] 每个任务完成后运行对应测试
 - [x] 每个任务完成时确认是否需要 UI 测试
