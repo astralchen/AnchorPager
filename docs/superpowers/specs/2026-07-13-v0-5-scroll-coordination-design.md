@@ -2,7 +2,7 @@
 
 **日期：** 2026-07-13
 
-**状态：** 草案已写入，待用户审阅；尚未进入实施计划与实现
+**状态：** 用户已确认；详细实施计划已创建，实现尚未开始
 
 **适用范围：** v0.5 `AnchorPagerScrollCoordinator`、当前 container/current child 连续纵向 handoff、最小 simultaneous recognition、顶部下拉临时边界和真实手势验收
 

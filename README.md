@@ -1,6 +1,6 @@
 # AnchorPager
 
-AnchorPager 是一个 UIKit 容器框架，用于组合可变 Header、吸顶分段栏、多页面横向分页和 child scroll view 接入。当前仓库已完成 v0.4 Child 生命周期、缓存与 reload 代际原子性实现：在 v0.3 固定分页 viewport 和 managed inset ownership 基础上，实现按需页面创建、稳定页面身份、可选相邻页缓存、generation-specific lease/snapshot，以及页面卸载后的滚动位置恢复。固定 paging host 以同一 request identifier 串行化 reload，并把非空 page、empty 和最终 bar inset 作为 matching terminal 一次确认。Swift 6.2.4 下框架 193 项、Example 5 项单元测试与 16 项 UI 测试已通过；最终独立复审已清零 Critical/Important/Minor，v0.4 Ready，v0.5 设计草案等待用户审阅。
+AnchorPager 是一个 UIKit 容器框架，用于组合可变 Header、吸顶分段栏、多页面横向分页和 child scroll view 接入。当前仓库已完成 v0.4 Child 生命周期、缓存与 reload 代际原子性实现：在 v0.3 固定分页 viewport 和 managed inset ownership 基础上，实现按需页面创建、稳定页面身份、可选相邻页缓存、generation-specific lease/snapshot，以及页面卸载后的滚动位置恢复。固定 paging host 以同一 request identifier 串行化 reload，并把非空 page、empty 和最终 bar inset 作为 matching terminal 一次确认。Swift 6.2.4 下框架 193 项、Example 5 项单元测试与 16 项 UI 测试已通过；最终独立复审已清零 Critical/Important/Minor，v0.4 Ready，v0.5 设计与详细实施计划已确认但实现尚未开始。
 
 最新完整验收严格串行复用 iPhone 17：resolve 1.34 秒，框架墙钟 53.81 秒，Example generic build 15.71 秒，Example 全量墙钟 277.97 秒，均为 0 fail、0 skip。已知 warning 仅为 Pageboy 5.0.2 / Tabman 4.0.1 的 `PrivacyInfo.xcprivacy` unhandled resource 提示。
 
@@ -221,7 +221,7 @@ log stream --predicate 'subsystem == "com.anchorpager.AnchorPager"'
 
 ## 当前限制
 
-v0.4 当前已交付固定分页 viewport、optional bar height、child/fallback managed inset ownership、按需页面身份、generation-specific cache lease/snapshot、稳定 paging host 和 request-aware page/empty terminal；最终独立复审已清零 Critical/Important/Minor，v0.4 Ready。v0.5 纵向滚动协调设计草案已写入，待用户审阅后再创建详细实施计划；真实 pan UI 验收和实现完成前仍不标记为已交付。v0.5 只能只读 Store 已提交的 current child/scroll target（空态为 nil），任何时刻都不能设置业务 child 的 `UIScrollView.delegate`，也不能替换 child pan delegate、缓存 Host/adapter/provider、读取 provider pending 或重复管理 page identity/cache/generation。完整顶部 overscroll mode、状态栏点击顶滚、尺寸变化恢复和完整手势状态机仍在后续版本。Tabman/Pageboy 仅出现在 internal adapter 层，Public API 不暴露第三方类型。
+v0.4 当前已交付固定分页 viewport、optional bar height、child/fallback managed inset ownership、按需页面身份、generation-specific cache lease/snapshot、稳定 paging host 和 request-aware page/empty terminal；最终独立复审已清零 Critical/Important/Minor，v0.4 Ready。v0.5 纵向滚动协调设计与详细实施计划已确认，真实 pan UI 验收和实现完成前仍不标记为已交付。v0.5 只能只读 Store 已提交的 current child/scroll target（空态为 nil），任何时刻都不能设置业务 child 的 `UIScrollView.delegate`，也不能替换 child pan delegate、缓存 Host/adapter/provider、读取 provider pending 或重复管理 page identity/cache/generation。完整顶部 overscroll mode、状态栏点击顶滚、尺寸变化恢复和完整手势状态机仍在后续版本。Tabman/Pageboy 仅出现在 internal adapter 层，Public API 不暴露第三方类型。
 
 在 Xcode 26.3 / Swift 6.2.4 的 x86_64 iPhone 17 Simulator 验证中，把控制器同步析构改为
 `isolated deinit` 会在生命周期析构后稳定触发 allocator `pointer being freed was not allocated` 崩溃。
