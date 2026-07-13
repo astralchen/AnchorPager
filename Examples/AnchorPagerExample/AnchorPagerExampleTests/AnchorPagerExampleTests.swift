@@ -8,6 +8,7 @@ struct AnchorPagerExampleTests {
     @Test func scrollCoordinationStateSerializesStableAccessibilityValue() {
         let state = ExampleScrollCoordinationState(
             page: "long",
+            hasScrollTarget: true,
             collapseProgress: 1,
             childDistance: 42,
             containerSawTopBounce: false,
@@ -16,13 +17,30 @@ struct AnchorPagerExampleTests {
 
         #expect(
             state.accessibilityValue
-                == "page=long;collapse=1.00;distance=42.00;containerBounce=0;childBounce=0"
+                == "page=long;hasScrollTarget=1;collapse=1.00;distance=42.00;containerBounce=0;childBounce=0"
+        )
+    }
+
+    @Test func plainScrollCoordinationStateReportsNoScrollTarget() {
+        let state = ExampleScrollCoordinationState(
+            page: "plain",
+            hasScrollTarget: false,
+            collapseProgress: 1,
+            childDistance: 0,
+            containerSawTopBounce: false,
+            childSawTopBounce: false
+        )
+
+        #expect(
+            state.accessibilityValue
+                == "page=plain;hasScrollTarget=0;collapse=1.00;distance=0.00;containerBounce=0;childBounce=0"
         )
     }
 
     @Test func scrollCoordinationStateResetsBothBounceFlags() {
         var state = ExampleScrollCoordinationState(
             page: "long",
+            hasScrollTarget: true,
             collapseProgress: 0,
             childDistance: 0,
             containerSawTopBounce: true,

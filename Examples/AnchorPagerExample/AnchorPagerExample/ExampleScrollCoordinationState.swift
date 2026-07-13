@@ -3,6 +3,7 @@ import Foundation
 
 struct ExampleScrollCoordinationState: Equatable {
     var page: String
+    var hasScrollTarget: Bool
     var collapseProgress: CGFloat
     var childDistance: CGFloat
     var containerSawTopBounce: Bool
@@ -11,6 +12,7 @@ struct ExampleScrollCoordinationState: Equatable {
     var accessibilityValue: String {
         [
             "page=\(page)",
+            "hasScrollTarget=\(hasScrollTarget ? 1 : 0)",
             "collapse=\(formatted(collapseProgress))",
             "distance=\(formatted(childDistance))",
             "containerBounce=\(containerSawTopBounce ? 1 : 0)",

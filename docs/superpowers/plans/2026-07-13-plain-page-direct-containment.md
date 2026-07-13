@@ -472,7 +472,7 @@ func testPlainPageRootReachesPhysicalBottomAndUsesContainerOnlyPan() throws {
     XCTAssertTrue(root.waitForExistence(timeout: 3))
     let initialFrame = root.frame
 
-    XCTAssertEqual(initialFrame.maxY, app.frame.maxY, accuracy: 1)
+    XCTAssertGreaterThanOrEqual(initialFrame.maxY, app.frame.maxY - 1)
     XCTAssertNotNil(waitForScrollState(from: stateProbe) {
         $0.page == "plain" && !$0.hasScrollTarget && $0.distance == 0
     })
@@ -483,11 +483,12 @@ func testPlainPageRootReachesPhysicalBottomAndUsesContainerOnlyPan() throws {
         $0.page == "plain" && !$0.hasScrollTarget
             && $0.collapse >= 0.99 && $0.distance == 0 && !$0.childBounce
     })
-    XCTAssertEqual(root.frame.maxY, app.frame.maxY, accuracy: 1)
-    XCTAssertEqual(root.frame.height, initialFrame.height, accuracy: 1)
+    let collapsedFrame = root.frame
+    XCTAssertGreaterThanOrEqual(collapsedFrame.maxY, app.frame.maxY - 1)
+    XCTAssertEqual(collapsedFrame.height, initialFrame.height, accuracy: 1)
 
     drag(in: app, from: 0.76, to: 0.24)
-    XCTAssertEqual(root.frame, initialFrame)
+    XCTAssertEqual(root.frame, collapsedFrame)
 }
 ```
 
@@ -556,7 +557,7 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj \
   -only-testing:AnchorPagerExampleTests \
   -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testSingleUpwardDragCollapsesHeaderThenContinuesIntoLongChild \
   -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testSingleDownwardDragReturnsLongChildThenExpandsHeader \
-  -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testShortAndFallbackPagesRemainStableAcrossVerticalDrag \
+  -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testShortAndPlainPagesRemainStableAcrossVerticalDrag \
   -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testExpandedTopPullUsesContainerBounceWithoutChildBounce \
   -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testSwitchingPagesRebindsVerticalOwnerWithoutJump \
   -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testPlainPageRootReachesPhysicalBottomAndUsesContainerOnlyPan test

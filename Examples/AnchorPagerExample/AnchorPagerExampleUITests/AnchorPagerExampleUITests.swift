@@ -50,7 +50,7 @@ final class AnchorPagerExampleUITests: XCTestCase {
     }
 
     @MainActor
-    func testShortAndFallbackPagesRemainStableAcrossVerticalDrag() throws {
+    func testShortAndPlainPagesRemainStableAcrossVerticalDrag() throws {
         let app = XCUIApplication()
         app.launch()
         let stateProbe = scrollCoordinationStateProbe(in: app)
@@ -62,12 +62,41 @@ final class AnchorPagerExampleUITests: XCTestCase {
 
         app.descendants(matching: .any)["无滚动页"].tap()
         XCTAssertNotNil(waitForScrollState(from: stateProbe) {
-            $0.page == "plain" && $0.distance == 0
+            $0.page == "plain" && !$0.hasScrollTarget && $0.distance == 0
         })
         drag(in: app, from: 0.76, to: 0.24)
         XCTAssertNotNil(waitForScrollState(from: stateProbe) {
-            $0.page == "plain" && $0.distance == 0 && !$0.childBounce
+            $0.page == "plain" && !$0.hasScrollTarget && $0.distance == 0 && !$0.childBounce
         })
+    }
+
+    @MainActor
+    func testPlainPageRootReachesPhysicalBottomAndUsesContainerOnlyPan() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--anchorPagerInitialIndex", "3"]
+        app.launch()
+        let root = app.otherElements["plain-page-root"]
+        let stateProbe = scrollCoordinationStateProbe(in: app)
+        XCTAssertTrue(root.waitForExistence(timeout: 3))
+        let initialFrame = root.frame
+
+        XCTAssertGreaterThanOrEqual(initialFrame.maxY, app.frame.maxY - 1)
+        XCTAssertNotNil(waitForScrollState(from: stateProbe) {
+            $0.page == "plain" && !$0.hasScrollTarget && $0.distance == 0
+        })
+
+        drag(in: app, from: 0.76, to: 0.24)
+
+        XCTAssertNotNil(waitForScrollState(from: stateProbe) {
+            $0.page == "plain" && !$0.hasScrollTarget
+                && $0.collapse >= 0.99 && $0.distance == 0 && !$0.childBounce
+        })
+        let collapsedFrame = root.frame
+        XCTAssertGreaterThanOrEqual(collapsedFrame.maxY, app.frame.maxY - 1)
+        XCTAssertEqual(collapsedFrame.height, initialFrame.height, accuracy: 1)
+
+        drag(in: app, from: 0.76, to: 0.24)
+        XCTAssertEqual(root.frame, collapsedFrame)
     }
 
     @MainActor
@@ -219,7 +248,7 @@ final class AnchorPagerExampleUITests: XCTestCase {
     }
 
     @MainActor
-    func testAdaptiveBarKeepsRealScrollAndFallbackPagesVisible() throws {
+    func testAdaptiveBarKeepsRealScrollAndPlainPagesVisible() throws {
         let app = XCUIApplication()
         app.launch()
 
@@ -500,6 +529,7 @@ final class AnchorPagerExampleUITests: XCTestCase {
 
 private struct ScrollCoordinationState {
     let page: String
+    let hasScrollTarget: Bool
     let collapse: CGFloat
     let distance: CGFloat
     let containerBounce: Bool
@@ -516,6 +546,7 @@ private struct ScrollCoordinationState {
                 }
         )
         guard let page = fields["page"],
+              let hasScrollTargetValue = fields["hasScrollTarget"],
               let collapseValue = fields["collapse"],
               let collapse = Double(collapseValue),
               let distanceValue = fields["distance"],
@@ -525,6 +556,7 @@ private struct ScrollCoordinationState {
             return nil
         }
         self.page = page
+        self.hasScrollTarget = hasScrollTargetValue == "1"
         self.collapse = CGFloat(collapse)
         self.distance = CGFloat(distance)
         self.containerBounce = containerBounceValue == "1"

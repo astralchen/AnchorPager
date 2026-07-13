@@ -17,6 +17,7 @@ final class ExamplePagerViewController: UIViewController {
     private weak var scrollCoordinationStateControl: UIButton?
     private var scrollCoordinationState = ExampleScrollCoordinationState(
         page: "short",
+        hasScrollTarget: true,
         collapseProgress: 0,
         childDistance: 0,
         containerSawTopBounce: false,
@@ -200,8 +201,10 @@ final class ExamplePagerViewController: UIViewController {
         scrollCoordinationState.page = pageIdentifier(at: index)
 
         if let page = pages[index] as? ExampleScrollPageViewController {
+            scrollCoordinationState.hasScrollTarget = true
             page.reportCurrentScrollState()
         } else {
+            scrollCoordinationState.hasScrollTarget = false
             scrollCoordinationState.childDistance = 0
             updateScrollCoordinationStateControl()
         }
@@ -618,6 +621,13 @@ private final class ExamplePlainPageViewController: UIViewController {
 
         view.backgroundColor = .tertiarySystemBackground
 
+        let rootProbe = UIView()
+        rootProbe.accessibilityIdentifier = "plain-page-root"
+        rootProbe.isAccessibilityElement = true
+        rootProbe.isUserInteractionEnabled = false
+        rootProbe.translatesAutoresizingMaskIntoConstraints = false
+        view.insertSubview(rootProbe, at: 0)
+
         let label = UILabel()
         label.text = pageTitle
         label.accessibilityIdentifier = "plain-page-content"
@@ -627,6 +637,10 @@ private final class ExamplePlainPageViewController: UIViewController {
         view.addSubview(label)
 
         NSLayoutConstraint.activate([
+            rootProbe.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            rootProbe.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            rootProbe.topAnchor.constraint(equalTo: view.topAnchor),
+            rootProbe.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             label.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             label.centerYAnchor.constraint(equalTo: view.centerYAnchor)
         ])
