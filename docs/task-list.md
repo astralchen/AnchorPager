@@ -389,7 +389,7 @@
 
 ## v0.5：纵向嵌套滚动协调版
 
-设计与计划门禁已满足：设计见 `docs/superpowers/specs/2026-07-13-v0-5-scroll-coordination-design.md`，实施计划见 `docs/superpowers/plans/2026-07-13-v0-5-scroll-coordination.md`。实现尚未开始。ScrollCoordinator 只读 Store committed current page/scroll target，empty 时两者为 nil，并在 matching reload/selection complete/cancel terminal 后重新绑定。任何时刻都不得设置业务 child 的 `UIScrollView.delegate`，也不得替换 child pan delegate、缓存 Host/adapter/provider、读取 provider pending，或复制 page identity/cache/generation 职责。
+设计与计划门禁已满足：设计见 `docs/superpowers/specs/2026-07-13-v0-5-scroll-coordination-design.md`，实施计划见 `docs/superpowers/plans/2026-07-13-v0-5-scroll-coordination.md`。实现进行中，Task 1 已完成；Task 2 已根据 UIKit 实测和 JXPagingView 参考验证改为 container scroll view 子类方案。ScrollCoordinator 只读 Store committed current page/scroll target，empty 时两者为 nil，并在 matching reload/selection complete/cancel terminal 后重新绑定。任何时刻都不得设置业务 child 的 `UIScrollView.delegate`，也不得设置 container/child 内建 pan delegate、缓存 Host/adapter/provider、读取 provider pending，或复制 page identity/cache/generation 职责。
 
 - [ ] 创建 `Sources/AnchorPager/Core/AnchorPagerScrollCoordinator.swift`
 - [ ] Header 未完全折叠时优先响应向上滚动
@@ -401,7 +401,7 @@
 - [ ] 处理 child top boundary rubber-band 抖动
 - [ ] 实现 guarded contentOffset update
 - [ ] 当前 container 与当前 child 支持受限纵向 simultaneous recognition
-- [ ] container pan forwarding proxy 保留并转发原 gesture delegate，且不修改 child pan delegate
+- [ ] container `UIScrollView` 子类只放行 committed current child pair，且不设置 container/child 内建 pan delegate
 - [ ] child contentOffset/contentSize observation 与 pan target 在 rebind、empty、reload 和 deinit 时同步清理
 - [ ] 同一 pan 在 container/child 边界转移剩余 delta
 - [ ] container 未完全折叠时当前 child 保持顶部

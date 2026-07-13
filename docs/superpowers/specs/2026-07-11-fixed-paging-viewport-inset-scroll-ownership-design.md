@@ -359,7 +359,7 @@ childTopOffset = -child.contentInset.top
 4. 完全展开后的额外下拉在 v0.5 临时只保留 container 原生 bounce、child 固定顶部；v0.6 再按 overscroll mode 决定正式 owner。
 
 不得通过反复切换 `isScrollEnabled` 实现 handoff，避免中断 pan、丢失 velocity 或产生手势断点。
-ScrollCoordinator 不替换 child scroll/pan delegate；它使用 child observation、container pan forwarding proxy、
+ScrollCoordinator 不替换 child scroll/pan delegate；它使用 child observation、container `UIScrollView` 子类、
 基于手势起点的 canonical total 和 guarded offset update 维护唯一 owner，不依赖 callback 顺序猜测剩余 delta。
 
 ### 最小纵向手势同时识别
@@ -371,8 +371,8 @@ verticalScrollView.panGestureRecognizer
 <-> currentChild.panGestureRecognizer
 ```
 
-进行受限 simultaneous recognition。只有 container pan 的 forwarding proxy 可以为当前 committed child pair 返回
-simultaneous，child pan delegate 保持原 owner。因此“当前 container 与当前 child 的最小纵向手势对”前移到
+进行受限 simultaneous recognition。只有 container scroll view 子类自身可以为当前 committed child pair 返回
+simultaneous，container/child 内建 pan delegate 均不被设置。因此“当前 container 与当前 child 的最小纵向手势对”前移到
 v0.5。v0.7 继续负责横向分页、系统返回手势、child 横向滚动、程序化分页、取消路径和完整
 interaction state 优先级。
 
@@ -385,7 +385,7 @@ interaction state 优先级。
 3. 不暂存非零 child distance 等待 Header 再次折叠后突然恢复，避免临界点内容跳跃。
 4. 不为了恢复目标 child offset 强制折叠 Header，避免切页导致 Header 突然消失。
 
-v0.5 只能通过 Store 的 committed-current 只读入口取得上述当前页；empty 时 page/scroll 均为 nil。ScrollCoordinator 在 matching reload、selection complete 或 selection cancel terminal 后重新绑定，不缓存 Host、adapter 或 provider，也不读取 pending generation。旧 observation、pan target 和 proxy binding 必须同步失效。
+v0.5 只能通过 Store 的 committed-current 只读入口取得上述当前页；empty 时 page/scroll 均为 nil。ScrollCoordinator 在 matching reload、selection complete 或 selection cancel terminal 后重新绑定，不缓存 Host、adapter 或 provider，也不读取 pending generation。旧 observation、pan target 和 container weak child pair 必须同步失效。
 
 ## 尺寸与 Header 变化
 
