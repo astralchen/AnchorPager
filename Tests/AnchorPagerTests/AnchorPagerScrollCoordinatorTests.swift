@@ -3,27 +3,20 @@ import XCTest
 
 @MainActor
 final class AnchorPagerScrollCoordinatorTests: XCTestCase {
-    func testBindingAtTopDisablesChildBounceAndInvalidateRestoresOriginalValue() {
+    func testBindingPanAndInvalidateKeepBusinessBounceConfiguration() {
         let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
-
-        XCTAssertFalse(fixture.child.bounces)
-
-        fixture.coordinator.invalidate()
-
-        XCTAssertTrue(fixture.child.bounces)
-    }
-
-    func testEndedPanRestoresChildBounceAfterChildLeavesTop() {
-        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        fixture.child.bounces = false
+        fixture.child.alwaysBounceVertical = true
+        fixture.coordinator.bindCommittedChild(nil)
+        fixture.coordinator.bindCommittedChild(fixture.child)
 
         fixture.coordinator.handlePan(state: .began, translationY: 0)
         fixture.coordinator.handlePan(state: .changed, translationY: -150)
+        fixture.coordinator.handlePan(state: .ended, translationY: -150)
+        fixture.coordinator.invalidate()
 
         XCTAssertFalse(fixture.child.bounces)
-
-        fixture.coordinator.handlePan(state: .ended, translationY: -150)
-
-        XCTAssertTrue(fixture.child.bounces)
+        XCTAssertTrue(fixture.child.alwaysBounceVertical)
     }
 
     func testUpwardPanCollapsesContainerThenScrollsChild() {

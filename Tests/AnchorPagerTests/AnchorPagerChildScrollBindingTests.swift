@@ -16,6 +16,24 @@ final class AnchorPagerChildScrollBindingTests: XCTestCase {
         XCTAssertTrue(scrollView.panGestureRecognizer.delegate === originalPanDelegate)
     }
 
+    func testBindingNeverChangesBusinessBounceConfiguration() {
+        let scrollView = UIScrollView()
+        scrollView.bounces = false
+        scrollView.alwaysBounceVertical = true
+        let binding = makeBinding(scrollView: scrollView)
+
+        scrollView.contentOffset.y = 20
+        scrollView.contentSize.height = 900
+
+        XCTAssertFalse(scrollView.bounces)
+        XCTAssertTrue(scrollView.alwaysBounceVertical)
+
+        binding.invalidate()
+
+        XCTAssertFalse(scrollView.bounces)
+        XCTAssertTrue(scrollView.alwaysBounceVertical)
+    }
+
     func testBindingReportsOffsetAndContentSizeWithoutDelegateWrites() {
         let scrollView = UIScrollView()
         var offsets: [CGPoint] = []
@@ -86,6 +104,23 @@ final class AnchorPagerChildScrollBindingTests: XCTestCase {
         XCTAssertFalse(normalized.contains("panGestureRecognizer.delegate ="))
         XCTAssertFalse(normalized.contains("originalScrollDelegate"))
         XCTAssertFalse(normalized.contains("savedScrollDelegate"))
+    }
+
+    func testBindingSourceDoesNotStoreOrAssignBounceConfiguration() throws {
+        let testURL = URL(fileURLWithPath: #filePath)
+        let packageRoot = testURL
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let sourceURL = packageRoot.appendingPathComponent(
+            "Sources/AnchorPager/Children/AnchorPagerChildScrollBinding.swift"
+        )
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+        let normalized = source.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+
+        XCTAssertFalse(normalized.contains("originalBounces"))
+        XCTAssertFalse(normalized.contains(".bounces ="))
+        XCTAssertFalse(normalized.contains(".alwaysBounceVertical ="))
     }
 
     private func makeBinding(scrollView: UIScrollView) -> AnchorPagerChildScrollBinding {

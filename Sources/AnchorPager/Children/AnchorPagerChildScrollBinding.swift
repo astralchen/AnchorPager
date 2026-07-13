@@ -5,7 +5,6 @@ final class AnchorPagerChildScrollBinding: NSObject {
     let token: Int
 
     private weak var scrollView: UIScrollView?
-    private let originalBounces: Bool
     private var contentOffsetObservation: NSKeyValueObservation?
     private var contentSizeObservation: NSKeyValueObservation?
     private var onContentOffsetChanged: ((CGPoint) -> Void)?
@@ -21,7 +20,6 @@ final class AnchorPagerChildScrollBinding: NSObject {
         onPan: @escaping (UIGestureRecognizer.State, CGFloat) -> Void
     ) {
         self.scrollView = scrollView
-        self.originalBounces = scrollView.bounces
         self.token = token
         self.onContentOffsetChanged = onContentOffsetChanged
         self.onContentSizeChanged = onContentSizeChanged
@@ -59,7 +57,6 @@ final class AnchorPagerChildScrollBinding: NSObject {
         isValid = false
 
         if let scrollView {
-            scrollView.bounces = originalBounces
             scrollView.panGestureRecognizer.removeTarget(
                 self,
                 action: #selector(handlePan(_:))
@@ -78,11 +75,6 @@ final class AnchorPagerChildScrollBinding: NSObject {
             category: .resource,
             event: "resource.scrollObservation.release"
         )
-    }
-
-    func setAllowsNativeBounce(_ allowsNativeBounce: Bool) {
-        guard isValid, let scrollView else { return }
-        scrollView.bounces = allowsNativeBounce && originalBounces
     }
 
     @objc private func handlePan(_ pan: UIPanGestureRecognizer) {
