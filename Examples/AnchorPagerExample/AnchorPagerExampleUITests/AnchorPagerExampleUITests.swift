@@ -16,6 +16,99 @@ final class AnchorPagerExampleUITests: XCTestCase {
     }
 
     @MainActor
+    func testSingleUpwardDragCollapsesHeaderThenContinuesIntoLongChild() throws {
+        let app = launchLongPage()
+        let stateProbe = scrollCoordinationStateProbe(in: app)
+
+        drag(in: app, from: 0.78, to: 0.18)
+
+        let state = waitForScrollState(from: stateProbe) {
+            $0.page == "long" && $0.collapse >= 0.99 && $0.distance > 1
+        }
+        XCTAssertNotNil(state)
+        XCTAssertEqual(state?.containerBounce, false)
+        XCTAssertEqual(state?.childBounce, false)
+    }
+
+    @MainActor
+    func testSingleDownwardDragReturnsLongChildThenExpandsHeader() throws {
+        let app = launchLongPage()
+        let stateProbe = scrollCoordinationStateProbe(in: app)
+        drag(in: app, from: 0.78, to: 0.18)
+        let scrolled = waitForScrollState(from: stateProbe) {
+            $0.collapse >= 0.99 && $0.distance > 1
+        }
+        let initialDistance = try XCTUnwrap(scrolled?.distance)
+
+        drag(in: app, from: 0.22, to: 0.82)
+
+        let returned = waitForScrollState(from: stateProbe) {
+            $0.distance < initialDistance && $0.collapse < 0.99
+        }
+        XCTAssertNotNil(returned)
+        XCTAssertEqual(returned?.childBounce, false)
+    }
+
+    @MainActor
+    func testShortAndFallbackPagesRemainStableAcrossVerticalDrag() throws {
+        let app = XCUIApplication()
+        app.launch()
+        let stateProbe = scrollCoordinationStateProbe(in: app)
+
+        drag(in: app, from: 0.76, to: 0.24)
+        XCTAssertNotNil(waitForScrollState(from: stateProbe) {
+            $0.page == "short" && $0.distance == 0
+        })
+
+        app.descendants(matching: .any)["无滚动页"].tap()
+        XCTAssertNotNil(waitForScrollState(from: stateProbe) {
+            $0.page == "plain" && $0.distance == 0
+        })
+        drag(in: app, from: 0.76, to: 0.24)
+        XCTAssertNotNil(waitForScrollState(from: stateProbe) {
+            $0.page == "plain" && $0.distance == 0 && !$0.childBounce
+        })
+    }
+
+    @MainActor
+    func testExpandedTopPullUsesContainerBounceWithoutChildBounce() throws {
+        let app = launchLongPage()
+        let stateProbe = scrollCoordinationStateProbe(in: app)
+
+        drag(in: app, from: 0.30, to: 0.72)
+
+        let state = waitForScrollState(from: stateProbe) {
+            $0.containerBounce
+        }
+        XCTAssertNotNil(state)
+        XCTAssertEqual(state?.page, "long")
+        XCTAssertEqual(state?.childBounce, false)
+        XCTAssertEqual(state?.distance, 0)
+    }
+
+    @MainActor
+    func testSwitchingPagesRebindsVerticalOwnerWithoutJump() throws {
+        let app = launchLongPage()
+        let stateProbe = scrollCoordinationStateProbe(in: app)
+        drag(in: app, from: 0.78, to: 0.18)
+        let longState = try XCTUnwrap(waitForScrollState(from: stateProbe) {
+            $0.page == "long" && $0.collapse >= 0.99 && $0.distance > 1
+        })
+
+        app.descendants(matching: .any)["短页"].tap()
+        XCTAssertNotNil(waitForScrollState(from: stateProbe) {
+            $0.page == "short" && $0.distance == 0 && $0.collapse >= 0.99
+        })
+
+        app.descendants(matching: .any)["长页"].tap()
+        let restored = waitForScrollState(from: stateProbe) {
+            $0.page == "long" && abs($0.distance - longState.distance) < 2 && $0.collapse >= 0.99
+        }
+        XCTAssertNotNil(restored)
+        XCTAssertEqual(restored?.childBounce, false)
+    }
+
+    @MainActor
     func testNavigationIconPushesAnchorPagerAndHidesTabBar() throws {
         let app = XCUIApplication()
         app.launch()
@@ -138,18 +231,16 @@ final class AnchorPagerExampleUITests: XCTestCase {
     }
 
     @MainActor
-    func testLongPageBottomStaysAboveTabBarWhileHeaderIsExpanded() throws {
+    func testLongPageBottomStaysAboveTabBarAfterNestedScrolling() throws {
         let app = XCUIApplication()
         app.launchArguments = ["--anchorPagerInitialIndex", "2"]
         app.launch()
 
-        let headerTitle = app.staticTexts["AnchorPager Example"]
         let lastRow = app.staticTexts["长页 - 30"]
         let tabBar = app.tabBars.firstMatch
-        XCTAssertTrue(headerTitle.waitForExistence(timeout: 3))
+        let stateProbe = scrollCoordinationStateProbe(in: app)
         XCTAssertTrue(lastRow.waitForExistence(timeout: 3))
         XCTAssertTrue(tabBar.waitForExistence(timeout: 3))
-        let expandedHeaderMinY = headerTitle.frame.minY
 
         let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.72))
         let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.24))
@@ -164,7 +255,9 @@ final class AnchorPagerExampleUITests: XCTestCase {
             object: nil
         )
         XCTAssertEqual(XCTWaiter.wait(for: [bottomIsVisible], timeout: 3), .completed)
-        XCTAssertEqual(headerTitle.frame.minY, expandedHeaderMinY, accuracy: 1)
+        XCTAssertNotNil(waitForScrollState(from: stateProbe) {
+            $0.page == "long" && $0.collapse >= 0.99 && $0.distance > 0
+        })
     }
 
     @MainActor
@@ -232,6 +325,11 @@ final class AnchorPagerExampleUITests: XCTestCase {
 
         app.descendants(matching: .any)["短页"].tap()
         XCTAssertTrue(app.staticTexts["短页 - 1"].waitForExistence(timeout: 3))
+        let stateProbe = scrollCoordinationStateProbe(in: app)
+        drag(in: app, from: 0.24, to: 0.76)
+        XCTAssertNotNil(waitForScrollState(from: stateProbe) {
+            $0.page == "short" && $0.collapse <= 0.01 && $0.distance == 0
+        })
         app.descendants(matching: .any)["长页"].tap()
 
         XCTAssertTrue(app.staticTexts["长页 - 1"].waitForExistence(timeout: 3))
@@ -349,5 +447,87 @@ final class AnchorPagerExampleUITests: XCTestCase {
         ((element.value as? String) ?? "")
             .split(separator: "|")
             .map(String.init)
+    }
+
+    @MainActor
+    private func launchLongPage() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = ["--anchorPagerInitialIndex", "2"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["长页 - 1"].waitForExistence(timeout: 3))
+        return app
+    }
+
+    @MainActor
+    private func scrollCoordinationStateProbe(in app: XCUIApplication) -> XCUIElement {
+        let probe = app.buttons["scroll-coordination-state"]
+        XCTAssertTrue(probe.waitForExistence(timeout: 3))
+        return probe
+    }
+
+    @MainActor
+    private func drag(in app: XCUIApplication, from startY: CGFloat, to endY: CGFloat) {
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: startY))
+        let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: endY))
+        start.press(
+            forDuration: 0.12,
+            thenDragTo: end,
+            withVelocity: .slow,
+            thenHoldForDuration: 0.05
+        )
+    }
+
+    @MainActor
+    private func waitForScrollState(
+        from probe: XCUIElement,
+        matching predicate: @escaping (ScrollCoordinationState) -> Bool
+    ) -> ScrollCoordinationState? {
+        let expectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in
+                guard let state = ScrollCoordinationState(value: probe.value as? String) else {
+                    return false
+                }
+                return predicate(state)
+            },
+            object: nil
+        )
+        guard XCTWaiter.wait(for: [expectation], timeout: 3) == .completed else {
+            return nil
+        }
+        return ScrollCoordinationState(value: probe.value as? String)
+    }
+}
+
+private struct ScrollCoordinationState {
+    let page: String
+    let collapse: CGFloat
+    let distance: CGFloat
+    let containerBounce: Bool
+    let childBounce: Bool
+
+    init?(value: String?) {
+        let fields = Dictionary(
+            uniqueKeysWithValues: (value ?? "")
+                .split(separator: ";")
+                .compactMap { component -> (String, String)? in
+                    let parts = component.split(separator: "=", maxSplits: 1).map(String.init)
+                    guard parts.count == 2 else { return nil }
+                    return (parts[0], parts[1])
+                }
+        )
+        guard let page = fields["page"],
+              let collapseValue = fields["collapse"],
+              let collapse = Double(collapseValue),
+              let distanceValue = fields["distance"],
+              let distance = Double(distanceValue),
+              let containerBounceValue = fields["containerBounce"],
+              let childBounceValue = fields["childBounce"] else {
+            return nil
+        }
+        self.page = page
+        self.collapse = CGFloat(collapse)
+        self.distance = CGFloat(distance)
+        self.containerBounce = containerBounceValue == "1"
+        self.childBounce = childBounceValue == "1"
     }
 }

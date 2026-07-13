@@ -389,7 +389,7 @@
 
 ## v0.5：纵向嵌套滚动协调版
 
-设计与计划门禁已满足：设计见 `docs/superpowers/specs/2026-07-13-v0-5-scroll-coordination-design.md`，实施计划见 `docs/superpowers/plans/2026-07-13-v0-5-scroll-coordination.md`。实现进行中，Task 1–5 已完成，Task 6 尚未开始。ScrollCoordinator 只读 Store committed current page/scroll target，empty 时两者为 nil，并在 matching reload/selection complete/cancel terminal 后重新绑定。任何时刻都不得设置业务 child 的 `UIScrollView.delegate`，也不得设置 container/child 内建 pan delegate、缓存 Host/adapter/provider、读取 provider pending，或复制 page identity/cache/generation 职责。
+设计与计划门禁已满足：设计见 `docs/superpowers/specs/2026-07-13-v0-5-scroll-coordination-design.md`，实施计划见 `docs/superpowers/plans/2026-07-13-v0-5-scroll-coordination.md`。实现进行中，Task 1–6 已完成，Task 7 最终验收尚未开始。ScrollCoordinator 只读 Store committed current page/scroll target，empty 时两者为 nil，并在 matching reload/selection complete/cancel terminal 后重新绑定。任何时刻都不得设置业务 child 的 `UIScrollView.delegate`，也不得设置 container/child 内建 pan delegate、缓存 Host/adapter/provider、读取 provider pending，或复制 page identity/cache/generation 职责。真实 pan 验收补充了可恢复 child `bounces` 租约：顶部或 container pan 活跃期间关闭，离开顶部且手势结束或解绑时恢复绑定前值。
 
 - [ ] 创建 `Sources/AnchorPager/Core/AnchorPagerScrollCoordinator.swift`
 - [ ] Header 未完全折叠时优先响应向上滚动
@@ -420,8 +420,9 @@
 - [ ] 测试向上和向下 handoff 不丢失剩余 delta
 - [ ] 测试 Header 折叠热路径不改变 Pageboy child bounds
 - [ ] 测试 contentSize 变化不震荡
-- [ ] Example UI test 使用真实连续 drag 验证 container-to-child 与 child-to-container handoff
-- [ ] Example UI test 覆盖短内容、fallback、页面切换和完全展开后仅 container bounce
+- [x] Example UI test 使用真实连续 drag 验证 container-to-child 与 child-to-container handoff
+- [x] Example UI test 覆盖短内容、fallback、页面切换和完全展开后仅 container bounce
+- [x] 真实 pan 验证 child delegate 不观察到顶部负 offset，binding 在 handoff/rebind/invalidate 时正确租用并恢复 `bounces`
 - [ ] UIKit 集成测试验证 child scroll delegate 与 child pan delegate 在绑定/解绑后保持原实例
 
 ## v0.6：顶部 Overscroll 事件处理版

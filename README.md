@@ -221,7 +221,7 @@ log stream --predicate 'subsystem == "com.anchorpager.AnchorPager"'
 
 ## 当前限制
 
-v0.4 当前已交付固定分页 viewport、optional bar height、child/fallback managed inset ownership、按需页面身份、generation-specific cache lease/snapshot、稳定 paging host 和 request-aware page/empty terminal；最终独立复审已清零 Critical/Important/Minor，v0.4 Ready。v0.5 纵向滚动协调设计与详细实施计划已确认，真实 pan UI 验收和实现完成前仍不标记为已交付。v0.5 只能只读 Store 已提交的 current child/scroll target（空态为 nil），任何时刻都不能设置业务 child 的 `UIScrollView.delegate`，也不能替换 child pan delegate、缓存 Host/adapter/provider、读取 provider pending 或重复管理 page identity/cache/generation。完整顶部 overscroll mode、状态栏点击顶滚、尺寸变化恢复和完整手势状态机仍在后续版本。Tabman/Pageboy 仅出现在 internal adapter 层，Public API 不暴露第三方类型。
+v0.4 当前已交付固定分页 viewport、optional bar height、child/fallback managed inset ownership、按需页面身份、generation-specific cache lease/snapshot、稳定 paging host 和 request-aware page/empty terminal；最终独立复审已清零 Critical/Important/Minor，v0.4 Ready。v0.5 纵向滚动协调 Task 1–6 已完成，Task 7 完整验收与最终复审前仍不标记为已交付。v0.5 只能只读 Store 已提交的 current child/scroll target（空态为 nil），任何时刻都不能设置业务 child 的 `UIScrollView.delegate`，也不能替换 child pan delegate、缓存 Host/adapter/provider、读取 provider pending 或重复管理 page identity/cache/generation。真实 pan 验收确认顶部额外下拉只由 container bounce；框架仅在 committed child 顶部或 container pan 活跃期间临时关闭 child `bounces`，离开顶部且手势结束或解绑时恢复绑定前值。完整顶部 overscroll mode、状态栏点击顶滚、尺寸变化恢复和完整手势状态机仍在后续版本。Tabman/Pageboy 仅出现在 internal adapter 层，Public API 不暴露第三方类型。
 
 在 Xcode 26.3 / Swift 6.2.4 的 x86_64 iPhone 17 Simulator 验证中，把控制器同步析构改为
 `isolated deinit` 会在生命周期析构后稳定触发 allocator `pointer being freed was not allocated` 崩溃。

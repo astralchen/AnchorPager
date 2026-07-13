@@ -13,6 +13,15 @@ final class ExamplePagerViewController: UIViewController {
     private var pageGeneration = 1
     private lazy var pages = makePages()
     private var didApplyInitialContainerState = false
+    private var containerContentOffsetObservation: NSKeyValueObservation?
+    private weak var scrollCoordinationStateControl: UIButton?
+    private var scrollCoordinationState = ExampleScrollCoordinationState(
+        page: "short",
+        collapseProgress: 0,
+        childDistance: 0,
+        containerSawTopBounce: false,
+        childSawTopBounce: false
+    )
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -21,6 +30,7 @@ final class ExamplePagerViewController: UIViewController {
         view.backgroundColor = .systemBackground
         installNavigationItem()
         installPager()
+        installScrollCoordinationStateControl()
         if appearanceRecorder != nil {
             installAppearanceRecorderControl()
         }
@@ -57,6 +67,8 @@ final class ExamplePagerViewController: UIViewController {
     }
 
     @objc private func reloadPages() {
+        scrollCoordinationState.resetBounceFlags()
+        updateScrollCoordinationStateControl()
         pageGeneration += 1
         pages = makePages()
         pagerViewController.reloadData()
@@ -146,6 +158,74 @@ final class ExamplePagerViewController: UIViewController {
 
         pagerViewController.reloadData()
         pagerViewController.setSelectedIndex(initialSelectedIndex(), animated: false)
+        observeContainerContentOffset()
+    }
+
+    private func installScrollCoordinationStateControl() {
+        let control = UIButton(type: .custom)
+        control.accessibilityIdentifier = "scroll-coordination-state"
+        control.accessibilityLabel = "纵向滚动协调状态"
+        control.accessibilityValue = scrollCoordinationState.accessibilityValue
+        control.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(control)
+        scrollCoordinationStateControl = control
+
+        NSLayoutConstraint.activate([
+            control.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -4),
+            control.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 4),
+            control.widthAnchor.constraint(equalToConstant: 20),
+            control.heightAnchor.constraint(equalToConstant: 20)
+        ])
+    }
+
+    private func observeContainerContentOffset() {
+        containerContentOffsetObservation = pagerViewController.verticalScrollView.observe(
+            \.contentOffset,
+            options: [.initial, .new]
+        ) { [weak self] scrollView, _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                let top = -scrollView.adjustedContentInset.top
+                if scrollView.contentOffset.y < top - 0.5 {
+                    self.scrollCoordinationState.containerSawTopBounce = true
+                }
+                self.updateScrollCoordinationStateControl()
+            }
+        }
+    }
+
+    private func updateSelectedPageState(at index: Int) {
+        guard pages.indices.contains(index) else { return }
+        scrollCoordinationState.resetBounceFlags()
+        scrollCoordinationState.page = pageIdentifier(at: index)
+
+        if let page = pages[index] as? ExampleScrollPageViewController {
+            page.reportCurrentScrollState()
+        } else {
+            scrollCoordinationState.childDistance = 0
+            updateScrollCoordinationStateControl()
+        }
+    }
+
+    private func updateChildScrollState(
+        page: String,
+        distance: CGFloat,
+        sawTopBounce: Bool
+    ) {
+        guard page == scrollCoordinationState.page else { return }
+        scrollCoordinationState.childDistance = distance
+        scrollCoordinationState.childSawTopBounce =
+            scrollCoordinationState.childSawTopBounce || sawTopBounce
+        updateScrollCoordinationStateControl()
+    }
+
+    private func updateScrollCoordinationStateControl() {
+        scrollCoordinationStateControl?.accessibilityValue =
+            scrollCoordinationState.accessibilityValue
+    }
+
+    private func pageIdentifier(at index: Int) -> String {
+        ["empty", "short", "long", "plain"][index]
     }
 
     private func installAppearanceRecorderControl() {
@@ -192,21 +272,24 @@ final class ExamplePagerViewController: UIViewController {
                 identifier: "empty",
                 rows: 0,
                 generation: pageGeneration,
-                appearanceRecorder: appearanceRecorder
+                appearanceRecorder: appearanceRecorder,
+                onScrollStateChange: makeScrollStateHandler()
             ),
             ExampleScrollPageViewController(
                 title: "短页",
                 identifier: "short",
                 rows: 6,
                 generation: pageGeneration,
-                appearanceRecorder: appearanceRecorder
+                appearanceRecorder: appearanceRecorder,
+                onScrollStateChange: makeScrollStateHandler()
             ),
             ExampleScrollPageViewController(
                 title: "长页",
                 identifier: "long",
                 rows: 30,
                 generation: pageGeneration,
-                appearanceRecorder: appearanceRecorder
+                appearanceRecorder: appearanceRecorder,
+                onScrollStateChange: makeScrollStateHandler()
             ),
             ExamplePlainPageViewController(
                 title: "无滚动页",
@@ -214,6 +297,16 @@ final class ExamplePagerViewController: UIViewController {
                 appearanceRecorder: appearanceRecorder
             )
         ]
+    }
+
+    private func makeScrollStateHandler() -> (String, CGFloat, Bool) -> Void {
+        { [weak self] page, distance, sawTopBounce in
+            self?.updateChildScrollState(
+                page: page,
+                distance: distance,
+                sawTopBounce: sawTopBounce
+            )
+        }
     }
 }
 
@@ -269,12 +362,17 @@ extension ExamplePagerViewController: AnchorPagerViewControllerDelegate {
     func pagerViewController(
         _ pagerViewController: AnchorPagerViewController,
         didSelectViewControllerAt index: Int
-    ) {}
+    ) {
+        updateSelectedPageState(at: index)
+    }
 
     func pagerViewController(
         _ pagerViewController: AnchorPagerViewController,
         didUpdateHeaderCollapseProgress progress: CGFloat
-    ) {}
+    ) {
+        scrollCoordinationState.collapseProgress = progress
+        updateScrollCoordinationStateControl()
+    }
 
     func pagerViewController(
         _ pagerViewController: AnchorPagerViewController,
@@ -325,12 +423,13 @@ private final class ExampleHeaderView: UIView {
     }
 }
 
-private final class ExampleScrollPageViewController: UIViewController {
+private final class ExampleScrollPageViewController: UIViewController, UIScrollViewDelegate {
     private let pageTitle: String
     private let pageIdentifier: String
     private let rows: Int
     private let generation: Int
     private let appearanceRecorder: ExampleAppearanceRecorder?
+    private let onScrollStateChange: (String, CGFloat, Bool) -> Void
     private let scrollView = UIScrollView()
     private let appearanceLabel = UILabel()
     private var willAppearCount = 0
@@ -343,13 +442,15 @@ private final class ExampleScrollPageViewController: UIViewController {
         identifier: String,
         rows: Int,
         generation: Int,
-        appearanceRecorder: ExampleAppearanceRecorder?
+        appearanceRecorder: ExampleAppearanceRecorder?,
+        onScrollStateChange: @escaping (String, CGFloat, Bool) -> Void
     ) {
         self.pageTitle = title
         self.pageIdentifier = identifier
         self.rows = rows
         self.generation = generation
         self.appearanceRecorder = appearanceRecorder
+        self.onScrollStateChange = onScrollStateChange
         super.init(nibName: nil, bundle: nil)
         self.title = title
     }
@@ -363,6 +464,7 @@ private final class ExampleScrollPageViewController: UIViewController {
 
         view.backgroundColor = .systemBackground
         anchorPagerScrollView = scrollView
+        scrollView.delegate = self
         installScrollView()
     }
 
@@ -454,6 +556,19 @@ private final class ExampleScrollPageViewController: UIViewController {
             "willDisappear=\(willDisappearCount)",
             "didDisappear=\(didDisappearCount)"
         ].joined(separator: ",")
+    }
+
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        reportCurrentScrollState()
+    }
+
+    func reportCurrentScrollState() {
+        let top = -scrollView.adjustedContentInset.top
+        onScrollStateChange(
+            pageIdentifier,
+            max(0, scrollView.contentOffset.y - top),
+            scrollView.contentOffset.y < top - 0.5
+        )
     }
 }
 

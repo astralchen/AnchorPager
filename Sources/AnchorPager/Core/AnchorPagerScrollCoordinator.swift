@@ -14,6 +14,7 @@ final class AnchorPagerScrollCoordinator {
     private var collapsibleDistance: CGFloat = 0
     private var gestureStartTotal: CGFloat?
     private var gestureStartTranslationY: CGFloat = 0
+    private var isContainerPanActive = false
     private var isApplyingGuardedOffsets = false
     private var isInvalidated = false
     private(set) var owner: Owner = .container
@@ -87,6 +88,8 @@ final class AnchorPagerScrollCoordinator {
         guard !isInvalidated else { return }
         switch state {
         case .began:
+            isContainerPanActive = true
+            childBinding?.setAllowsNativeBounce(false)
             gestureStartTotal = currentCanonicalTotal()
             gestureStartTranslationY = translationY
         case .changed:
@@ -100,6 +103,7 @@ final class AnchorPagerScrollCoordinator {
                 fallback: currentStablePosition()
             )))
         case .ended, .cancelled, .failed:
+            isContainerPanActive = false
             gestureStartTotal = nil
             settleStableOffsets()
         default:
@@ -123,6 +127,7 @@ final class AnchorPagerScrollCoordinator {
             action: #selector(handleContainerPan(_:))
         )
         gestureStartTotal = nil
+        isContainerPanActive = false
     }
 }
 
@@ -206,6 +211,7 @@ private extension AnchorPagerScrollCoordinator {
 
         logTransitions(from: previous, to: position)
         transitionOwnerIfNeeded(to: nextOwner)
+        updateChildBounceLease()
         if didWrite {
             AnchorPagerLogger.log(
                 .debug,
@@ -245,6 +251,7 @@ private extension AnchorPagerScrollCoordinator {
         containerScrollView.contentOffset.y = containerOffset
         isApplyingGuardedOffsets = false
         transitionOwnerIfNeeded(to: .container)
+        updateChildBounceLease()
         AnchorPagerLogger.log(
             .debug,
             category: .scroll,
@@ -298,6 +305,13 @@ private extension AnchorPagerScrollCoordinator {
         childBinding?.invalidate()
         childBinding = nil
         AnchorPagerLogger.log(.info, category: .scroll, event: "scroll.binding.end")
+    }
+
+    func updateChildBounceLease() {
+        let childDistance = currentStablePosition().childDistance
+        childBinding?.setAllowsNativeBounce(
+            !isContainerPanActive && childDistance > epsilon
+        )
     }
 
     func transitionOwnerIfNeeded(to nextOwner: Owner) {

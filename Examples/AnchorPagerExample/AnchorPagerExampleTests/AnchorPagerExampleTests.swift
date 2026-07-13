@@ -5,6 +5,36 @@ import UIKit
 
 @MainActor
 struct AnchorPagerExampleTests {
+    @Test func scrollCoordinationStateSerializesStableAccessibilityValue() {
+        let state = ExampleScrollCoordinationState(
+            page: "long",
+            collapseProgress: 1,
+            childDistance: 42,
+            containerSawTopBounce: false,
+            childSawTopBounce: false
+        )
+
+        #expect(
+            state.accessibilityValue
+                == "page=long;collapse=1.00;distance=42.00;containerBounce=0;childBounce=0"
+        )
+    }
+
+    @Test func scrollCoordinationStateResetsBothBounceFlags() {
+        var state = ExampleScrollCoordinationState(
+            page: "long",
+            collapseProgress: 0,
+            childDistance: 0,
+            containerSawTopBounce: true,
+            childSawTopBounce: true
+        )
+
+        state.resetBounceFlags()
+
+        #expect(state.containerSawTopBounce == false)
+        #expect(state.childSawTopBounce == false)
+    }
+
     @Test func rootControllerInstallsAnchorPager() {
         let tabBarController = makeExampleRootViewController()
         let navigationController = tabBarController.viewControllers?.first as? UINavigationController
