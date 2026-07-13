@@ -9,7 +9,7 @@ struct AnchorPagerExampleTests {
         let state = ExampleScrollCoordinationState(
             page: "long",
             hasScrollTarget: true,
-            topMode: "container",
+            mode: "container",
             collapseProgress: 1,
             childDistance: 42,
             containerPresentation: 1.25,
@@ -31,7 +31,7 @@ struct AnchorPagerExampleTests {
         let state = ExampleScrollCoordinationState(
             page: "plain",
             hasScrollTarget: false,
-            topMode: "container",
+            mode: "container",
             collapseProgress: 1,
             childDistance: 0,
             containerPresentation: 0,
@@ -53,7 +53,7 @@ struct AnchorPagerExampleTests {
         var state = ExampleScrollCoordinationState(
             page: "long",
             hasScrollTarget: true,
-            topMode: "container",
+            mode: "container",
             collapseProgress: 0,
             childDistance: 0,
             containerPresentation: 3,
@@ -103,6 +103,21 @@ struct AnchorPagerExampleTests {
         #expect(behaviorItem?.title == "安全区内")
         #expect(actions.map(\.title) == ["安全区内", "延伸到顶部"])
         #expect(actions.map(\.state) == [.on, .off])
+    }
+
+    @Test func pagerNavigationShowsTopOverscrollMenuWithContainerSelected() {
+        let viewController = ExamplePagerViewController()
+
+        viewController.loadViewIfNeeded()
+
+        let item = viewController.navigationItem.rightBarButtonItems?.first {
+            $0.accessibilityLabel == "顶部回弹"
+        }
+        let actions = item?.menu?.children.compactMap { $0 as? UIAction } ?? []
+
+        #expect(item?.accessibilityValue == "容器")
+        #expect(actions.map(\.title) == ["关闭", "容器", "子页面"])
+        #expect(actions.map(\.state) == [.off, .on, .off])
     }
 
     @Test func normalLaunchDoesNotEnableAppearanceRecorder() {

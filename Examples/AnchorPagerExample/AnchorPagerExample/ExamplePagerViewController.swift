@@ -2,7 +2,9 @@ import AnchorPager
 import UIKit
 
 final class ExamplePagerViewController: UIViewController {
-    private let pagerViewController = AnchorPagerViewController()
+    private let pagerViewController = AnchorPagerViewController(
+        configuration: ExamplePagerViewController.initialConfiguration()
+    )
     private let appearanceRecorder: ExampleAppearanceRecorder? = {
         guard ProcessInfo.processInfo.arguments.contains("--anchorPagerAppearanceRecorder") else {
             return nil
@@ -10,6 +12,7 @@ final class ExamplePagerViewController: UIViewController {
         return ExampleAppearanceRecorder()
     }()
     private var headerTopBehaviorItem: UIBarButtonItem?
+    private var topOverscrollHandlingItem: UIBarButtonItem?
     private var pageGeneration = 1
     private lazy var pages = makePages()
     private var didApplyInitialContainerState = false
@@ -19,7 +22,7 @@ final class ExamplePagerViewController: UIViewController {
     private var scrollCoordinationState = ExampleScrollCoordinationState(
         page: "short",
         hasScrollTarget: true,
-        topMode: "container",
+        mode: "container",
         collapseProgress: 0,
         childDistance: 0,
         containerPresentation: 0,
@@ -36,6 +39,9 @@ final class ExamplePagerViewController: UIViewController {
 
         title = "AnchorPager"
         view.backgroundColor = .systemBackground
+        scrollCoordinationState.mode = identifier(
+            for: pagerViewController.configuration.topOverscrollHandlingMode
+        )
         installNavigationItem()
         installPager()
         installScrollCoordinationStateControl()
@@ -64,6 +70,8 @@ final class ExamplePagerViewController: UIViewController {
 
         let headerTopBehaviorItem = makeHeaderTopBehaviorItem()
         self.headerTopBehaviorItem = headerTopBehaviorItem
+        let topOverscrollHandlingItem = makeTopOverscrollHandlingItem()
+        self.topOverscrollHandlingItem = topOverscrollHandlingItem
         let reloadItem = UIBarButtonItem(
             image: UIImage(systemName: "arrow.clockwise"),
             style: .plain,
@@ -71,7 +79,12 @@ final class ExamplePagerViewController: UIViewController {
             action: #selector(reloadPages)
         )
         reloadItem.accessibilityLabel = "重新加载页面"
-        navigationItem.rightBarButtonItems = [pushItem, headerTopBehaviorItem, reloadItem]
+        navigationItem.rightBarButtonItems = [
+            pushItem,
+            topOverscrollHandlingItem,
+            headerTopBehaviorItem,
+            reloadItem
+        ]
     }
 
     @objc private func reloadPages() {
@@ -102,6 +115,72 @@ final class ExamplePagerViewController: UIViewController {
         item.accessibilityLabel = "Header 顶部行为"
         item.accessibilityValue = title(for: pagerViewController.configuration.header.topBehavior)
         return item
+    }
+
+    private func makeTopOverscrollHandlingItem() -> UIBarButtonItem {
+        let mode = pagerViewController.configuration.topOverscrollHandlingMode
+        let item = UIBarButtonItem(
+            title: title(for: mode),
+            image: nil,
+            primaryAction: nil,
+            menu: makeTopOverscrollHandlingMenu()
+        )
+        item.accessibilityLabel = "顶部回弹"
+        item.accessibilityValue = title(for: mode)
+        return item
+    }
+
+    private func makeTopOverscrollHandlingMenu() -> UIMenu {
+        let current = pagerViewController.configuration.topOverscrollHandlingMode
+        let modes: [AnchorPagerTopOverscrollHandlingMode] = [.none, .container, .child]
+        return UIMenu(
+            title: "顶部回弹",
+            children: modes.map { mode in
+                UIAction(
+                    title: title(for: mode),
+                    state: current == mode ? .on : .off
+                ) { [weak self] _ in
+                    self?.setTopOverscrollHandlingMode(mode)
+                }
+            }
+        )
+    }
+
+    private func setTopOverscrollHandlingMode(_ mode: AnchorPagerTopOverscrollHandlingMode) {
+        pagerViewController.configuration.topOverscrollHandlingMode = mode
+        scrollCoordinationState.mode = identifier(for: mode)
+        scrollCoordinationState.resetPresentationMetrics()
+        updateTopOverscrollHandlingItem()
+        updateScrollCoordinationStateControl()
+    }
+
+    private func updateTopOverscrollHandlingItem() {
+        let mode = pagerViewController.configuration.topOverscrollHandlingMode
+        topOverscrollHandlingItem?.title = title(for: mode)
+        topOverscrollHandlingItem?.accessibilityValue = title(for: mode)
+        topOverscrollHandlingItem?.menu = makeTopOverscrollHandlingMenu()
+    }
+
+    private func title(for mode: AnchorPagerTopOverscrollHandlingMode) -> String {
+        switch mode {
+        case .none:
+            "关闭"
+        case .container:
+            "容器"
+        case .child:
+            "子页面"
+        }
+    }
+
+    private func identifier(for mode: AnchorPagerTopOverscrollHandlingMode) -> String {
+        switch mode {
+        case .none:
+            "none"
+        case .container:
+            "container"
+        case .child:
+            "child"
+        }
     }
 
     private func makeHeaderTopBehaviorMenu() -> UIMenu {
@@ -304,6 +383,27 @@ final class ExamplePagerViewController: UIViewController {
             return 1
         }
         return min(max(0, requestedIndex), pages.count - 1)
+    }
+
+    private static func initialConfiguration() -> AnchorPagerConfiguration {
+        var configuration = AnchorPagerConfiguration.default
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let argumentIndex = arguments.firstIndex(of: "--anchorPagerTopOverscrollMode"),
+              arguments.indices.contains(argumentIndex + 1) else {
+            return configuration
+        }
+
+        switch arguments[argumentIndex + 1] {
+        case "none":
+            configuration.topOverscrollHandlingMode = .none
+        case "container":
+            configuration.topOverscrollHandlingMode = .container
+        case "child":
+            configuration.topOverscrollHandlingMode = .child
+        default:
+            break
+        }
+        return configuration
     }
 
     var isAppearanceRecorderEnabledForTesting: Bool {
@@ -512,6 +612,8 @@ private final class ExampleScrollPageViewController: UIViewController, UIScrollV
 
         view.backgroundColor = .systemBackground
         anchorPagerScrollView = scrollView
+        scrollView.bounces = true
+        scrollView.alwaysBounceVertical = true
         scrollView.delegate = self
         installScrollView()
     }

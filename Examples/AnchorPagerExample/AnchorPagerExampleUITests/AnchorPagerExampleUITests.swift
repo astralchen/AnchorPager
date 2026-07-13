@@ -97,8 +97,8 @@ final class AnchorPagerExampleUITests: XCTestCase {
     }
 
     @MainActor
-    func testExpandedTopPullShowsVisibleContainerPresentationAndSettles() throws {
-        let app = launchLongPage()
+    func testPlainContainerTopBounceIsVisible() throws {
+        let app = launchPage(index: 3, mode: "container")
         let probe = scrollCoordinationStateProbe(in: app)
 
         drag(in: app, from: 0.30, to: 0.72)
@@ -106,14 +106,17 @@ final class AnchorPagerExampleUITests: XCTestCase {
         let state = try XCTUnwrap(waitForScrollState(from: probe) {
             $0.containerTopMax > 1 && abs($0.containerCurrent) < 0.5
         })
+        XCTAssertFalse(state.hasScrollTarget)
         XCTAssertEqual(state.mode, "container")
-        XCTAssertEqual(state.distance, 0, accuracy: 0.5)
+        XCTAssertEqual(state.childTopMax, 0, accuracy: 0.5)
     }
 
     @MainActor
-    func testPlainBottomPullShowsVisibleContainerPresentationAndSettles() throws {
-        let app = launchPlainPage()
+    func testPlainContainerBottomBounceIsVisible() throws {
+        let app = launchPage(index: 3, mode: "none")
         let probe = scrollCoordinationStateProbe(in: app)
+        let root = app.otherElements["plain-page-root"]
+        XCTAssertTrue(root.waitForExistence(timeout: 3))
         drag(in: app, from: 0.76, to: 0.24)
         XCTAssertNotNil(waitForScrollState(from: probe) {
             $0.collapse >= 0.99
@@ -126,16 +129,77 @@ final class AnchorPagerExampleUITests: XCTestCase {
             $0.containerBottomMax > 1 && abs($0.containerCurrent) < 0.5
         })
         XCTAssertFalse(state.hasScrollTarget)
+        XCTAssertGreaterThanOrEqual(root.frame.maxY, app.frame.maxY - 1)
+    }
+
+    @MainActor
+    func testRealChildContainerTopBounceIsVisible() throws {
+        let app = launchPage(index: 2, mode: "container")
+        let probe = scrollCoordinationStateProbe(in: app)
+
+        drag(in: app, from: 0.30, to: 0.72)
+
+        let state = try XCTUnwrap(waitForScrollState(from: probe) {
+            $0.containerTopMax > 1
+                && abs($0.containerCurrent) < 0.5
+                && abs($0.childTopCurrent) < 0.5
+        })
+        XCTAssertEqual(state.mode, "container")
         XCTAssertEqual(state.distance, 0, accuracy: 0.5)
     }
 
     @MainActor
-    private func launchPlainPage() -> XCUIApplication {
-        let app = XCUIApplication()
-        app.launchArguments = ["--anchorPagerInitialIndex", "3"]
-        app.launch()
-        XCTAssertTrue(app.staticTexts["plain-page-content"].waitForExistence(timeout: 3))
-        return app
+    func testRealChildTopBounceUsesChildMode() throws {
+        let app = launchPage(index: 2, mode: "child")
+        let probe = scrollCoordinationStateProbe(in: app)
+
+        drag(in: app, from: 0.30, to: 0.72)
+
+        let state = try XCTUnwrap(waitForScrollState(from: probe) {
+            $0.childTopMax > 1
+                && abs($0.childTopCurrent) < 0.5
+                && abs($0.containerCurrent) < 0.5
+        })
+        XCTAssertEqual(state.mode, "child")
+        XCTAssertLessThan(state.containerTopMax, 0.5)
+    }
+
+    @MainActor
+    func testNoneModeHasNoVisibleTopOwner() throws {
+        let app = launchPage(index: 2, mode: "none")
+        let probe = scrollCoordinationStateProbe(in: app)
+        probe.tap()
+
+        drag(in: app, from: 0.30, to: 0.72)
+
+        let state = try XCTUnwrap(waitForScrollState(from: probe) {
+            abs($0.containerCurrent) < 0.5 && abs($0.childTopCurrent) < 0.5
+        })
+        XCTAssertEqual(state.mode, "none")
+        XCTAssertLessThan(state.containerTopMax, 0.5)
+        XCTAssertEqual(state.distance, 0, accuracy: 0.5)
+    }
+
+    @MainActor
+    func testRealChildBottomBounceUsesChild() throws {
+        let app = launchPage(index: 2, mode: "container")
+        let probe = scrollCoordinationStateProbe(in: app)
+        let lastRow = app.staticTexts["长页 - 30"]
+        for _ in 0..<6 where !lastRow.isHittable {
+            drag(in: app, from: 0.76, to: 0.24)
+        }
+        XCTAssertTrue(lastRow.isHittable)
+        probe.tap()
+
+        drag(in: app, from: 0.76, to: 0.24)
+
+        let state = try XCTUnwrap(waitForScrollState(from: probe) {
+            $0.childBottomMax > 1
+                && abs($0.childBottomCurrent) < 0.5
+                && abs($0.containerCurrent) < 0.5
+        })
+        XCTAssertLessThan(state.containerBottomMax, 0.5)
+        XCTAssertGreaterThanOrEqual(state.collapse, 0.99)
     }
 
     @MainActor
@@ -150,11 +214,14 @@ final class AnchorPagerExampleUITests: XCTestCase {
         app.descendants(matching: .any)["短页"].tap()
         XCTAssertNotNil(waitForScrollState(from: stateProbe) {
             $0.page == "short" && $0.distance == 0 && $0.collapse >= 0.99
+                && $0.mode == "container" && $0.hasZeroPresentationMetrics
         })
 
         app.descendants(matching: .any)["长页"].tap()
         let restored = waitForScrollState(from: stateProbe) {
-            $0.page == "long" && abs($0.distance - longState.distance) < 2 && $0.collapse >= 0.99
+            $0.page == "long" && abs($0.distance - longState.distance) < 2
+                && $0.collapse >= 0.99 && $0.mode == "container"
+                && $0.hasScrollTarget && $0.hasZeroPresentationMetrics
         }
         XCTAssertNotNil(restored)
     }
@@ -390,9 +457,8 @@ final class AnchorPagerExampleUITests: XCTestCase {
 
     @MainActor
     func testReloadReplacesOldPageGenerationAndKeepsPageInteractive() throws {
-        let app = XCUIApplication()
-        app.launchArguments = ["--anchorPagerInitialIndex", "2"]
-        app.launch()
+        let app = launchPage(index: 2, mode: "container")
+        let stateProbe = scrollCoordinationStateProbe(in: app)
         let oldGeneration = app.staticTexts["page-generation-1-long"]
         XCTAssertTrue(oldGeneration.waitForExistence(timeout: 3))
 
@@ -403,6 +469,10 @@ final class AnchorPagerExampleUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["page-generation-2-long"].waitForExistence(timeout: 3))
         XCTAssertFalse(oldGeneration.exists)
         XCTAssertTrue(app.staticTexts["长页 - 1"].exists)
+        XCTAssertNotNil(waitForScrollState(from: stateProbe) {
+            $0.page == "long" && $0.mode == "container" && $0.hasScrollTarget
+                && $0.hasZeroPresentationMetrics
+        })
     }
 
     @MainActor
@@ -502,10 +572,18 @@ final class AnchorPagerExampleUITests: XCTestCase {
 
     @MainActor
     private func launchLongPage() -> XCUIApplication {
+        launchPage(index: 2, mode: "container")
+    }
+
+    @MainActor
+    private func launchPage(index: Int, mode: String) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["--anchorPagerInitialIndex", "2"]
+        app.launchArguments = [
+            "--anchorPagerInitialIndex", "\(index)",
+            "--anchorPagerTopOverscrollMode", mode
+        ]
         app.launch()
-        XCTAssertTrue(app.staticTexts["长页 - 1"].waitForExistence(timeout: 3))
+        XCTAssertTrue(scrollCoordinationStateProbe(in: app).exists)
         return app
     }
 
@@ -562,6 +640,16 @@ private struct ScrollCoordinationState {
     let childTopMax: CGFloat
     let childBottomCurrent: CGFloat
     let childBottomMax: CGFloat
+
+    var hasZeroPresentationMetrics: Bool {
+        abs(containerCurrent) < 0.5
+            && containerTopMax < 0.5
+            && containerBottomMax < 0.5
+            && abs(childTopCurrent) < 0.5
+            && childTopMax < 0.5
+            && abs(childBottomCurrent) < 0.5
+            && childBottomMax < 0.5
+    }
 
     init?(value: String?) {
         let fields = Dictionary(
