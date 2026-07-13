@@ -458,7 +458,7 @@ open class AnchorPagerViewController: UIViewController {
         logsChanges: Bool,
         updatesScrollRange: Bool
     ) {
-        let translationY = overscrollTranslationY
+        let translationY = containerOverscrollTranslationY(for: output)
         viewportView.transform = CGAffineTransform(translationX: 0, y: translationY)
 
         if updatesScrollRange {
@@ -511,8 +511,14 @@ open class AnchorPagerViewController: UIViewController {
         )
     }
 
-    private var overscrollTranslationY: CGFloat {
-        Swift.max(0, -verticalScrollView.contentOffset.y)
+    private func containerOverscrollTranslationY(
+        for output: AnchorPagerLayoutEngine.Output
+    ) -> CGFloat {
+        let offset = verticalScrollView.contentOffset.y
+        let collapsed = output.resolvedHeaderHeight.collapsibleDistance
+        let topOverflow = Swift.max(0, -offset)
+        let bottomOverflow = Swift.max(0, offset - collapsed)
+        return topOverflow - bottomOverflow
     }
 
     private func layoutContext(

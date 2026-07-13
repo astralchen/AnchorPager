@@ -9,15 +9,21 @@ struct AnchorPagerExampleTests {
         let state = ExampleScrollCoordinationState(
             page: "long",
             hasScrollTarget: true,
+            topMode: "container",
             collapseProgress: 1,
             childDistance: 42,
-            containerSawTopBounce: false,
-            childSawTopBounce: false
+            containerPresentation: 1.25,
+            maximumContainerTopPresentation: 12.5,
+            maximumContainerBottomPresentation: 8,
+            childTopOverflow: 2,
+            maximumChildTopOverflow: 5,
+            childBottomOverflow: 4,
+            maximumChildBottomOverflow: 7
         )
 
         #expect(
             state.accessibilityValue
-                == "page=long;hasScrollTarget=1;collapse=1.00;distance=42.00;containerBounce=0;childBounce=0"
+                == "page=long;hasScrollTarget=1;mode=container;collapse=1.00;distance=42.00;containerCurrent=1.25;containerTopMax=12.50;containerBottomMax=8.00;childTopCurrent=2.00;childTopMax=5.00;childBottomCurrent=4.00;childBottomMax=7.00"
         )
     }
 
@@ -25,32 +31,49 @@ struct AnchorPagerExampleTests {
         let state = ExampleScrollCoordinationState(
             page: "plain",
             hasScrollTarget: false,
+            topMode: "container",
             collapseProgress: 1,
             childDistance: 0,
-            containerSawTopBounce: false,
-            childSawTopBounce: false
+            containerPresentation: 0,
+            maximumContainerTopPresentation: 0,
+            maximumContainerBottomPresentation: 0,
+            childTopOverflow: 0,
+            maximumChildTopOverflow: 0,
+            childBottomOverflow: 0,
+            maximumChildBottomOverflow: 0
         )
 
         #expect(
             state.accessibilityValue
-                == "page=plain;hasScrollTarget=0;collapse=1.00;distance=0.00;containerBounce=0;childBounce=0"
+                == "page=plain;hasScrollTarget=0;mode=container;collapse=1.00;distance=0.00;containerCurrent=0.00;containerTopMax=0.00;containerBottomMax=0.00;childTopCurrent=0.00;childTopMax=0.00;childBottomCurrent=0.00;childBottomMax=0.00"
         )
     }
 
-    @Test func scrollCoordinationStateResetsBothBounceFlags() {
+    @Test func scrollCoordinationStateResetsPresentationMetrics() {
         var state = ExampleScrollCoordinationState(
             page: "long",
             hasScrollTarget: true,
+            topMode: "container",
             collapseProgress: 0,
             childDistance: 0,
-            containerSawTopBounce: true,
-            childSawTopBounce: true
+            containerPresentation: 3,
+            maximumContainerTopPresentation: 12,
+            maximumContainerBottomPresentation: 8,
+            childTopOverflow: 2,
+            maximumChildTopOverflow: 5,
+            childBottomOverflow: 4,
+            maximumChildBottomOverflow: 7
         )
 
-        state.resetBounceFlags()
+        state.resetPresentationMetrics()
 
-        #expect(state.containerSawTopBounce == false)
-        #expect(state.childSawTopBounce == false)
+        #expect(state.containerPresentation == 0)
+        #expect(state.maximumContainerTopPresentation == 0)
+        #expect(state.maximumContainerBottomPresentation == 0)
+        #expect(state.childTopOverflow == 0)
+        #expect(state.maximumChildTopOverflow == 0)
+        #expect(state.childBottomOverflow == 0)
+        #expect(state.maximumChildBottomOverflow == 0)
     }
 
     @Test func rootControllerInstallsAnchorPager() {

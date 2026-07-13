@@ -13,15 +13,22 @@ final class ExamplePagerViewController: UIViewController {
     private var pageGeneration = 1
     private lazy var pages = makePages()
     private var didApplyInitialContainerState = false
-    private var containerContentOffsetObservation: NSKeyValueObservation?
+    private var expandedHeaderBaselineY: CGFloat?
+    private var collapsedHeaderBaselineY: CGFloat?
     private weak var scrollCoordinationStateControl: UIButton?
     private var scrollCoordinationState = ExampleScrollCoordinationState(
         page: "short",
         hasScrollTarget: true,
+        topMode: "container",
         collapseProgress: 0,
         childDistance: 0,
-        containerSawTopBounce: false,
-        childSawTopBounce: false
+        containerPresentation: 0,
+        maximumContainerTopPresentation: 0,
+        maximumContainerBottomPresentation: 0,
+        childTopOverflow: 0,
+        maximumChildTopOverflow: 0,
+        childBottomOverflow: 0,
+        maximumChildBottomOverflow: 0
     )
 
     override func viewDidLoad() {
@@ -68,7 +75,7 @@ final class ExamplePagerViewController: UIViewController {
     }
 
     @objc private func reloadPages() {
-        scrollCoordinationState.resetBounceFlags()
+        scrollCoordinationState.resetPresentationMetrics()
         updateScrollCoordinationStateControl()
         pageGeneration += 1
         pages = makePages()
@@ -159,7 +166,6 @@ final class ExamplePagerViewController: UIViewController {
 
         pagerViewController.reloadData()
         pagerViewController.setSelectedIndex(initialSelectedIndex(), animated: false)
-        observeContainerContentOffset()
     }
 
     private func installScrollCoordinationStateControl() {
@@ -167,6 +173,11 @@ final class ExamplePagerViewController: UIViewController {
         control.accessibilityIdentifier = "scroll-coordination-state"
         control.accessibilityLabel = "纵向滚动协调状态"
         control.accessibilityValue = scrollCoordinationState.accessibilityValue
+        control.addTarget(
+            self,
+            action: #selector(resetScrollCoordinationPresentationMetrics),
+            for: .touchUpInside
+        )
         control.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(control)
         scrollCoordinationStateControl = control
@@ -179,25 +190,14 @@ final class ExamplePagerViewController: UIViewController {
         ])
     }
 
-    private func observeContainerContentOffset() {
-        containerContentOffsetObservation = pagerViewController.verticalScrollView.observe(
-            \.contentOffset,
-            options: [.initial, .new]
-        ) { [weak self] scrollView, _ in
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                let top = -scrollView.adjustedContentInset.top
-                if scrollView.contentOffset.y < top - 0.5 {
-                    self.scrollCoordinationState.containerSawTopBounce = true
-                }
-                self.updateScrollCoordinationStateControl()
-            }
-        }
+    @objc private func resetScrollCoordinationPresentationMetrics() {
+        scrollCoordinationState.resetPresentationMetrics()
+        updateScrollCoordinationStateControl()
     }
 
     private func updateSelectedPageState(at index: Int) {
         guard pages.indices.contains(index) else { return }
-        scrollCoordinationState.resetBounceFlags()
+        scrollCoordinationState.resetPresentationMetrics()
         scrollCoordinationState.page = pageIdentifier(at: index)
 
         if let page = pages[index] as? ExampleScrollPageViewController {
@@ -213,12 +213,54 @@ final class ExamplePagerViewController: UIViewController {
     private func updateChildScrollState(
         page: String,
         distance: CGFloat,
-        sawTopBounce: Bool
+        topOverflow: CGFloat,
+        bottomOverflow: CGFloat
     ) {
         guard page == scrollCoordinationState.page else { return }
-        scrollCoordinationState.childDistance = distance
-        scrollCoordinationState.childSawTopBounce =
-            scrollCoordinationState.childSawTopBounce || sawTopBounce
+        scrollCoordinationState.childDistance = max(0, distance)
+        scrollCoordinationState.childTopOverflow = topOverflow
+        scrollCoordinationState.maximumChildTopOverflow = max(
+            scrollCoordinationState.maximumChildTopOverflow,
+            topOverflow
+        )
+        scrollCoordinationState.childBottomOverflow = bottomOverflow
+        scrollCoordinationState.maximumChildBottomOverflow = max(
+            scrollCoordinationState.maximumChildBottomOverflow,
+            bottomOverflow
+        )
+        updateScrollCoordinationStateControl()
+    }
+
+    private func recordContainerPresentation(_ context: AnchorPagerLayoutContext) {
+        let scrollView = pagerViewController.verticalScrollView
+        let maximumOffset = max(0, scrollView.contentSize.height - scrollView.bounds.height)
+        let topOverflow = max(0, -scrollView.contentOffset.y)
+        let bottomOverflow = max(0, scrollView.contentOffset.y - maximumOffset)
+        let isStable = topOverflow <= 0.5 && bottomOverflow <= 0.5
+
+        if isStable {
+            scrollCoordinationState.containerPresentation = 0
+            if scrollCoordinationState.collapseProgress <= 0.01 {
+                expandedHeaderBaselineY = context.headerFrame.minY
+            }
+            if scrollCoordinationState.collapseProgress >= 0.99 {
+                collapsedHeaderBaselineY = context.headerFrame.minY
+            }
+        } else if topOverflow > 0.5, let baseline = expandedHeaderBaselineY {
+            let presentation = context.headerFrame.minY - baseline
+            scrollCoordinationState.containerPresentation = presentation
+            scrollCoordinationState.maximumContainerTopPresentation = max(
+                scrollCoordinationState.maximumContainerTopPresentation,
+                presentation
+            )
+        } else if bottomOverflow > 0.5, let baseline = collapsedHeaderBaselineY {
+            let presentation = context.headerFrame.minY - baseline
+            scrollCoordinationState.containerPresentation = presentation
+            scrollCoordinationState.maximumContainerBottomPresentation = max(
+                scrollCoordinationState.maximumContainerBottomPresentation,
+                -presentation
+            )
+        }
         updateScrollCoordinationStateControl()
     }
 
@@ -302,12 +344,13 @@ final class ExamplePagerViewController: UIViewController {
         ]
     }
 
-    private func makeScrollStateHandler() -> (String, CGFloat, Bool) -> Void {
-        { [weak self] page, distance, sawTopBounce in
+    private func makeScrollStateHandler() -> (String, CGFloat, CGFloat, CGFloat) -> Void {
+        { [weak self] page, distance, topOverflow, bottomOverflow in
             self?.updateChildScrollState(
                 page: page,
                 distance: distance,
-                sawTopBounce: sawTopBounce
+                topOverflow: topOverflow,
+                bottomOverflow: bottomOverflow
             )
         }
     }
@@ -380,7 +423,9 @@ extension ExamplePagerViewController: AnchorPagerViewControllerDelegate {
     func pagerViewController(
         _ pagerViewController: AnchorPagerViewController,
         didUpdateLayout context: AnchorPagerLayoutContext
-    ) {}
+    ) {
+        recordContainerPresentation(context)
+    }
 }
 
 private final class ExampleHeaderView: UIView {
@@ -432,7 +477,7 @@ private final class ExampleScrollPageViewController: UIViewController, UIScrollV
     private let rows: Int
     private let generation: Int
     private let appearanceRecorder: ExampleAppearanceRecorder?
-    private let onScrollStateChange: (String, CGFloat, Bool) -> Void
+    private let onScrollStateChange: (String, CGFloat, CGFloat, CGFloat) -> Void
     private let scrollView = UIScrollView()
     private let appearanceLabel = UILabel()
     private var willAppearCount = 0
@@ -446,7 +491,7 @@ private final class ExampleScrollPageViewController: UIViewController, UIScrollV
         rows: Int,
         generation: Int,
         appearanceRecorder: ExampleAppearanceRecorder?,
-        onScrollStateChange: @escaping (String, CGFloat, Bool) -> Void
+        onScrollStateChange: @escaping (String, CGFloat, CGFloat, CGFloat) -> Void
     ) {
         self.pageTitle = title
         self.pageIdentifier = identifier
@@ -566,11 +611,21 @@ private final class ExampleScrollPageViewController: UIViewController, UIScrollV
     }
 
     func reportCurrentScrollState() {
-        let top = -scrollView.adjustedContentInset.top
+        let distance = scrollView.contentOffset.y + scrollView.contentInset.top
+        let maximumDistance = max(
+            0,
+            scrollView.contentSize.height
+                + scrollView.contentInset.top
+                + scrollView.contentInset.bottom
+                - scrollView.bounds.height
+        )
+        let topOverflow = max(0, -distance)
+        let bottomOverflow = max(0, distance - maximumDistance)
         onScrollStateChange(
             pageIdentifier,
-            max(0, scrollView.contentOffset.y - top),
-            scrollView.contentOffset.y < top - 0.5
+            distance,
+            topOverflow,
+            bottomOverflow
         )
     }
 }

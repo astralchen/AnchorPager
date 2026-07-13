@@ -4,25 +4,42 @@ import Foundation
 struct ExampleScrollCoordinationState: Equatable {
     var page: String
     var hasScrollTarget: Bool
+    var topMode: String
     var collapseProgress: CGFloat
     var childDistance: CGFloat
-    var containerSawTopBounce: Bool
-    var childSawTopBounce: Bool
+    var containerPresentation: CGFloat
+    var maximumContainerTopPresentation: CGFloat
+    var maximumContainerBottomPresentation: CGFloat
+    var childTopOverflow: CGFloat
+    var maximumChildTopOverflow: CGFloat
+    var childBottomOverflow: CGFloat
+    var maximumChildBottomOverflow: CGFloat
 
     var accessibilityValue: String {
         [
             "page=\(page)",
             "hasScrollTarget=\(hasScrollTarget ? 1 : 0)",
+            "mode=\(topMode)",
             "collapse=\(formatted(collapseProgress))",
             "distance=\(formatted(childDistance))",
-            "containerBounce=\(containerSawTopBounce ? 1 : 0)",
-            "childBounce=\(childSawTopBounce ? 1 : 0)"
+            "containerCurrent=\(formatted(containerPresentation))",
+            "containerTopMax=\(formatted(maximumContainerTopPresentation))",
+            "containerBottomMax=\(formatted(maximumContainerBottomPresentation))",
+            "childTopCurrent=\(formatted(childTopOverflow))",
+            "childTopMax=\(formatted(maximumChildTopOverflow))",
+            "childBottomCurrent=\(formatted(childBottomOverflow))",
+            "childBottomMax=\(formatted(maximumChildBottomOverflow))"
         ].joined(separator: ";")
     }
 
-    mutating func resetBounceFlags() {
-        containerSawTopBounce = false
-        childSawTopBounce = false
+    mutating func resetPresentationMetrics() {
+        containerPresentation = 0
+        maximumContainerTopPresentation = 0
+        maximumContainerBottomPresentation = 0
+        childTopOverflow = 0
+        maximumChildTopOverflow = 0
+        childBottomOverflow = 0
+        maximumChildBottomOverflow = 0
     }
 
     private func formatted(_ value: CGFloat) -> String {

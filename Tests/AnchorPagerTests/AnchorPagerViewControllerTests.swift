@@ -1308,10 +1308,11 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         configuration.header.heightMode = .fixed(max: 120, min: 0)
         let pager = AnchorPagerViewController(configuration: configuration)
         let headerView = FixedFittingView(height: 120)
+        let child = ScrollChildViewController()
         let delegate = StubDelegate()
         let dataSource = StubDataSource(
             count: 1,
-            viewControllers: [ScrollChildViewController()],
+            viewControllers: [child],
             headerContent: .view(headerView)
         )
         pager.dataSource = dataSource
@@ -1327,6 +1328,8 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         window.layoutIfNeeded()
         let headerHostView = try XCTUnwrap(headerView.superview)
         let initialFrame = headerHostView.convert(headerHostView.bounds, to: pager.view)
+        let initialContext = try XCTUnwrap(delegate.layoutContexts.last)
+        let initialChildFrameInWindow = child.view.convert(child.view.bounds, to: window)
         let initialContentSize = pager.verticalScrollView.contentSize
 
         pager.verticalScrollView.contentOffset = CGPoint(x: 0, y: -24)
@@ -1345,9 +1348,60 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         window.layoutIfNeeded()
         let restoredFrame = headerHostView.convert(headerHostView.bounds, to: pager.view)
         let restoredContext = try XCTUnwrap(delegate.layoutContexts.last)
+        let restoredChildFrameInWindow = child.view.convert(child.view.bounds, to: window)
 
         XCTAssertEqual(restoredFrame.minY, initialFrame.minY, accuracy: 0.5)
-        XCTAssertEqual(restoredContext.headerFrame.minY, initialFrame.minY, accuracy: 0.5)
+        XCTAssertEqual(restoredContext, initialContext)
+        XCTAssertEqual(restoredChildFrameInWindow, initialChildFrameInWindow)
+        XCTAssertGreaterThanOrEqual(restoredChildFrameInWindow.maxY, window.bounds.maxY - 1)
+        XCTAssertEqual(pager.verticalScrollView.contentSize, initialContentSize)
+    }
+
+    @MainActor
+    func testPlainBottomOverflowTranslatesViewportUpWithoutChangingCanonicalRange() throws {
+        var configuration = AnchorPagerConfiguration.default
+        configuration.header.heightMode = .fixed(max: 100, min: 0)
+        let pager = AnchorPagerViewController(configuration: configuration)
+        let delegate = StubDelegate()
+        let plainChild = UIViewController()
+        pager.delegate = delegate
+        pager.dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [plainChild],
+            headerContent: .view(FixedFittingView(height: 100))
+        )
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = pager
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+
+        pager.reloadData()
+        window.layoutIfNeeded()
+        let initialContentSize = pager.verticalScrollView.contentSize
+        pager.verticalScrollView.contentOffset.y = 100
+        pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
+        window.layoutIfNeeded()
+        let collapsedContext = try XCTUnwrap(delegate.layoutContexts.last)
+
+        pager.verticalScrollView.contentOffset.y = 124
+        pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
+        window.layoutIfNeeded()
+
+        let context = try XCTUnwrap(delegate.layoutContexts.last)
+        XCTAssertEqual(
+            context.headerFrame.minY,
+            collapsedContext.headerFrame.minY - 24,
+            accuracy: 0.5
+        )
+        XCTAssertEqual(pager.verticalScrollView.contentSize, initialContentSize)
+        XCTAssertEqual(try XCTUnwrap(delegate.collapseProgresses.last), 1, accuracy: 0.001)
+
+        pager.verticalScrollView.contentOffset.y = 100
+        pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
+        window.layoutIfNeeded()
+
+        let restoredContext = try XCTUnwrap(delegate.layoutContexts.last)
+        XCTAssertEqual(restoredContext, collapsedContext)
         XCTAssertEqual(pager.verticalScrollView.contentSize, initialContentSize)
     }
 

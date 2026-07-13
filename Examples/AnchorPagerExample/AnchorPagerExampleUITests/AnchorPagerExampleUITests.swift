@@ -26,8 +26,6 @@ final class AnchorPagerExampleUITests: XCTestCase {
             $0.page == "long" && $0.collapse >= 0.99 && $0.distance > 1
         }
         XCTAssertNotNil(state)
-        XCTAssertEqual(state?.containerBounce, false)
-        XCTAssertEqual(state?.childBounce, false)
     }
 
     @MainActor
@@ -46,7 +44,6 @@ final class AnchorPagerExampleUITests: XCTestCase {
             $0.distance < initialDistance && $0.collapse < 0.99
         }
         XCTAssertNotNil(returned)
-        XCTAssertEqual(returned?.childBounce, false)
     }
 
     @MainActor
@@ -66,7 +63,7 @@ final class AnchorPagerExampleUITests: XCTestCase {
         })
         drag(in: app, from: 0.76, to: 0.24)
         XCTAssertNotNil(waitForScrollState(from: stateProbe) {
-            $0.page == "plain" && !$0.hasScrollTarget && $0.distance == 0 && !$0.childBounce
+            $0.page == "plain" && !$0.hasScrollTarget && $0.distance == 0
         })
     }
 
@@ -89,7 +86,7 @@ final class AnchorPagerExampleUITests: XCTestCase {
 
         XCTAssertNotNil(waitForScrollState(from: stateProbe) {
             $0.page == "plain" && !$0.hasScrollTarget
-                && $0.collapse >= 0.99 && $0.distance == 0 && !$0.childBounce
+                && $0.collapse >= 0.99 && $0.distance == 0
         })
         let collapsedFrame = root.frame
         XCTAssertGreaterThanOrEqual(collapsedFrame.maxY, app.frame.maxY - 1)
@@ -100,19 +97,45 @@ final class AnchorPagerExampleUITests: XCTestCase {
     }
 
     @MainActor
-    func testExpandedTopPullUsesContainerBounceWithoutChildBounce() throws {
+    func testExpandedTopPullShowsVisibleContainerPresentationAndSettles() throws {
         let app = launchLongPage()
-        let stateProbe = scrollCoordinationStateProbe(in: app)
+        let probe = scrollCoordinationStateProbe(in: app)
 
         drag(in: app, from: 0.30, to: 0.72)
 
-        let state = waitForScrollState(from: stateProbe) {
-            $0.containerBounce
-        }
-        XCTAssertNotNil(state)
-        XCTAssertEqual(state?.page, "long")
-        XCTAssertEqual(state?.childBounce, false)
-        XCTAssertEqual(state?.distance, 0)
+        let state = try XCTUnwrap(waitForScrollState(from: probe) {
+            $0.containerTopMax > 1 && abs($0.containerCurrent) < 0.5
+        })
+        XCTAssertEqual(state.mode, "container")
+        XCTAssertEqual(state.distance, 0, accuracy: 0.5)
+    }
+
+    @MainActor
+    func testPlainBottomPullShowsVisibleContainerPresentationAndSettles() throws {
+        let app = launchPlainPage()
+        let probe = scrollCoordinationStateProbe(in: app)
+        drag(in: app, from: 0.76, to: 0.24)
+        XCTAssertNotNil(waitForScrollState(from: probe) {
+            $0.collapse >= 0.99
+        })
+        probe.tap()
+
+        drag(in: app, from: 0.76, to: 0.24)
+
+        let state = try XCTUnwrap(waitForScrollState(from: probe) {
+            $0.containerBottomMax > 1 && abs($0.containerCurrent) < 0.5
+        })
+        XCTAssertFalse(state.hasScrollTarget)
+        XCTAssertEqual(state.distance, 0, accuracy: 0.5)
+    }
+
+    @MainActor
+    private func launchPlainPage() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = ["--anchorPagerInitialIndex", "3"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["plain-page-content"].waitForExistence(timeout: 3))
+        return app
     }
 
     @MainActor
@@ -134,7 +157,6 @@ final class AnchorPagerExampleUITests: XCTestCase {
             $0.page == "long" && abs($0.distance - longState.distance) < 2 && $0.collapse >= 0.99
         }
         XCTAssertNotNil(restored)
-        XCTAssertEqual(restored?.childBounce, false)
     }
 
     @MainActor
@@ -530,10 +552,16 @@ final class AnchorPagerExampleUITests: XCTestCase {
 private struct ScrollCoordinationState {
     let page: String
     let hasScrollTarget: Bool
+    let mode: String
     let collapse: CGFloat
     let distance: CGFloat
-    let containerBounce: Bool
-    let childBounce: Bool
+    let containerCurrent: CGFloat
+    let containerTopMax: CGFloat
+    let containerBottomMax: CGFloat
+    let childTopCurrent: CGFloat
+    let childTopMax: CGFloat
+    let childBottomCurrent: CGFloat
+    let childBottomMax: CGFloat
 
     init?(value: String?) {
         let fields = Dictionary(
@@ -547,19 +575,38 @@ private struct ScrollCoordinationState {
         )
         guard let page = fields["page"],
               let hasScrollTargetValue = fields["hasScrollTarget"],
+              let mode = fields["mode"],
               let collapseValue = fields["collapse"],
               let collapse = Double(collapseValue),
               let distanceValue = fields["distance"],
               let distance = Double(distanceValue),
-              let containerBounceValue = fields["containerBounce"],
-              let childBounceValue = fields["childBounce"] else {
+              let containerCurrentValue = fields["containerCurrent"],
+              let containerCurrent = Double(containerCurrentValue),
+              let containerTopMaxValue = fields["containerTopMax"],
+              let containerTopMax = Double(containerTopMaxValue),
+              let containerBottomMaxValue = fields["containerBottomMax"],
+              let containerBottomMax = Double(containerBottomMaxValue),
+              let childTopCurrentValue = fields["childTopCurrent"],
+              let childTopCurrent = Double(childTopCurrentValue),
+              let childTopMaxValue = fields["childTopMax"],
+              let childTopMax = Double(childTopMaxValue),
+              let childBottomCurrentValue = fields["childBottomCurrent"],
+              let childBottomCurrent = Double(childBottomCurrentValue),
+              let childBottomMaxValue = fields["childBottomMax"],
+              let childBottomMax = Double(childBottomMaxValue) else {
             return nil
         }
         self.page = page
         self.hasScrollTarget = hasScrollTargetValue == "1"
+        self.mode = mode
         self.collapse = CGFloat(collapse)
         self.distance = CGFloat(distance)
-        self.containerBounce = containerBounceValue == "1"
-        self.childBounce = childBounceValue == "1"
+        self.containerCurrent = CGFloat(containerCurrent)
+        self.containerTopMax = CGFloat(containerTopMax)
+        self.containerBottomMax = CGFloat(containerBottomMax)
+        self.childTopCurrent = CGFloat(childTopCurrent)
+        self.childTopMax = CGFloat(childTopMax)
+        self.childBottomCurrent = CGFloat(childBottomCurrent)
+        self.childBottomMax = CGFloat(childBottomMax)
     }
 }
