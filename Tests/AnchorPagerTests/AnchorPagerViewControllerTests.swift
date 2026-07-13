@@ -2274,6 +2274,155 @@ final class AnchorPagerViewControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testReloadDataSynchronouslyCancelsActiveContainerPresentationBeforeReadingDataSource() throws {
+        let fixture = try TopOverscrollPresentationFixture()
+        defer { fixture.window.isHidden = true }
+        fixture.activateContainerPresentation()
+        var observedCanonicalState = false
+        fixture.dataSource.onNumberOfViewControllers = {
+            fixture.assertCanonicalPresentationRestored()
+            observedCanonicalState = true
+        }
+
+        fixture.pager.reloadData()
+
+        XCTAssertTrue(observedCanonicalState)
+        fixture.assertCanonicalPresentationRestored()
+    }
+
+    @MainActor
+    func testReloadHeaderLayoutSynchronouslyCancelsActiveContainerPresentation() throws {
+        let fixture = try TopOverscrollPresentationFixture()
+        defer { fixture.window.isHidden = true }
+        fixture.activateContainerPresentation()
+
+        fixture.pager.reloadHeaderLayout(offsetAdjustment: .preserveVisualPosition)
+
+        fixture.assertCanonicalPresentationRestored()
+    }
+
+    @MainActor
+    func testOnlyMatchingWillPerformReloadRequestSynchronouslyCancelsActiveContainerPresentation() throws {
+        let fixture = try TopOverscrollPresentationFixture()
+        defer { fixture.window.isHidden = true }
+        let adapter = try XCTUnwrap(fixture.host.activeAdapter)
+        adapter.pageboyViewController(
+            adapter,
+            willScrollToPageAt: 1,
+            direction: .forward,
+            animated: true
+        )
+        fixture.replaceDataSourcePages(with: [ScrollChildViewController()])
+        fixture.pager.reloadData()
+        fixture.activateContainerPresentation()
+
+        XCTAssertFalse(
+            fixture.pager.pagingHost(
+                fixture.host,
+                willPerformReloadRequest: 999
+            )
+        )
+        fixture.assertContainerPresentationIsActive()
+
+        XCTAssertTrue(
+            fixture.pager.pagingHost(
+                fixture.host,
+                willPerformReloadRequest: 2
+            )
+        )
+        fixture.assertCanonicalPresentationRestored()
+    }
+
+    @MainActor
+    func testWillSelectSynchronouslyCancelsActiveContainerPresentation() throws {
+        let fixture = try TopOverscrollPresentationFixture()
+        defer { fixture.window.isHidden = true }
+        fixture.activateContainerPresentation()
+
+        fixture.pager.pagingHost(fixture.host, willSelect: 1, animated: true)
+
+        fixture.assertCanonicalPresentationRestored()
+    }
+
+    @MainActor
+    func testViewWillTransitionSynchronouslyCancelsActiveContainerPresentation() throws {
+        let fixture = try TopOverscrollPresentationFixture()
+        defer { fixture.window.isHidden = true }
+        fixture.activateContainerPresentation()
+
+        fixture.pager.viewWillTransition(
+            to: CGSize(width: 844, height: 390),
+            with: ImmediateTransitionCoordinator()
+        )
+
+        fixture.assertCanonicalPresentationRestored()
+    }
+
+    @MainActor
+    func testReloadTerminalRebindsCommittedScrollOnlyAfterPendingGenerationCommits() throws {
+        let fixture = try TopOverscrollPresentationFixture()
+        defer { fixture.window.isHidden = true }
+        let pendingPage = ScrollChildViewController()
+        let oldFirst = try XCTUnwrap(fixture.pages.first)
+        try fixture.activatePendingProvider(with: pendingPage)
+
+        fixture.assertOnlyScrollViewIsBound(
+            oldFirst.scrollView,
+            insteadOf: pendingPage.scrollView
+        )
+
+        XCTAssertTrue(
+            fixture.pager.pagingHost(
+                fixture.host,
+                didReload: .page(index: 0),
+                finalBarInsets: .zero,
+                requestIdentifier: 2
+            )
+        )
+
+        fixture.assertOnlyScrollViewIsBound(
+            pendingPage.scrollView,
+            insteadOf: oldFirst.scrollView
+        )
+    }
+
+    @MainActor
+    func testSelectionTerminalRebindsCommittedGenerationInsteadOfPendingProvider() throws {
+        let fixture = try TopOverscrollPresentationFixture()
+        defer { fixture.window.isHidden = true }
+        let pendingPage = ScrollChildViewController()
+        let oldSecond = try XCTUnwrap(fixture.pages.dropFirst().first)
+        try fixture.activatePendingProvider(with: pendingPage)
+
+        fixture.pager.pagingHost(fixture.host, didSelect: 1, animated: true)
+
+        fixture.assertOnlyScrollViewIsBound(
+            oldSecond.scrollView,
+            insteadOf: pendingPage.scrollView
+        )
+    }
+
+    @MainActor
+    func testSelectionCancelRebindsCommittedGenerationInsteadOfPendingProvider() throws {
+        let fixture = try TopOverscrollPresentationFixture()
+        defer { fixture.window.isHidden = true }
+        let pendingPage = ScrollChildViewController()
+        let oldFirst = try XCTUnwrap(fixture.pages.first)
+        try fixture.activatePendingProvider(with: pendingPage)
+
+        fixture.pager.pagingHost(
+            fixture.host,
+            didCancelSelectionAt: 1,
+            returningTo: 0
+        )
+
+        fixture.assertOnlyScrollViewIsBound(
+            oldFirst.scrollView,
+            insteadOf: pendingPage.scrollView
+        )
+    }
+
+    @MainActor
     private func installedAdapter(in pager: AnchorPagerViewController) -> AnchorPagerPagingAdapter? {
         installedPagingHost(in: pager)?.activeAdapter
     }
@@ -2283,6 +2432,234 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         in pager: AnchorPagerViewController
     ) -> AnchorPagerPagingHostViewController? {
         pager.children.compactMap { $0 as? AnchorPagerPagingHostViewController }.first
+    }
+}
+
+@MainActor
+private final class TopOverscrollPresentationFixture {
+    let pager: AnchorPagerViewController
+    let dataSource: StubDataSource
+    let pages: [ScrollChildViewController]
+    let headerView: FixedFittingView
+    let window: UIWindow
+    let host: AnchorPagerPagingHostViewController
+
+    private let headerHostView: UIView
+    private let viewportView: UIView
+    private let canonicalHeaderFrame: CGRect
+    private let overflowDistance: CGFloat = 24
+
+    init() throws {
+        var configuration = AnchorPagerConfiguration.default
+        configuration.header.heightMode = .fixed(max: 100, min: 0)
+        pages = [ScrollChildViewController(), ScrollChildViewController()]
+        for page in pages {
+            page.loadViewIfNeeded()
+            page.scrollView.contentSize = CGSize(width: 390, height: 1_600)
+        }
+        headerView = FixedFittingView(height: 100)
+        pager = AnchorPagerViewController(configuration: configuration)
+        dataSource = StubDataSource(
+            count: pages.count,
+            viewControllers: pages,
+            headerContent: .view(headerView)
+        )
+        pager.dataSource = dataSource
+        window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = pager
+        window.makeKeyAndVisible()
+        pager.reloadData()
+        window.layoutIfNeeded()
+        pager.reloadHeaderLayout(offsetAdjustment: .resetToExpanded)
+        window.layoutIfNeeded()
+
+        host = try XCTUnwrap(
+            pager.children.compactMap {
+                $0 as? AnchorPagerPagingHostViewController
+            }.first
+        )
+        let adapter = try XCTUnwrap(host.activeAdapter)
+        for index in pages.indices {
+            _ = adapter.viewController(for: adapter, at: index)
+        }
+        headerHostView = try XCTUnwrap(headerView.superview)
+        viewportView = try XCTUnwrap(headerHostView.superview)
+        canonicalHeaderFrame = headerHostView.convert(headerHostView.bounds, to: pager.view)
+    }
+
+    func activateContainerPresentation(
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        pager.verticalScrollView.contentOffset = CGPoint(x: 0, y: -overflowDistance)
+        pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
+        assertContainerPresentationIsActive(file: file, line: line)
+    }
+
+    func assertContainerPresentationIsActive(
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        XCTAssertEqual(
+            pager.verticalScrollView.contentOffset.y,
+            -overflowDistance,
+            accuracy: 0.5,
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            viewportView.transform.ty,
+            overflowDistance,
+            accuracy: 0.5,
+            file: file,
+            line: line
+        )
+    }
+
+    func assertCanonicalPresentationRestored(
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        XCTAssertEqual(
+            pager.verticalScrollView.contentOffset.y,
+            0,
+            accuracy: 0.5,
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(viewportView.transform.a, 1, accuracy: 0.001, file: file, line: line)
+        XCTAssertEqual(viewportView.transform.b, 0, accuracy: 0.001, file: file, line: line)
+        XCTAssertEqual(viewportView.transform.c, 0, accuracy: 0.001, file: file, line: line)
+        XCTAssertEqual(viewportView.transform.d, 1, accuracy: 0.001, file: file, line: line)
+        XCTAssertEqual(viewportView.transform.tx, 0, accuracy: 0.001, file: file, line: line)
+        XCTAssertEqual(viewportView.transform.ty, 0, accuracy: 0.001, file: file, line: line)
+        XCTAssertEqual(
+            currentHeaderFrame.minY,
+            canonicalHeaderFrame.minY,
+            accuracy: 0.5,
+            file: file,
+            line: line
+        )
+    }
+
+    func replaceDataSourcePages(with replacements: [ScrollChildViewController]) {
+        for replacement in replacements {
+            replacement.loadViewIfNeeded()
+            replacement.scrollView.contentSize = CGSize(width: 390, height: 1_600)
+        }
+        dataSource.count = replacements.count
+        dataSource.titles = replacements.indices.map { "Replacement \($0)" }
+        dataSource.viewControllers = replacements
+    }
+
+    func activatePendingProvider(with pendingPage: ScrollChildViewController) throws {
+        let adapter = try XCTUnwrap(host.activeAdapter)
+        adapter.pageboyViewController(
+            adapter,
+            willScrollToPageAt: 1,
+            direction: .forward,
+            animated: true
+        )
+        replaceDataSourcePages(with: [pendingPage])
+        pager.reloadData()
+        XCTAssertTrue(
+            pager.pagingHost(host, willPerformReloadRequest: 2),
+            "测试前置条件要求激活匹配的 pending provider generation。"
+        )
+        XCTAssertTrue(pager.pageViewController(at: 0) === pendingPage)
+    }
+
+    func assertOnlyScrollViewIsBound(
+        _ expected: UIScrollView,
+        insteadOf other: UIScrollView,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        pager.verticalScrollView.contentOffset.y = 0
+        let expectedTop = -expected.contentInset.top
+        expected.contentOffset.y = expectedTop + 20
+        XCTAssertEqual(
+            expected.contentOffset.y,
+            expectedTop,
+            accuracy: 0.5,
+            file: file,
+            line: line
+        )
+
+        let otherTop = -other.contentInset.top
+        other.contentOffset.y = otherTop + 20
+        XCTAssertEqual(
+            other.contentOffset.y,
+            otherTop + 20,
+            accuracy: 0.5,
+            file: file,
+            line: line
+        )
+        other.contentOffset.y = otherTop
+    }
+
+    private var currentHeaderFrame: CGRect {
+        headerHostView.convert(headerHostView.bounds, to: pager.view)
+    }
+}
+
+@MainActor
+private final class ImmediateTransitionCoordinator: NSObject,
+    UIViewControllerTransitionCoordinator {
+    let isAnimated = false
+    let presentationStyle: UIModalPresentationStyle = .none
+    let initiallyInteractive = false
+    let isInterruptible = false
+    let isInteractive = false
+    let isCancelled = false
+    let transitionDuration: TimeInterval = 0
+    let percentComplete: CGFloat = 1
+    let completionVelocity: CGFloat = 1
+    let completionCurve: UIView.AnimationCurve = .linear
+    let containerView = UIView()
+    let targetTransform = CGAffineTransform.identity
+
+    func viewController(
+        forKey key: UITransitionContextViewControllerKey
+    ) -> UIViewController? {
+        nil
+    }
+
+    func view(forKey key: UITransitionContextViewKey) -> UIView? {
+        nil
+    }
+
+    func animate(
+        alongsideTransition animation: (
+            (any UIViewControllerTransitionCoordinatorContext) -> Void
+        )?,
+        completion: ((any UIViewControllerTransitionCoordinatorContext) -> Void)?
+    ) -> Bool {
+        animation?(self)
+        completion?(self)
+        return true
+    }
+
+    func animateAlongsideTransition(
+        in view: UIView?,
+        animation: ((any UIViewControllerTransitionCoordinatorContext) -> Void)?,
+        completion: ((any UIViewControllerTransitionCoordinatorContext) -> Void)?
+    ) -> Bool {
+        animation?(self)
+        completion?(self)
+        return true
+    }
+
+    func notifyWhenInteractionEnds(
+        _ handler: @escaping (any UIViewControllerTransitionCoordinatorContext) -> Void
+    ) {
+        handler(self)
+    }
+
+    func notifyWhenInteractionChanges(
+        _ handler: @escaping (any UIViewControllerTransitionCoordinatorContext) -> Void
+    ) {
+        handler(self)
     }
 }
 

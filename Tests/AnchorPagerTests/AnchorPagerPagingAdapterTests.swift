@@ -538,6 +538,55 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
         }
     }
 
+    func testPublicDocCUsesUserFacingTopOverscrollTerms() throws {
+        let publicDirectory = try packageRoot()
+            .appendingPathComponent("Sources")
+            .appendingPathComponent("AnchorPager")
+            .appendingPathComponent("Public")
+        let swiftFiles = try FileManager.default.swiftFiles(in: publicDirectory)
+        let docComments = try swiftFiles.flatMap { file in
+            try String(contentsOf: file, encoding: .utf8)
+                .split(separator: "\n")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { $0.hasPrefix("///") }
+        }
+        let normalizedDocC = docComments.joined(separator: "\n")
+        let internalTerms = try NSRegularExpression(
+            pattern: #"(?i)\b(owner|handoff|pin(?:\s+anchor)?)\b"#
+        )
+        let fullRange = NSRange(
+            normalizedDocC.startIndex..<normalizedDocC.endIndex,
+            in: normalizedDocC
+        )
+
+        XCTAssertNil(
+            internalTerms.firstMatch(in: normalizedDocC, range: fullRange),
+            "Public DocC 不得暴露内部状态机术语。"
+        )
+
+        let configurationSource = try String(
+            contentsOf: publicDirectory.appendingPathComponent(
+                "AnchorPagerConfiguration.swift"
+            ),
+            encoding: .utf8
+        )
+        XCTAssertTrue(
+            configurationSource.contains(
+                "/// 收敛到稳定边界，不提供可见的顶部 overscroll。"
+            )
+        )
+        XCTAssertTrue(
+            configurationSource.contains(
+                "/// 由当前真实 child 滚动视图按自身原生配置处理顶部 overscroll。"
+            )
+        )
+        XCTAssertTrue(
+            configurationSource.contains(
+                "/// 当前页面的 scroll target 为 nil 时，该模式不可用，且不会回退到 container。"
+            )
+        )
+    }
+
     private func packageRoot() throws -> URL {
         var current = URL(fileURLWithPath: #filePath)
         while current.path != "/" {

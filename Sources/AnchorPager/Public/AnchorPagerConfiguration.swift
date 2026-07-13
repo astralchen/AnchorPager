@@ -127,7 +127,7 @@ public enum AnchorPagerHeaderOffsetAdjustment: Sendable, Equatable {
 
 /// 顶部 overscroll 处理模式。
 public enum AnchorPagerTopOverscrollHandlingMode: Sendable, Equatable {
-    /// 不接管顶部 overscroll。
+    /// 收敛到稳定边界，不提供可见的顶部 overscroll。
     case none
 
     /// 由容器滚动视图处理顶部 overscroll。
@@ -136,6 +136,6 @@ public enum AnchorPagerTopOverscrollHandlingMode: Sendable, Equatable {
     /// 由当前真实 child 滚动视图按自身原生配置处理顶部 overscroll。
     ///
     /// AnchorPager 不修改 child 的 `bounces` 或 `alwaysBounceVertical`；
-    /// nil scroll target 时该 owner 不可用，也不会回退到 container。
+    /// 当前页面的 scroll target 为 nil 时，该模式不可用，且不会回退到 container。
     case child
 }
