@@ -334,6 +334,8 @@ private extension AnchorPagerScrollCoordinator {
                 || (childDistance ?? 0) < -boundaryEpsilon {
                 beginBoundary(.top)
             } else if let childDistance,
+                      containerScrollView.contentOffset.y
+                        >= collapsibleDistance - boundaryEpsilon,
                       childDistance > childMaximumDistance + boundaryEpsilon {
                 beginBoundary(.bottom)
             } else if committedChildScrollView == nil,

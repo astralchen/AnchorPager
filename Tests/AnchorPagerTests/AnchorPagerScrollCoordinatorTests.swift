@@ -282,6 +282,20 @@ final class AnchorPagerScrollCoordinatorTests: XCTestCase {
         )
     }
 
+    func testShortChildOffsetWhileContainerExpandedDoesNotBecomeBottomOwner() {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 0)
+
+        fixture.child.contentOffset.y = -fixture.child.contentInset.top + 37
+
+        XCTAssertEqual(fixture.container.contentOffset.y, 0, accuracy: 0.001)
+        XCTAssertEqual(
+            fixture.child.contentOffset.y,
+            -fixture.child.contentInset.top,
+            accuracy: 0.001
+        )
+        XCTAssertNil(fixture.coordinator.activeBoundaryForTesting)
+    }
+
     func testActiveNativeBoundaryIsNotClampedByGeometryRefresh() {
         let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
         fixture.container.contentOffset.y = -24
