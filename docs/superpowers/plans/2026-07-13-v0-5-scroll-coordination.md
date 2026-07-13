@@ -1429,7 +1429,9 @@ git commit -m "验证纵向滚动真实手势交接"
 
 Task 1–6 完成后的真实视图层级检查发现，历史 synthetic scroll wrapper 会缩短无滚动业务页根 view。专项设计与计划见 `docs/superpowers/specs/2026-07-13-plain-page-direct-containment-design.md` 和 `docs/superpowers/plans/2026-07-13-plain-page-direct-containment.md`。
 
-专项修复已完成：Store 采用 page/optional scroll 三态，plain original page 直接交给 Pageboy，synthetic wrapper 已删除；plain page 不参与 managed inset、snapshot、child bounce 或 simultaneous pair。专项全量验收为 Framework 220 tests、Example 30 tests，均 0 failures、0 skips；Example generic simulator build 成功。v0.5 Task 7 因此重新开放，但在其独立复审与最终完整验收完成前仍不得标记 v0.5 Ready。
+专项修复已完成：Store 采用 page/optional scroll 三态，plain original page 直接交给 Pageboy，synthetic wrapper 已删除；plain page 不参与 managed inset、snapshot、child bounce 或 simultaneous pair。专项全量验收为 Framework 220 tests、Example 30 tests，均 0 failures、0 skips；Example generic simulator build 成功。
+
+后续真实运行发现 `alwaysBounceVertical` 虽已开启，但 active pan 的 canonical clamp 会抵消肉眼可见 bounce；旧 UI 探针只证明出现过瞬时负 offset。Task 7 因此再次暂停。修订设计见 `docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md`：先完成 stable/native boundary 分离与无滚动页双边界 presentation，再进入本 Task 7 最终复审；不得沿用旧探针提前标记 v0.5 Ready。
 
 ---
 

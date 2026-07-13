@@ -1,6 +1,8 @@
 # v0.5 纵向滚动协调与代理所有权设计
 
 > 2026-07-13 修订：本文关于 fallback 页作为 child scroll owner 或 simultaneous pair 的描述已被 `2026-07-13-plain-page-direct-containment-design.md` 取代。无 scroll 当前页的 committed page 非 nil、scroll target 为 nil，纵向手势只由 container 消费。
+>
+> 2026-07-13 第二次修订：本文的“临时 container 顶部 bounce”与 active pan 全程关闭 child `bounces` 的规则已被 `2026-07-13-boundary-bounce-ownership-design.md` 取代。新设计分离 stable range 与 native boundary pass-through，并按现有 public mode 路由正式顶部 owner。
 
 **日期：** 2026-07-13
 

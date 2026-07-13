@@ -196,6 +196,8 @@ public enum AnchorPagerTopOverscrollHandlingMode: Sendable, Equatable {
 }
 ```
 
+正式启用顶部 overscroll mode 后默认值为 `.container`；`.child` 只在当前 committed page 存在真实 scroll target 时可用，不创建替代 scroll view。
+
 ## 6. UIViewController Scroll 接入要求
 
 通过 UIViewController extension 提供 scroll view 接入点：
@@ -292,6 +294,8 @@ extension UIViewController {
 7. 同一次下拉手势中只能有一个 top overscroll owner。
 8. Header 展开优先级高于 top overscroll handling。
 9. 横向分页、Header layout reload、屏幕旋转或 child 切换期间，active top overscroll handling 必须有明确暂停、取消或恢复策略。
+10. 底部 bounce 不受顶部 mode 影响：真实 scroll page 由 child 处理，无滚动页由 verticalScrollView 处理。
+11. `.child` 模式或 child bottom owner 激活时可临时启用 child `bounces`，短内容场景可同时启用 `alwaysBounceVertical`；两项属性都必须在结束、取消、切页、reload 和释放时同步恢复业务原值。
 
 ## 12. 状态栏点击顶滚要求
 

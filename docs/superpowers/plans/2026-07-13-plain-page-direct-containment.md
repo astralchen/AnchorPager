@@ -705,6 +705,6 @@ Expected: 工作区无未解释改动；最近四个实施提交依次覆盖 Sto
 2. Store 明确区分 empty、plain page 和真实 scroll page 三态；generation migration、retention、reload commit/cancel 与 cleanup 只归还真实 scroll ownership。
 3. nil scroll page 不参与 managed inset、snapshot、child observation、bounce、simultaneous pair 或 scroll-to-top 替代 owner；shared scroll 冲突目标不会被写入。
 4. 真实 scroll page 的业务 delegate/pan delegate、managed inset、snapshot 与纵向 handoff 路径保持不变。
-5. UIKit 与真实 simulator drag 均证明 plain root 至少覆盖 pager/window 物理底边；第二次上推不会产生额外 child distance。
+5. UIKit 与真实 simulator drag 均证明 plain root 至少覆盖 pager/window 物理底边；当时的第二次上推验收证明没有 synthetic child distance。后续 container bottom 可见 bounce 由 `2026-07-13-boundary-bounce-ownership-design.md` 接管，不改变 nil child scroll target 事实。
 6. `scroll.target.none` 只在首次解析无目标状态时记录；Example 的 root/state probe 仅位于示例 target，不拦截触摸，也不伪造 synthetic offset。
 7. 文档已统一为 direct containment + nil scroll target；本专项修复完成，但 v0.5 Task 7 仍需独立复审，因此不将 v0.5 标记为 Ready。

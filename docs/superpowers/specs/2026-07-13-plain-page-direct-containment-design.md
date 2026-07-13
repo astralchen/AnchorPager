@@ -1,5 +1,7 @@
 # 无滚动页面直接 Containment 设计
 
+> 2026-07-13 修订：本文关于无滚动页“折叠后继续上推不产生额外纵向距离”的验收已被 `2026-07-13-boundary-bounce-ownership-design.md` 取代。页面仍没有 child scroll target，但外层 container 将在底部边界提供原生可见 bounce。
+
 **日期：** 2026-07-13
 
 **状态：** 已实施并完成专项验收；v0.5 Task 7 已重新开放但尚未完成

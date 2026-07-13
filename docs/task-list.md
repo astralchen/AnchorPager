@@ -435,13 +435,18 @@
 
 依赖门禁：OverscrollCoordinator 只消费 v0.5 已绑定的 committed current/empty owner；pending provider page 不能成为 overscroll owner。
 
+设计门禁已确认：`docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md`。必须先完成 v0.5 stable range/native boundary pass-through 与无滚动页双边界可见 bounce 修复，再正式启用顶部 mode；当前仍未实施。
+
 - [ ] 创建 `Sources/AnchorPager/Overscroll/AnchorPagerOverscrollCoordinator.swift`
 - [ ] 实现 `.none`
 - [ ] 实现 `.container`
 - [ ] 实现 `.child`
 - [ ] Header 完全展开前优先展开 Header
 - [ ] container 模式由 verticalScrollView 处理继续下拉
-- [ ] child 模式由当前 child scroll view 或 page scroll host 处理继续下拉
+- [ ] child 模式只由当前真实 child scroll view 处理继续下拉；nil scroll target 不创建替代 owner
+- [ ] 默认顶部模式调整为 container，并支持运行时同步切换
+- [ ] 无滚动页 container bottom bounce 与真实 scroll page child bottom bounce 不受顶部 mode 影响
+- [ ] child 顶部 owner 临时启用并在全部 terminal/cancel 路径恢复业务 bounces 原值
 - [ ] 同一次下拉手势只允许一个 top overscroll owner
 - [ ] 实现 owner 进入阈值
 - [ ] 实现 owner 退出阈值
@@ -457,6 +462,7 @@
 - [ ] 测试 owner 互斥
 - [ ] 测试 Header 展开优先级
 - [ ] 测试 owner 阈值稳定性
+- [ ] UI test 验证实际 presentation distance，不再只记录瞬时负 offset flag
 
 ## v0.7：手势与交互状态机版
 
