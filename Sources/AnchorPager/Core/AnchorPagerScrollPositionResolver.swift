@@ -26,7 +26,11 @@ struct AnchorPagerScrollPositionResolver {
         guard values.allSatisfy(\.isFinite) else { return nil }
 
         let upwardDelta = input.gestureStartTranslationY - input.currentTranslationY
-        return input.gestureStartTotal + upwardDelta
+        guard upwardDelta.isFinite else { return nil }
+
+        let desiredTotal = input.gestureStartTotal + upwardDelta
+        guard desiredTotal.isFinite else { return nil }
+        return desiredTotal
     }
 
     static func resolve(_ input: Input) -> Position {

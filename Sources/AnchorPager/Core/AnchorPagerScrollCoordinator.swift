@@ -216,20 +216,17 @@ private extension AnchorPagerScrollCoordinator {
 
         let nextOwner: Owner = position.childDistance > epsilon ? .child : .container
         let childTarget = childTopOffset + position.childDistance
-        var didWrite = false
 
         let writeContainer = {
             if abs(self.containerScrollView.contentOffset.y - position.containerOffset)
                 > self.epsilon {
                 self.containerScrollView.contentOffset.y = position.containerOffset
-                didWrite = true
             }
         }
         let writeChild = {
             guard let child = self.committedChildScrollView,
                   abs(child.contentOffset.y - childTarget) > self.epsilon else { return }
             child.contentOffset.y = childTarget
-            didWrite = true
         }
 
         if nextOwner == .child {
@@ -242,13 +239,6 @@ private extension AnchorPagerScrollCoordinator {
 
         logTransitions(from: previous, to: position)
         transitionOwnerIfNeeded(to: nextOwner)
-        if didWrite {
-            AnchorPagerLogger.log(
-                .debug,
-                category: .scroll,
-                event: "scroll.offset.guard.apply"
-            )
-        }
     }
 
     func settleStableOffsets() {
@@ -275,17 +265,10 @@ private extension AnchorPagerScrollCoordinator {
     func pinChildToTop() {
         guard let child = committedChildScrollView,
               abs(child.contentOffset.y - childTopOffset) > epsilon else { return }
-        let containerOffset = containerScrollView.contentOffset.y
         isApplyingGuardedOffsets = true
+        defer { isApplyingGuardedOffsets = false }
         child.contentOffset.y = childTopOffset
-        containerScrollView.contentOffset.y = containerOffset
-        isApplyingGuardedOffsets = false
         transitionOwnerIfNeeded(to: .container)
-        AnchorPagerLogger.log(
-            .debug,
-            category: .scroll,
-            event: "scroll.offset.guard.apply"
-        )
     }
 
     func beginBoundary(_ boundary: AnchorPagerOverscrollCoordinator.Boundary) {
@@ -352,13 +335,8 @@ private extension AnchorPagerScrollCoordinator {
     func writeContainerBoundary(_ target: CGFloat) {
         guard abs(containerScrollView.contentOffset.y - target) > epsilon else { return }
         isApplyingGuardedOffsets = true
+        defer { isApplyingGuardedOffsets = false }
         containerScrollView.contentOffset.y = target
-        isApplyingGuardedOffsets = false
-        AnchorPagerLogger.log(
-            .debug,
-            category: .scroll,
-            event: "scroll.offset.guard.apply"
-        )
     }
 
     func handleObservedBoundaryIfNeeded() -> Bool {

@@ -64,6 +64,197 @@ final class AnchorPagerScrollCoordinatorTests: XCTestCase {
         )
     }
 
+    func testContainerTopPassThroughDoesNotInvokeOwnerOffsetSetter() {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        fixture.container.contentOffset.y = -24
+        fixture.coordinator.containerDidScroll()
+        let ownerSetterInvoked = expectation(description: "owner setter 不应被调用")
+        ownerSetterInvoked.isInverted = true
+        let observation = fixture.container.observe(\.contentOffset, options: [.new]) { _, _ in
+            ownerSetterInvoked.fulfill()
+        }
+
+        fixture.child.contentOffset.y = -fixture.child.contentInset.top - 12
+
+        wait(for: [ownerSetterInvoked], timeout: 0.01)
+        XCTAssertEqual(fixture.container.contentOffset.y, -24, accuracy: 0.001)
+        XCTAssertEqual(
+            fixture.child.contentOffset.y,
+            -fixture.child.contentInset.top,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            fixture.coordinator.activeBoundaryForTesting,
+            .init(boundary: .top, owner: .container)
+        )
+        observation.invalidate()
+    }
+
+    func testZeroStableRangeDownwardPanSelectsOnlyTopBoundary() {
+        let fixture = Fixture(collapsedOffset: 0, childMaximumDistance: 0)
+
+        fixture.coordinator.handlePan(state: .began, translationY: 0)
+        fixture.coordinator.handlePan(state: .changed, translationY: 24)
+
+        XCTAssertEqual(
+            fixture.coordinator.activeBoundaryForTesting,
+            .init(boundary: .top, owner: .container)
+        )
+    }
+
+    func testZeroStableRangeUpwardPanSelectsOnlyBottomBoundary() {
+        let fixture = Fixture(collapsedOffset: 0, childMaximumDistance: 0)
+
+        fixture.coordinator.handlePan(state: .began, translationY: 0)
+        fixture.coordinator.handlePan(state: .changed, translationY: -24)
+
+        XCTAssertEqual(
+            fixture.coordinator.activeBoundaryForTesting,
+            .init(boundary: .bottom, owner: .child)
+        )
+    }
+
+    func testCancelBoundaryHandlingClearsOwnerAndSettlesStableOffsets() {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        fixture.container.contentOffset.y = -24
+        fixture.coordinator.containerDidScroll()
+
+        fixture.coordinator.cancelBoundaryHandling()
+
+        XCTAssertNil(fixture.coordinator.activeBoundaryForTesting)
+        XCTAssertEqual(fixture.container.contentOffset.y, 0, accuracy: 0.001)
+        XCTAssertEqual(
+            fixture.child.contentOffset.y,
+            -fixture.child.contentInset.top,
+            accuracy: 0.001
+        )
+    }
+
+    func testEndInteractionWithoutVisibleOverflowFinishesOwner() {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+
+        fixture.coordinator.handlePan(state: .began, translationY: 0)
+        fixture.coordinator.handlePan(state: .changed, translationY: 1)
+        XCTAssertEqual(
+            fixture.coordinator.activeBoundaryForTesting,
+            .init(boundary: .top, owner: .container)
+        )
+
+        fixture.coordinator.handlePan(state: .ended, translationY: 1)
+
+        XCTAssertNil(fixture.coordinator.activeBoundaryForTesting)
+        XCTAssertEqual(fixture.container.contentOffset.y, 0, accuracy: 0.001)
+    }
+
+    func testChangedGeometryCancelsActiveBoundaryAndSettlesStableOffsets() {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        fixture.container.contentOffset.y = -24
+        fixture.coordinator.containerDidScroll()
+
+        fixture.coordinator.updateGeometry(collapsibleDistance: 120)
+
+        XCTAssertNil(fixture.coordinator.activeBoundaryForTesting)
+        XCTAssertEqual(fixture.container.contentOffset.y, 0, accuracy: 0.001)
+    }
+
+    func testChangedCommittedChildCancelsActiveBoundaryAndSettlesReplacement() {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        let replacement = fixture.makeChild(maximumDistance: 300)
+        fixture.container.contentOffset.y = -24
+        fixture.coordinator.containerDidScroll()
+
+        fixture.coordinator.bindCommittedChild(replacement)
+
+        XCTAssertNil(fixture.coordinator.activeBoundaryForTesting)
+        XCTAssertEqual(fixture.container.contentOffset.y, 0, accuracy: 0.001)
+        XCTAssertEqual(
+            replacement.contentOffset.y,
+            -replacement.contentInset.top,
+            accuracy: 0.001
+        )
+    }
+
+    func testActiveBoundaryGuardedChildCorrectionDoesNotReenterSettlement() {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        fixture.container.contentOffset.y = -24
+        fixture.coordinator.containerDidScroll()
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+
+        fixture.child.contentOffset.y = -fixture.child.contentInset.top - 12
+
+        XCTAssertEqual(
+            events.filter { $0.event == "scroll.offset.guard.skip" }.count,
+            1
+        )
+        XCTAssertEqual(
+            fixture.coordinator.activeBoundaryForTesting,
+            .init(boundary: .top, owner: .container)
+        )
+        XCTAssertEqual(fixture.container.contentOffset.y, -24, accuracy: 0.001)
+        XCTAssertEqual(
+            fixture.child.contentOffset.y,
+            -fixture.child.contentInset.top,
+            accuracy: 0.001
+        )
+    }
+
+    func testRepeatedBoundaryCorrectionsDoNotEmitPerFrameGuardApplyLogs() {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+
+        fixture.container.contentOffset.y = 112
+        fixture.child.contentOffset.y = -fixture.child.contentInset.top + 524
+        for _ in 0..<3 {
+            fixture.container.contentOffset.y = 112
+            fixture.coordinator.handleChildChangeForTesting(
+                token: fixture.coordinator.bindingTokenForTesting
+            )
+        }
+
+        XCTAssertEqual(
+            events.filter { $0.event == "overscroll.boundary.bottom" }.count,
+            1
+        )
+        XCTAssertEqual(
+            events.filter { $0.event == "overscroll.owner.child.begin" }.count,
+            1
+        )
+        XCTAssertEqual(
+            events.filter { $0.event == "scroll.offset.guard.apply" }.count,
+            0
+        )
+    }
+
+    func testRepeatedTopNonOwnerCorrectionsDoNotEmitPerFrameGuardApplyLogs() {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+
+        fixture.container.contentOffset.y = -24
+        fixture.coordinator.containerDidScroll()
+        for _ in 0..<3 {
+            fixture.child.contentOffset.y = -fixture.child.contentInset.top - 12
+        }
+
+        XCTAssertEqual(
+            events.filter { $0.event == "overscroll.boundary.top" }.count,
+            1
+        )
+        XCTAssertEqual(
+            events.filter { $0.event == "overscroll.owner.container.begin" }.count,
+            1
+        )
+        XCTAssertEqual(
+            events.filter { $0.event == "scroll.offset.guard.apply" }.count,
+            0
+        )
+    }
+
     func testPlainBottomPassThroughKeepsContainerOverflow() {
         let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
         fixture.coordinator.bindCommittedChild(nil)
@@ -126,7 +317,7 @@ final class AnchorPagerScrollCoordinatorTests: XCTestCase {
         XCTAssertEqual(fixture.container.contentOffset.y, 60, accuracy: 0.001)
     }
 
-    func testGuardedWritesDoNotReenter() {
+    func testGuardedWritesDoNotReenterOrEmitPerFrameApplyLogs() {
         let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
         var events: [AnchorPagerLogger.Event] = []
         AnchorPagerLogger.sink = { events.append($0) }
@@ -135,7 +326,7 @@ final class AnchorPagerScrollCoordinatorTests: XCTestCase {
         fixture.coordinator.handlePan(state: .began, translationY: 0)
         fixture.coordinator.handlePan(state: .changed, translationY: -150)
 
-        XCTAssertEqual(events.filter { $0.event == "scroll.offset.guard.apply" }.count, 1)
+        XCTAssertEqual(events.filter { $0.event == "scroll.offset.guard.apply" }.count, 0)
         XCTAssertLessThanOrEqual(
             events.filter { $0.event == "scroll.offset.guard.skip" }.count,
             2

@@ -24,6 +24,42 @@ final class AnchorPagerScrollPositionResolverTests: XCTestCase {
         XCTAssertEqual(AnchorPagerScrollPositionResolver.unclampedDesiredTotal(bottom), 624)
     }
 
+    func testUnclampedDesiredTotalRejectsOverflowInUpwardDelta() {
+        let fallback = AnchorPagerScrollPositionResolver.Position(
+            containerOffset: 40,
+            childDistance: 20
+        )
+        let input = AnchorPagerScrollPositionResolver.Input(
+            gestureStartTotal: 60,
+            gestureStartTranslationY: .greatestFiniteMagnitude,
+            currentTranslationY: -.greatestFiniteMagnitude,
+            containerCollapsedOffset: 100,
+            childMaximumDistance: 500,
+            fallback: fallback
+        )
+
+        XCTAssertNil(AnchorPagerScrollPositionResolver.unclampedDesiredTotal(input))
+        XCTAssertEqual(AnchorPagerScrollPositionResolver.resolve(input), fallback)
+    }
+
+    func testUnclampedDesiredTotalRejectsOverflowInFinalTotal() {
+        let fallback = AnchorPagerScrollPositionResolver.Position(
+            containerOffset: 40,
+            childDistance: 20
+        )
+        let input = AnchorPagerScrollPositionResolver.Input(
+            gestureStartTotal: .greatestFiniteMagnitude,
+            gestureStartTranslationY: .greatestFiniteMagnitude,
+            currentTranslationY: 0,
+            containerCollapsedOffset: 100,
+            childMaximumDistance: 500,
+            fallback: fallback
+        )
+
+        XCTAssertNil(AnchorPagerScrollPositionResolver.unclampedDesiredTotal(input))
+        XCTAssertEqual(AnchorPagerScrollPositionResolver.resolve(input), fallback)
+    }
+
     func testUpwardTranslationDistributesAcrossContainerAndChildWithoutDroppingDelta() {
         let result = AnchorPagerScrollPositionResolver.resolve(.init(
             gestureStartTotal: 80,
