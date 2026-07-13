@@ -24,13 +24,26 @@ final class AnchorPagerScrollCoordinator {
         overscrollCoordinator.activeOwner
     }
 
-    init(containerScrollView: AnchorPagerContainerScrollView) {
+    init(
+        containerScrollView: AnchorPagerContainerScrollView,
+        topOverscrollHandlingMode: AnchorPagerTopOverscrollHandlingMode = .container
+    ) {
         self.containerScrollView = containerScrollView
-        self.overscrollCoordinator = AnchorPagerOverscrollCoordinator(topMode: .container)
+        self.overscrollCoordinator = AnchorPagerOverscrollCoordinator(
+            topMode: topOverscrollHandlingMode
+        )
         containerScrollView.panGestureRecognizer.addTarget(
             self,
             action: #selector(handleContainerPan(_:))
         )
+    }
+
+    func updateTopOverscrollHandlingMode(_ mode: AnchorPagerTopOverscrollHandlingMode) {
+        let hadActiveOwner = overscrollCoordinator.activeOwner != nil
+        overscrollCoordinator.updateTopMode(mode)
+        if hadActiveOwner {
+            settleStableOffsets()
+        }
     }
 
     func updateGeometry(collapsibleDistance: CGFloat) {

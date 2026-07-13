@@ -3,6 +3,71 @@ import XCTest
 
 @MainActor
 final class AnchorPagerScrollCoordinatorTests: XCTestCase {
+    func testNoneModeClampsContainerAndChildAtExpandedBoundary() {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        fixture.coordinator.updateTopOverscrollHandlingMode(.none)
+        fixture.container.contentOffset.y = -20
+        fixture.child.contentOffset.y = -fixture.child.contentInset.top - 12
+
+        fixture.coordinator.containerDidScroll()
+
+        XCTAssertEqual(fixture.container.contentOffset.y, 0, accuracy: 0.001)
+        XCTAssertEqual(
+            fixture.child.contentOffset.y,
+            -fixture.child.contentInset.top,
+            accuracy: 0.001
+        )
+    }
+
+    func testChildModeKeepsContainerExpandedAndPassesThroughChildTop() {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        fixture.coordinator.updateTopOverscrollHandlingMode(.child)
+        fixture.container.contentOffset.y = -20
+        fixture.child.contentOffset.y = -fixture.child.contentInset.top - 12
+
+        fixture.coordinator.handleChildChangeForTesting(
+            token: fixture.coordinator.bindingTokenForTesting
+        )
+
+        XCTAssertEqual(fixture.container.contentOffset.y, 0, accuracy: 0.001)
+        XCTAssertEqual(
+            fixture.child.contentOffset.y,
+            -fixture.child.contentInset.top - 12,
+            accuracy: 0.001
+        )
+    }
+
+    func testChildModeWithNilTargetClampsWithoutFallback() {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        fixture.coordinator.bindCommittedChild(nil)
+        fixture.coordinator.updateTopOverscrollHandlingMode(.child)
+        fixture.container.contentOffset.y = -20
+
+        fixture.coordinator.containerDidScroll()
+
+        XCTAssertEqual(fixture.container.contentOffset.y, 0, accuracy: 0.001)
+        XCTAssertNil(fixture.coordinator.activeBoundaryForTesting)
+    }
+
+    func testModesNeverChangeBusinessBounceConfiguration() {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 0)
+        fixture.child.bounces = false
+        fixture.child.alwaysBounceVertical = false
+
+        for mode in [
+            AnchorPagerTopOverscrollHandlingMode.none,
+            .container,
+            .child
+        ] {
+            fixture.coordinator.updateTopOverscrollHandlingMode(mode)
+            fixture.coordinator.handlePan(state: .began, translationY: 0)
+            fixture.coordinator.handlePan(state: .changed, translationY: 40)
+            fixture.coordinator.handlePan(state: .cancelled, translationY: 40)
+            XCTAssertFalse(fixture.child.bounces)
+            XCTAssertFalse(fixture.child.alwaysBounceVertical)
+        }
+    }
+
     func testBindingPanAndInvalidateKeepBusinessBounceConfiguration() {
         let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
         fixture.child.bounces = false

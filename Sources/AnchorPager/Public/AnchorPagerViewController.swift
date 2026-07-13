@@ -22,6 +22,9 @@ open class AnchorPagerViewController: UIViewController {
     public var configuration: AnchorPagerConfiguration {
         didSet {
             guard isViewLoaded else { return }
+            scrollCoordinator?.updateTopOverscrollHandlingMode(
+                configuration.topOverscrollHandlingMode
+            )
             pageStateStore.setKeepsAdjacentPagesLoaded(
                 configuration.paging.keepsAdjacentPagesLoaded
             )
@@ -124,8 +127,17 @@ open class AnchorPagerViewController: UIViewController {
         updateVisibleLayout()
     }
 
+    open override func viewWillTransition(
+        to size: CGSize,
+        with coordinator: any UIViewControllerTransitionCoordinator
+    ) {
+        scrollCoordinator?.cancelBoundaryHandling()
+        super.viewWillTransition(to: size, with: coordinator)
+    }
+
     /// 重新加载页面、标题和 Header 数据。
     public func reloadData() {
+        scrollCoordinator?.cancelBoundaryHandling()
         reloadTransactionIdentifier &+= 1
         let transactionIdentifier = reloadTransactionIdentifier
         let reloadDataSource = dataSource
@@ -232,6 +244,7 @@ open class AnchorPagerViewController: UIViewController {
     public func reloadHeaderLayout(
         offsetAdjustment: AnchorPagerHeaderOffsetAdjustment = .preserveVisualPosition
     ) {
+        scrollCoordinator?.cancelBoundaryHandling()
         AnchorPagerLogger.log(.info, category: .layout, event: "reloadHeaderLayout")
         updateVisibleLayout(forceNotify: true, offsetAdjustment: offsetAdjustment)
         view.setNeedsLayout()
@@ -680,7 +693,10 @@ open class AnchorPagerViewController: UIViewController {
         guard let container = verticalScrollView as? AnchorPagerContainerScrollView else {
             preconditionFailure("verticalScrollView 必须由 AnchorPagerContainerScrollView 提供")
         }
-        scrollCoordinator = AnchorPagerScrollCoordinator(containerScrollView: container)
+        scrollCoordinator = AnchorPagerScrollCoordinator(
+            containerScrollView: container,
+            topOverscrollHandlingMode: configuration.topOverscrollHandlingMode
+        )
     }
 
     private func reconcileCommittedScrollBinding() {
@@ -733,6 +749,7 @@ extension AnchorPagerViewController: AnchorPagerPagingHostViewControllerDelegate
             AnchorPagerLogger.log(.debug, category: .paging, event: "paging.reload.stale")
             return false
         }
+        scrollCoordinator?.cancelBoundaryHandling()
         activateProviderGeneration(for: identifier)
         activeReloadRequestIdentifier = identifier
         return true
@@ -755,6 +772,7 @@ extension AnchorPagerViewController: AnchorPagerPagingHostViewControllerDelegate
         willSelect index: Int,
         animated: Bool
     ) {
+        scrollCoordinator?.cancelBoundaryHandling()
         pageStateStore.willSelect(
             from: selectedIndex,
             to: index,

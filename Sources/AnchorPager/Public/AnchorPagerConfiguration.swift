@@ -22,7 +22,7 @@ public struct AnchorPagerConfiguration: Sendable, Equatable {
         header: AnchorPagerHeaderConfiguration = .default,
         bar: AnchorPagerBarConfiguration = .default,
         paging: AnchorPagerPagingConfiguration = .default,
-        topOverscrollHandlingMode: AnchorPagerTopOverscrollHandlingMode = .none
+        topOverscrollHandlingMode: AnchorPagerTopOverscrollHandlingMode = .container
     ) {
         self.header = header
         self.bar = bar
@@ -133,6 +133,9 @@ public enum AnchorPagerTopOverscrollHandlingMode: Sendable, Equatable {
     /// 由容器滚动视图处理顶部 overscroll。
     case container
 
-    /// 由当前 child 滚动视图处理顶部 overscroll。
+    /// 由当前真实 child 滚动视图按自身原生配置处理顶部 overscroll。
+    ///
+    /// AnchorPager 不修改 child 的 `bounces` 或 `alwaysBounceVertical`；
+    /// nil scroll target 时该 owner 不可用，也不会回退到 container。
     case child
 }

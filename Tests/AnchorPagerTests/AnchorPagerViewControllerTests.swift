@@ -2240,7 +2240,37 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         XCTAssertEqual(configuration.header.heightMode, .automatic(min: 0, max: nil))
         XCTAssertEqual(configuration.header.topBehavior, .insideSafeArea)
         XCTAssertNil(configuration.bar.height)
-        XCTAssertEqual(configuration.topOverscrollHandlingMode, .none)
+        XCTAssertEqual(configuration.topOverscrollHandlingMode, .container)
+    }
+
+    @MainActor
+    func testRuntimeTopModeChangeCancelsContainerPresentationAndKeepsChildConfiguration() {
+        var configuration = AnchorPagerConfiguration.default
+        configuration.header.heightMode = .fixed(max: 100, min: 0)
+        let child = ScrollChildViewController()
+        child.loadViewIfNeeded()
+        child.scrollView.bounces = false
+        child.scrollView.alwaysBounceVertical = true
+        let pager = AnchorPagerViewController(configuration: configuration)
+        pager.dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [child],
+            headerContent: .view(FixedFittingView(height: 100))
+        )
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = pager
+        window.makeKeyAndVisible()
+        pager.reloadData()
+        window.layoutIfNeeded()
+        pager.verticalScrollView.contentOffset.y = -20
+        pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
+
+        pager.configuration.topOverscrollHandlingMode = .child
+        window.layoutIfNeeded()
+
+        XCTAssertEqual(pager.verticalScrollView.contentOffset.y, 0, accuracy: 0.5)
+        XCTAssertFalse(child.scrollView.bounces)
+        XCTAssertTrue(child.scrollView.alwaysBounceVertical)
     }
 
     @MainActor
