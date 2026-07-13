@@ -76,14 +76,7 @@ final class AnchorPagerScrollCoordinator {
 
     func containerDidScroll() {
         guard !isInvalidated else { return }
-        guard !isApplyingGuardedOffsets else {
-            AnchorPagerLogger.log(
-                .debug,
-                category: .scroll,
-                event: "scroll.offset.guard.skip"
-            )
-            return
-        }
+        guard !isApplyingGuardedOffsets else { return }
         if handleObservedBoundaryIfNeeded() {
             return
         }
@@ -201,14 +194,7 @@ private extension AnchorPagerScrollCoordinator {
     }
 
     func apply(_ position: AnchorPagerScrollPositionResolver.Position) {
-        guard !isApplyingGuardedOffsets else {
-            AnchorPagerLogger.log(
-                .debug,
-                category: .scroll,
-                event: "scroll.offset.guard.skip"
-            )
-            return
-        }
+        guard !isApplyingGuardedOffsets else { return }
 
         let previous = currentStablePosition()
         isApplyingGuardedOffsets = true
@@ -370,14 +356,7 @@ private extension AnchorPagerScrollCoordinator {
             )
             return
         }
-        guard !isApplyingGuardedOffsets else {
-            AnchorPagerLogger.log(
-                .debug,
-                category: .scroll,
-                event: "scroll.offset.guard.skip"
-            )
-            return
-        }
+        guard !isApplyingGuardedOffsets else { return }
         if handleObservedBoundaryIfNeeded() {
             return
         }
