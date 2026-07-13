@@ -7,6 +7,12 @@ final class AnchorPagerScrollCoordinator {
         case child
     }
 
+    private enum ActiveBoundaryEnforcementResult {
+        case inactive
+        case active
+        case finished(AnchorPagerOverscrollCoordinator.ActiveOwner)
+    }
+
     private let containerScrollView: AnchorPagerContainerScrollView
     private let overscrollCoordinator: AnchorPagerOverscrollCoordinator
     private var childBinding: AnchorPagerChildScrollBinding?
@@ -119,9 +125,9 @@ final class AnchorPagerScrollCoordinator {
             }
             let maximumStableTotal = collapsibleDistance + childMaximumDistance
             if desiredTotal < -boundaryEpsilon {
-                beginBoundary(.top)
+                beginBoundary(.top, resolverInput: input)
             } else if desiredTotal > maximumStableTotal + boundaryEpsilon {
-                beginBoundary(.bottom)
+                beginBoundary(.bottom, resolverInput: input)
             } else if overscrollCoordinator.activeOwner == nil {
                 overscrollCoordinator.reachedStableRange()
                 apply(AnchorPagerScrollPositionResolver.resolve(input))
@@ -131,7 +137,10 @@ final class AnchorPagerScrollCoordinator {
                     overscrollCoordinator.reachedStableRange()
                     apply(AnchorPagerScrollPositionResolver.resolve(input))
                 case .presented:
-                    enforceAndObserveActiveBoundary()
+                    handleActiveBoundaryEnforcementResult(
+                        enforceAndObserveActiveBoundary(),
+                        resolverInput: input
+                    )
                 }
             }
         case .ended, .cancelled, .failed:
@@ -248,23 +257,27 @@ private extension AnchorPagerScrollCoordinator {
 
     func settleStableOffsets() {
         if overscrollCoordinator.activeOwner != nil {
-            enforceAndObserveActiveBoundary()
+            handleActiveBoundaryEnforcementResult(
+                enforceAndObserveActiveBoundary(),
+                resolverInput: nil
+            )
             return
         }
+        apply(normalizedStablePosition())
+    }
+
+    func normalizedStablePosition() -> AnchorPagerScrollPositionResolver.Position {
         let current = currentStablePosition()
-        let normalized: AnchorPagerScrollPositionResolver.Position
         if current.childDistance > epsilon {
-            normalized = .init(
+            return .init(
                 containerOffset: collapsibleDistance,
                 childDistance: current.childDistance
             )
-        } else {
-            normalized = .init(
-                containerOffset: current.containerOffset,
-                childDistance: 0
-            )
         }
-        apply(normalized)
+        return .init(
+            containerOffset: current.containerOffset,
+            childDistance: 0
+        )
     }
 
     func pinChildToTop() {
@@ -276,7 +289,10 @@ private extension AnchorPagerScrollCoordinator {
         transitionOwnerIfNeeded(to: .container)
     }
 
-    func beginBoundary(_ boundary: AnchorPagerOverscrollCoordinator.Boundary) {
+    func beginBoundary(
+        _ boundary: AnchorPagerOverscrollCoordinator.Boundary,
+        resolverInput: AnchorPagerScrollPositionResolver.Input? = nil
+    ) {
         let route = overscrollCoordinator.begin(
             boundary: boundary,
             hasChild: committedChildScrollView != nil
@@ -293,12 +309,15 @@ private extension AnchorPagerScrollCoordinator {
                 ))
             }
         case .passThrough:
-            enforceAndObserveActiveBoundary()
+            handleActiveBoundaryEnforcementResult(
+                enforceAndObserveActiveBoundary(),
+                resolverInput: resolverInput
+            )
         }
     }
 
-    func enforceAndObserveActiveBoundary() {
-        guard let active = overscrollCoordinator.activeOwner else { return }
+    private func enforceAndObserveActiveBoundary() -> ActiveBoundaryEnforcementResult {
+        guard let active = overscrollCoordinator.activeOwner else { return .inactive }
         switch (active.boundary, active.owner) {
         case (.top, .container):
             pinChildToTop()
@@ -313,9 +332,46 @@ private extension AnchorPagerScrollCoordinator {
         let result = overscrollCoordinator.observeActiveOverflow(
             activeOverflowDistance(active)
         )
-        if result == .finished {
-            settleStableOffsets()
+        switch result {
+        case .inactive:
+            return .inactive
+        case .active:
+            return .active
+        case .finished:
+            return .finished(active)
         }
+    }
+
+    private func handleActiveBoundaryEnforcementResult(
+        _ result: ActiveBoundaryEnforcementResult,
+        resolverInput: AnchorPagerScrollPositionResolver.Input?
+    ) {
+        guard case let .finished(finishedOwner) = result else { return }
+        overscrollCoordinator.reachedStableRange()
+        if let resolverInput {
+            apply(AnchorPagerScrollPositionResolver.resolve(resolverInput))
+            return
+        }
+        applyStablePositionAfterObservedBoundaryFinish(finishedOwner)
+    }
+
+    func applyStablePositionAfterObservedBoundaryFinish(
+        _ finishedOwner: AnchorPagerOverscrollCoordinator.ActiveOwner
+    ) {
+        guard finishedOwner.boundary == .top,
+              finishedOwner.owner == .child,
+              let child = committedChildScrollView else {
+            apply(normalizedStablePosition())
+            return
+        }
+        let containerBoundary: CGFloat = 0
+        let rawChildDistance = child.contentOffset.y - childTopOffset
+        apply(AnchorPagerScrollPositionResolver.resolveCanonicalTotal(
+            containerBoundary + rawChildDistance,
+            containerCollapsedOffset: collapsibleDistance,
+            childMaximumDistance: childMaximumDistance,
+            fallback: currentStablePosition()
+        ))
     }
 
     func activeOverflowDistance(
@@ -351,22 +407,29 @@ private extension AnchorPagerScrollCoordinator {
         if overscrollCoordinator.activeOwner == nil {
             if containerScrollView.contentOffset.y < -boundaryEpsilon {
                 beginBoundary(.top)
+                return true
             } else if (childDistance ?? 0) < -boundaryEpsilon,
                       containerScrollView.contentOffset.y <= boundaryEpsilon {
                 beginBoundary(.top)
+                return true
             } else if let childDistance,
                       containerScrollView.contentOffset.y
                         >= collapsibleDistance - boundaryEpsilon,
                       childDistance > childMaximumDistance + boundaryEpsilon {
                 beginBoundary(.bottom)
+                return true
             } else if committedChildScrollView == nil,
                       containerScrollView.contentOffset.y
                         > collapsibleDistance + boundaryEpsilon {
                 beginBoundary(.bottom)
+                return true
             }
         }
         guard overscrollCoordinator.activeOwner != nil else { return false }
-        enforceAndObserveActiveBoundary()
+        handleActiveBoundaryEnforcementResult(
+            enforceAndObserveActiveBoundary(),
+            resolverInput: nil
+        )
         return true
     }
 

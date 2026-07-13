@@ -2,6 +2,27 @@ import XCTest
 @testable import AnchorPager
 
 final class AnchorPagerScrollPositionResolverTests: XCTestCase {
+    func testCanonicalTotalDistributesToContainerBeforeChild() {
+        XCTAssertEqual(
+            AnchorPagerScrollPositionResolver.resolveCanonicalTotal(
+                6,
+                containerCollapsedOffset: 100,
+                childMaximumDistance: 500,
+                fallback: .init(containerOffset: 0, childDistance: 6)
+            ),
+            .init(containerOffset: 6, childDistance: 0)
+        )
+        XCTAssertEqual(
+            AnchorPagerScrollPositionResolver.resolveCanonicalTotal(
+                106,
+                containerCollapsedOffset: 100,
+                childMaximumDistance: 500,
+                fallback: .init(containerOffset: 100, childDistance: 6)
+            ),
+            .init(containerOffset: 100, childDistance: 6)
+        )
+    }
+
     func testUnclampedDesiredTotalPreservesTopAndBottomOverflow() {
         let top = AnchorPagerScrollPositionResolver.Input(
             gestureStartTotal: 0,

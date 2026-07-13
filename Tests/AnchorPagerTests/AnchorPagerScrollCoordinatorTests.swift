@@ -339,6 +339,179 @@ final class AnchorPagerScrollCoordinatorTests: XCTestCase {
         XCTAssertFalse(fixture.child.bounces)
     }
 
+    func testPresentedChildTopOwnerObserverFinishPreservesRawTotalBeforePanCallback() {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        fixture.coordinator.updateTopOverscrollHandlingMode(.child)
+        fixture.child.bounces = true
+        fixture.child.alwaysBounceVertical = true
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+
+        fixture.coordinator.handlePan(state: .began, translationY: 0)
+        fixture.coordinator.handlePan(state: .changed, translationY: 24)
+        fixture.child.contentOffset.y = -fixture.child.contentInset.top - 12
+        XCTAssertEqual(
+            fixture.coordinator.activeBoundaryForTesting,
+            .init(boundary: .top, owner: .child)
+        )
+
+        fixture.child.contentOffset.y = -fixture.child.contentInset.top + 6
+
+        XCTAssertNil(fixture.coordinator.activeBoundaryForTesting)
+        XCTAssertEqual(fixture.container.contentOffset.y, 6, accuracy: 0.001)
+        XCTAssertEqual(
+            fixture.child.contentOffset.y,
+            -fixture.child.contentInset.top,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            fixture.container.contentOffset.y
+                + fixture.child.contentOffset.y
+                + fixture.child.contentInset.top,
+            6,
+            accuracy: 0.001
+        )
+
+        fixture.coordinator.handlePan(state: .changed, translationY: -6)
+
+        XCTAssertEqual(fixture.container.contentOffset.y, 6, accuracy: 0.001)
+        XCTAssertEqual(
+            fixture.child.contentOffset.y,
+            -fixture.child.contentInset.top,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            events.filter { $0.event == "overscroll.owner.finish" }.count,
+            1
+        )
+        XCTAssertTrue(fixture.child.bounces)
+        XCTAssertTrue(fixture.child.alwaysBounceVertical)
+    }
+
+    func testPresentedChildTopOwnerPanFirstThenObserverFinishPreservesRawTotal() {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        fixture.coordinator.updateTopOverscrollHandlingMode(.child)
+        fixture.child.bounces = true
+        fixture.child.alwaysBounceVertical = true
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+
+        fixture.coordinator.handlePan(state: .began, translationY: 0)
+        fixture.coordinator.handlePan(state: .changed, translationY: 24)
+        fixture.child.contentOffset.y = -fixture.child.contentInset.top - 12
+
+        fixture.coordinator.handlePan(state: .changed, translationY: -6)
+        XCTAssertEqual(
+            fixture.coordinator.activeBoundaryForTesting,
+            .init(boundary: .top, owner: .child)
+        )
+        fixture.child.contentOffset.y = -fixture.child.contentInset.top + 6
+
+        XCTAssertNil(fixture.coordinator.activeBoundaryForTesting)
+        XCTAssertEqual(fixture.container.contentOffset.y, 6, accuracy: 0.001)
+        XCTAssertEqual(
+            fixture.child.contentOffset.y,
+            -fixture.child.contentInset.top,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            fixture.container.contentOffset.y
+                + fixture.child.contentOffset.y
+                + fixture.child.contentInset.top,
+            6,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            events.filter { $0.event == "overscroll.owner.finish" }.count,
+            1
+        )
+        XCTAssertTrue(fixture.child.bounces)
+        XCTAssertTrue(fixture.child.alwaysBounceVertical)
+    }
+
+    func testPanAppliesCurrentResolverInputImmediatelyWhenPresentedOwnerFinishes() {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        fixture.child.bounces = false
+        fixture.child.alwaysBounceVertical = true
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+
+        fixture.coordinator.handlePan(state: .began, translationY: 0)
+        fixture.coordinator.handlePan(state: .changed, translationY: 24)
+        fixture.container.contentOffset.y = -12
+        fixture.coordinator.containerDidScroll()
+        XCTAssertEqual(
+            fixture.coordinator.activeBoundaryForTesting,
+            .init(boundary: .top, owner: .container)
+        )
+
+        fixture.container.contentOffset.y = 6
+        fixture.coordinator.handlePan(state: .changed, translationY: -6)
+
+        XCTAssertNil(fixture.coordinator.activeBoundaryForTesting)
+        XCTAssertEqual(fixture.container.contentOffset.y, 6, accuracy: 0.001)
+        XCTAssertEqual(
+            fixture.child.contentOffset.y,
+            -fixture.child.contentInset.top,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            events.filter { $0.event == "overscroll.owner.finish" }.count,
+            1
+        )
+        XCTAssertFalse(fixture.child.bounces)
+        XCTAssertTrue(fixture.child.alwaysBounceVertical)
+    }
+
+    func testObservedContainerTopFinishKeepsExpandedStablePosition() {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        fixture.container.contentOffset.y = -12
+        fixture.coordinator.containerDidScroll()
+
+        fixture.container.contentOffset.y = 0
+        fixture.coordinator.containerDidScroll()
+
+        XCTAssertNil(fixture.coordinator.activeBoundaryForTesting)
+        XCTAssertEqual(fixture.container.contentOffset.y, 0, accuracy: 0.001)
+        XCTAssertEqual(
+            fixture.child.contentOffset.y,
+            -fixture.child.contentInset.top,
+            accuracy: 0.001
+        )
+    }
+
+    func testObservedChildBottomFinishKeepsCollapsedMaximumStablePosition() {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        fixture.container.contentOffset.y = 100
+        fixture.child.contentOffset.y = -fixture.child.contentInset.top + 524
+
+        fixture.child.contentOffset.y = -fixture.child.contentInset.top + 500
+
+        XCTAssertNil(fixture.coordinator.activeBoundaryForTesting)
+        XCTAssertEqual(fixture.container.contentOffset.y, 100, accuracy: 0.001)
+        XCTAssertEqual(
+            fixture.child.contentOffset.y + fixture.child.contentInset.top,
+            500,
+            accuracy: 0.001
+        )
+    }
+
+    func testObservedPlainContainerBottomFinishKeepsCollapsedStablePosition() {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        fixture.coordinator.bindCommittedChild(nil)
+        fixture.container.contentOffset.y = 124
+        fixture.coordinator.containerDidScroll()
+
+        fixture.container.contentOffset.y = 100
+        fixture.coordinator.containerDidScroll()
+
+        XCTAssertNil(fixture.coordinator.activeBoundaryForTesting)
+        XCTAssertEqual(fixture.container.contentOffset.y, 100, accuracy: 0.001)
+    }
+
     func testChangedGeometryCancelsActiveBoundaryAndSettlesStableOffsets() {
         let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
         fixture.container.contentOffset.y = -24

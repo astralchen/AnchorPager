@@ -38,10 +38,31 @@ struct AnchorPagerScrollPositionResolver {
             return input.fallback
         }
 
-        let collapsedOffset = max(0, input.containerCollapsedOffset)
-        let maximumChildDistance = max(0, input.childMaximumDistance)
+        return resolveCanonicalTotal(
+            rawDesiredTotal,
+            containerCollapsedOffset: input.containerCollapsedOffset,
+            childMaximumDistance: input.childMaximumDistance,
+            fallback: input.fallback
+        )
+    }
+
+    static func resolveCanonicalTotal(
+        _ canonicalTotal: CGFloat,
+        containerCollapsedOffset: CGFloat,
+        childMaximumDistance: CGFloat,
+        fallback: Position
+    ) -> Position {
+        let values = [
+            canonicalTotal,
+            containerCollapsedOffset,
+            childMaximumDistance
+        ]
+        guard values.allSatisfy(\.isFinite) else { return fallback }
+
+        let collapsedOffset = max(0, containerCollapsedOffset)
+        let maximumChildDistance = max(0, childMaximumDistance)
         let desiredTotal = min(
-            max(0, rawDesiredTotal),
+            max(0, canonicalTotal),
             collapsedOffset + maximumChildDistance
         )
 
