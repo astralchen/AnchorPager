@@ -80,7 +80,7 @@ childDistanceFromTop == 0
 
 AnchorPager 不向无滚动页写入 `contentInset`、`scrollIndicatorInsets`、`contentOffset`、`contentSize`、`additionalSafeAreaInsets`、`bounces` 或 `alwaysBounceVertical`。
 
-页面根 view 的 frame 完全由 Pageboy content viewport 决定。固定 paging viewport 的 bottom 仍以 AnchorPager 本地 bounds 底边为几何终点，bottom obstruction 只用于真实 scroll target 的 managed inset，不得缩短无滚动 page frame。示例工程在 `UITabBarController` 下还要验证 page root 转换到 window 后的 `maxY` 等于 window bounds `maxY`。
+页面根 view 的 frame 完全由 Pageboy content viewport 决定。固定 paging viewport 的 bottom 仍以 AnchorPager 本地 bounds 底边为几何终点，bottom obstruction 只用于真实 scroll target 的 managed inset，不得缩短无滚动 page frame。Header 展开时，未裁剪的 page root 可能延伸到 AnchorPager 或 window 底部之外，因此 UIKit 几何验收应验证转换后的 `maxY` 不小于对应 bounds 的 `maxY`；示例工程通过 XCUITest 读取的是裁剪后的可见 frame，仍应与物理屏幕底部重合。
 
 ## 纵向手势
 
