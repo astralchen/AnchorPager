@@ -389,7 +389,7 @@
 
 ## v0.5：纵向嵌套滚动协调版
 
-设计与计划门禁已满足：设计见 `docs/superpowers/specs/2026-07-13-v0-5-scroll-coordination-design.md`，实施计划见 `docs/superpowers/plans/2026-07-13-v0-5-scroll-coordination.md`。Task 1–6 与无滚动页 direct containment 修复已完成；修订设计见 `docs/superpowers/specs/2026-07-13-plain-page-direct-containment-design.md`。无滚动 original page 由 Pageboy 直接 containment，committed page 非 nil、scroll target 为 nil，不应用 managed inset、snapshot 或 child bounce。Task 7 已重新开放但尚未完成，完整验收和最终复审前不得把 v0.5 标为 Ready。
+设计与计划门禁已满足：设计见 `docs/superpowers/specs/2026-07-13-v0-5-scroll-coordination-design.md`，实施计划见 `docs/superpowers/plans/2026-07-13-v0-5-scroll-coordination.md`。Task 1–6 与无滚动页 direct containment 修复已完成；修订设计见 `docs/superpowers/specs/2026-07-13-plain-page-direct-containment-design.md`。无滚动 original page 由 Pageboy 直接 containment，committed page 非 nil、scroll target 为 nil，不应用 managed inset、snapshot 或 child bounce。Task 7 因可见边界 bounce 与业务 child bounce 配置保留修订而暂停，完整验收和最终复审前不得把 v0.5 标为 Ready。
 
 - [x] 删除无滚动页 synthetic scroll wrapper 及其额外 containment
 - [x] 无滚动 original page 直接交给 Pageboy，Store 保存 page 非 nil、scroll target 为 nil
@@ -428,14 +428,15 @@
 - [ ] 测试 contentSize 变化不震荡
 - [x] Example UI test 使用真实连续 drag 验证 container-to-child 与 child-to-container handoff
 - [x] Example UI test 覆盖短内容、plain direct page、页面切换和完全展开后仅 container bounce
-- [x] 真实 pan 验证 child delegate 不观察到顶部负 offset，binding 在 handoff/rebind/invalidate 时正确租用并恢复 `bounces`
+- [x] 历史真实 pan 曾通过临时 `bounces` 租约阻止 child delegate 顶部负 offset；该策略已被边界 owner 修订设计取代，最终实现必须删除租约并允许业务配置保持不变
 - [ ] UIKit 集成测试验证 child scroll delegate 与 child pan delegate 在绑定/解绑后保持原实例
+- [ ] UIKit 集成测试验证绑定、handoff、模式切换、切页、reload、empty 和释放全过程不修改业务 child 的 `bounces` 与 `alwaysBounceVertical`
 
 ## v0.6：顶部 Overscroll 事件处理版
 
 依赖门禁：OverscrollCoordinator 只消费 v0.5 已绑定的 committed current/empty owner；pending provider page 不能成为 overscroll owner。
 
-设计门禁已确认：`docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md`。必须先完成 v0.5 stable range/native boundary pass-through 与无滚动页双边界可见 bounce 修复，再正式启用顶部 mode；当前仍未实施。
+设计与计划门禁已确认：`docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md`、`docs/superpowers/plans/2026-07-13-boundary-bounce-ownership.md`。必须先完成 v0.5 stable range/native boundary pass-through 与无滚动页双边界可见 bounce 修复，再正式启用顶部 mode；当前仍未实施。
 
 - [ ] 创建 `Sources/AnchorPager/Overscroll/AnchorPagerOverscrollCoordinator.swift`
 - [ ] 实现 `.none`
@@ -446,7 +447,7 @@
 - [ ] child 模式只由当前真实 child scroll view 处理继续下拉；nil scroll target 不创建替代 owner
 - [ ] 默认顶部模式调整为 container，并支持运行时同步切换
 - [ ] 无滚动页 container bottom bounce 与真实 scroll page child bottom bounce 不受顶部 mode 影响
-- [ ] child 顶部 owner 临时启用并在全部 terminal/cancel 路径恢复业务 bounces 原值
+- [ ] child 顶部及真实 child bottom owner 尊重业务 `bounces`/`alwaysBounceVertical`，框架不保存、不修改、不恢复这两项属性
 - [ ] 同一次下拉手势只允许一个 top overscroll owner
 - [ ] 实现 owner 进入阈值
 - [ ] 实现 owner 退出阈值

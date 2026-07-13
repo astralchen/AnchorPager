@@ -295,7 +295,8 @@ extension UIViewController {
 8. Header 展开优先级高于 top overscroll handling。
 9. 横向分页、Header layout reload、屏幕旋转或 child 切换期间，active top overscroll handling 必须有明确暂停、取消或恢复策略。
 10. 底部 bounce 不受顶部 mode 影响：真实 scroll page 由 child 处理，无滚动页由 verticalScrollView 处理。
-11. `.child` 模式或 child bottom owner 激活时可临时启用 child `bounces`，短内容场景可同时启用 `alwaysBounceVertical`；两项属性都必须在结束、取消、切页、reload 和释放时同步恢复业务原值。
+11. AnchorPager 不得修改业务 child 的 `bounces` 或 `alwaysBounceVertical`；`.child` 顶部和真实 child bottom 只允许业务 scroll view 按自身配置处理原生回弹，短内容是否回弹由业务方配置 `alwaysBounceVertical`。
+12. `.container` 或 `.none` 的顶部非 owner 约束通过 guarded stable-boundary write 完成，不得为了屏蔽瞬时越界而临时关闭业务 child bounce。
 
 ## 12. 状态栏点击顶滚要求
 

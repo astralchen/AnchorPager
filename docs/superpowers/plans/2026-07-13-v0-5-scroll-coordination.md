@@ -1433,6 +1433,8 @@ Task 1–6 完成后的真实视图层级检查发现，历史 synthetic scroll 
 
 后续真实运行发现 `alwaysBounceVertical` 虽已开启，但 active pan 的 canonical clamp 会抵消肉眼可见 bounce；旧 UI 探针只证明出现过瞬时负 offset。Task 7 因此再次暂停。修订设计见 `docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md`：先完成 stable/native boundary 分离与无滚动页双边界 presentation，再进入本 Task 7 最终复审；不得沿用旧探针提前标记 v0.5 Ready。
 
+2026-07-13 JXPagingView 源码复核后再次修订：本计划 Task 6 记录的 child `bounces` 临时租约属于已完成但被取代的历史实现，不再是最终契约。后续实施必须删除该租约，不保存、不修改、不恢复业务 child 的 `bounces`/`alwaysBounceVertical`；`.container`/`.none` 通过 guarded stable-boundary write 约束非 owner，`.child` 与真实 child bottom 按业务 scroll view 自身配置执行原生回弹。新的实施步骤以同日边界 bounce 专项计划为准，本历史计划不回写已完成 RED/GREEN 记录。
+
 ---
 
 ### Task 7: 文档、状态、完整验收与最终复审
