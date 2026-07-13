@@ -4,11 +4,11 @@
 
 **日期：** 2026-07-13
 
-**状态：** 已实施并完成专项验收；v0.5 Task 7 已重新开放但尚未完成
+**状态：** 已实施并完成专项验收；边界 bounce 集成与 Task 7 实现者验收通过；待主代理独立复审
 
 ## 背景
 
-当前实现把没有 `UIScrollView` 的业务页面包装进 `AnchorPagerPageScrollHostViewController`，由内部 synthetic `UIScrollView` 充当统一 scroll target。该设计最初用于复用 managed inset、offset snapshot、纵向手势和 fallback containment，但真实调试证明它把“页面显示几何”和“滚动内容几何”错误地绑定在一起：fallback child 的最小高度减去 managed top/bottom 后，业务根 view 底边停在安全区或 Tab Bar 上方；`alwaysBounceVertical` 还引入了无真实内容却可滚动或回弹的路径。
+修复前实现曾把没有 `UIScrollView` 的业务页面包装进 `AnchorPagerPageScrollHostViewController`，由内部 synthetic `UIScrollView` 充当统一 scroll target。该设计最初用于复用 managed inset、offset snapshot、纵向手势和 fallback containment，但真实调试证明它把“页面显示几何”和“滚动内容几何”错误地绑定在一起：fallback child 的最小高度减去 managed top/bottom 后，业务根 view 底边停在安全区或 Tab Bar 上方；`alwaysBounceVertical` 还引入了无真实内容却可滚动或回弹的路径。
 
 用户已明确：业务页面内部没有 `UIScrollView` 时，不需要 AnchorPager 为它设置 content inset、indicator inset、offset snapshot 或 child bounce。页面根 view/背景应按 Pageboy 提供的分页 viewport 完整铺开；如果宿主把 AnchorPager 布局到物理屏幕底部，页面也必须延伸到物理屏幕底部。业务内容是否避开 safe area 由 UIKit 和业务页面自己决定。
 
@@ -114,7 +114,7 @@ UIKit 的祖先 `verticalScrollView.panGestureRecognizer` 可以从普通 descen
 ### 手势与 UI
 
 1. 在无滚动页中央真实上推，Header 折叠且 page root 底边不变。
-2. Header 折叠后继续上推，container 和 page 均不产生额外纵向距离。
+2. Header 折叠后继续上推，page 不产生 child distance；container 可按边界 owner 规格呈现底部原生回弹。
 3. 真实下拉只展开 Header或触发 container bounce，page 无 child bounce。
 4. Example 探针不得为 plain 页写死 `distance=0` 来替代内部事实；改为报告 `hasScrollTarget=0` 和 plain root/window 几何。
 5. 真实列表页、短页、横向分页、reload 和 appearance lifecycle 全量回归通过。
@@ -139,3 +139,7 @@ UIKit 的祖先 `verticalScrollView.panGestureRecognizer` 可以从普通 descen
 4. 真实 pan、完整 framework tests、Example tests、generic simulator build 和 `git diff --check` 全部通过。
 5. public API 不变化，业务 child scroll delegate/pan delegate 不被设置。
 6. 文档不再把无滚动页描述为 fallback scroll owner。
+
+## 边界集成复验（2026-07-13）
+
+最终边界实现未改变 direct containment、committed page 非 nil / scroll target nil、无 managed inset/snapshot/child observation 和物理底边契约。plain page 顶部 `.container` 与底部边界均由外层 container 呈现；`.child` 顶部不可用且不回退。新鲜 Example 全量 36 项中包含 plain root 物理底边、container-only pan、顶部与底部实际 presentation distance 用例，全部 0 fail、0 skip；主代理独立复审仍待执行。

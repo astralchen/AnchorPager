@@ -8,6 +8,8 @@
 
 **技术栈：** Swift 6.2、Swift 6 language mode、UIKit、iOS 14+、Swift Package Manager、Tabman 4.0.1、Pageboy 5.0.2、XCTest/XCUITest、Xcode 26.3。
 
+**当前状态：** Tasks 1–6 已实现；Task 7 Step 1–4 的实现者文档、静态门禁、完整验收与自审已完成；Step 5 主代理独立复审和 Step 6 最终状态提交仍待完成，v0.5/v0.6 不标记 Ready。
+
 ## Global Constraints
 
 - Package name、Library product 和 Module name 均为 `AnchorPager`。
@@ -57,7 +59,7 @@
 - Consumes: 现有 `AnchorPagerChildScrollBinding` KVO/pan target 与 `AnchorPagerScrollCoordinator.bindCommittedChild(_:)`。
 - Produces: 只读 binding；删除 `setAllowsNativeBounce(_:)`，业务 `bounces`/`alwaysBounceVertical` 全生命周期保持原值。
 
-- [ ] **Step 1：写业务 bounce 配置保持的失败测试**
+- [x] **Step 1：写业务 bounce 配置保持的失败测试**
 
 在 `AnchorPagerChildScrollBindingTests` 新增：
 
@@ -118,7 +120,7 @@ func testBindingPanAndInvalidateKeepBusinessBounceConfiguration() {
 }
 ```
 
-- [ ] **Step 2：运行 RED**
+- [x] **Step 2：运行 RED**
 
 ```bash
 xcodebuild -scheme AnchorPager \
@@ -129,7 +131,7 @@ xcodebuild -scheme AnchorPager \
 
 Expected: `testBindingSourceDoesNotStoreOrAssignBounceConfiguration` 失败，源码仍包含 `originalBounces` 和 `.bounces =`。
 
-- [ ] **Step 3：删除租约实现**
+- [x] **Step 3：删除租约实现**
 
 `AnchorPagerChildScrollBinding` 删除：
 
@@ -174,7 +176,7 @@ case .ended, .cancelled, .failed:
     settleStableOffsets()
 ```
 
-- [ ] **Step 4：运行 GREEN 与静态门禁**
+- [x] **Step 4：运行 GREEN 与静态门禁**
 
 ```bash
 xcodebuild -scheme AnchorPager \
@@ -187,7 +189,7 @@ rg -n 'originalBounces|setAllowsNativeBounce|\.bounces\s*=|\.alwaysBounceVertica
 
 Expected: 聚焦测试全部通过；`rg` 在 Binding/ScrollCoordinator 中无匹配。
 
-- [ ] **Step 5：自审并提交**
+- [x] **Step 5：自审并提交**
 
 确认 observation/pan target cleanup、delegate identity、MainActor 和资源日志不变；随后：
 
@@ -212,7 +214,7 @@ git commit -m "移除业务滚动回弹租约"
 - Consumes: `AnchorPagerTopOverscrollHandlingMode`、当前页是否存在 committed child scroll target。
 - Produces: `Boundary`、`Owner`、`ActiveOwner`、`Route`、`begin(boundary:hasChild:)`、`observeActiveOverflow(_:)`、`endInteraction()`、`updateTopMode(_:)`、`cancel()`。
 
-- [ ] **Step 1：写 owner 矩阵与生命周期 RED 测试**
+- [x] **Step 1：写 owner 矩阵与生命周期 RED 测试**
 
 新增测试文件，核心测试固定为：
 
@@ -286,7 +288,7 @@ final class AnchorPagerOverscrollCoordinatorTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2：运行 RED**
+- [x] **Step 2：运行 RED**
 
 ```bash
 xcodebuild -scheme AnchorPager \
@@ -296,7 +298,7 @@ xcodebuild -scheme AnchorPager \
 
 Expected: 编译失败，`AnchorPagerOverscrollCoordinator` 不存在。
 
-- [ ] **Step 3：实现纯策略状态机**
+- [x] **Step 3：实现纯策略状态机**
 
 新增文件，使用以下完整接口和状态规则：
 
@@ -450,7 +452,7 @@ final class AnchorPagerOverscrollCoordinator {
 }
 ```
 
-- [ ] **Step 4：运行 GREEN 与日志回归**
+- [x] **Step 4：运行 GREEN 与日志回归**
 
 ```bash
 xcodebuild -scheme AnchorPager \
@@ -461,7 +463,7 @@ xcodebuild -scheme AnchorPager \
 
 Expected: 全部通过；重复 begin 不产生逐帧重复 boundary/unavailable 日志。
 
-- [ ] **Step 5：自审并提交**
+- [x] **Step 5：自审并提交**
 
 确认新 coordinator 不 import UIKit、不持有 scroll view/page/provider、不写 offset。随后：
 
@@ -486,7 +488,7 @@ git commit -m "建立纵向边界所有权策略"
 - Consumes: Task 2 的 `AnchorPagerOverscrollCoordinator`。
 - Produces: `AnchorPagerScrollPositionResolver.unclampedDesiredTotal(_:) -> CGFloat?`；ScrollCoordinator 的 top/bottom owner pass-through、非 owner guarded clamp、`cancelBoundaryHandling()`。
 
-- [ ] **Step 1：写未夹紧 total 和四类边界 RED 测试**
+- [x] **Step 1：写未夹紧 total 和四类边界 RED 测试**
 
 Resolver 新增：
 
@@ -566,7 +568,7 @@ func testActiveNativeBoundaryIsNotClampedByGeometryRefresh() {
 }
 ```
 
-- [ ] **Step 2：运行 RED**
+- [x] **Step 2：运行 RED**
 
 ```bash
 xcodebuild -scheme AnchorPager \
@@ -577,7 +579,7 @@ xcodebuild -scheme AnchorPager \
 
 Expected: resolver API 缺失；plain bottom 和 child bottom 被现有 settle clamp。
 
-- [ ] **Step 3：增加未夹紧 canonical total**
+- [x] **Step 3：增加未夹紧 canonical total**
 
 在 resolver 增加：
 
@@ -608,7 +610,7 @@ let desiredTotal = min(
 )
 ```
 
-- [ ] **Step 4：接入边界策略但暂时固定顶部 `.container`**
+- [x] **Step 4：接入边界策略但暂时固定顶部 `.container`**
 
 ScrollCoordinator 新增 property，并在现有 initializer 中固定 v0.5 临时 `.container`：
 
@@ -809,7 +811,7 @@ func updateGeometry(collapsibleDistance: CGFloat) {
 }
 ```
 
-- [ ] **Step 5：运行 GREEN、组合回归与属性静态扫描**
+- [x] **Step 5：运行 GREEN、组合回归与属性静态扫描**
 
 ```bash
 xcodebuild -scheme AnchorPager \
@@ -824,7 +826,7 @@ rg -n 'scrollView\.delegate\s*=|panGestureRecognizer\.delegate\s*=|\.bounces\s*=
 
 Expected: 聚焦测试全部通过；扫描不命中业务 child 写入路径。
 
-- [ ] **Step 6：自审并提交 v0.5 native boundary 核心**
+- [x] **Step 6：自审并提交 v0.5 native boundary 核心**
 
 重点确认 active owner 时 geometry/KVO/delegate 不 clamp、zero range 按拖动方向只进入一个边界、ScrollCoordinator 仍是唯一 writer。随后：
 
@@ -853,7 +855,7 @@ git commit -m "分离稳定滚动与原生边界回弹"
 - Consumes: Task 3 默认 container top、plain bottom native pass-through。
 - Produces: `containerOverscrollTranslationY(for:)` 对称 presentation；Example current/max 可见距离探针；默认 container 的真实 drag 证据。
 
-- [ ] **Step 1：写 UIKit 对称几何 RED 测试**
+- [x] **Step 1：写 UIKit 对称几何 RED 测试**
 
 在 ViewController tests 新增：
 
@@ -897,7 +899,7 @@ func testPlainBottomOverflowTranslatesViewportUpWithoutChangingCanonicalRange() 
 
 保留并扩展已有顶部负 offset 测试，断言回弹恢复后 transform、context 和物理底边回到 canonical 值。
 
-- [ ] **Step 2：运行 RED**
+- [x] **Step 2：运行 RED**
 
 ```bash
 xcodebuild -scheme AnchorPager \
@@ -907,7 +909,7 @@ xcodebuild -scheme AnchorPager \
 
 Expected: Header/context 没有向上平移 24 pt；当前实现只处理顶部负 offset。
 
-- [ ] **Step 3：实现对称 translation**
+- [x] **Step 3：实现对称 translation**
 
 把 `applyLayoutOutput` 改为：
 
@@ -932,7 +934,7 @@ private func containerOverscrollTranslationY(
 
 LayoutEngine input、scroll range、managed inset 和 collapse progress 不使用该 translation。
 
-- [ ] **Step 4：把 Example 探针从 boolean 改为 current/max 距离**
+- [x] **Step 4：把 Example 探针从 boolean 改为 current/max 距离**
 
 `ExampleScrollCoordinationState` 使用以下字段和序列化键：
 
@@ -1065,7 +1067,7 @@ scrollCoordinationState.maximumChildBottomOverflow = max(
 
 状态按钮增加 `touchUpInside` target，只调用 `resetPresentationMetrics()` 并刷新 accessibility value，不改变框架状态。
 
-- [ ] **Step 5：更新默认 container 真实 UI 测试**
+- [x] **Step 5：更新默认 container 真实 UI 测试**
 
 替换旧 boolean bounce 测试，新增：
 
@@ -1102,7 +1104,7 @@ func testPlainBottomPullShowsVisibleContainerPresentationAndSettles() throws {
 
 `ScrollCoordinationState` parser 同步解析全部新键。旧 `childBounce == false` 断言删除，因为该值来自业务 delegate 的瞬时 callback，不再代表可见 owner。
 
-- [ ] **Step 6：运行 v0.5 framework/Example 聚焦 GREEN**
+- [x] **Step 6：运行 v0.5 framework/Example 聚焦 GREEN**
 
 ```bash
 xcodebuild -scheme AnchorPager \
@@ -1119,7 +1121,7 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj \
 
 Expected: framework 聚焦集和两个真实 drag 均通过；探针证明 max presentation > 1 pt 且回弹后 current < 0.5 pt。
 
-- [ ] **Step 7：自审并提交 v0.5 可见 bounce 修复**
+- [x] **Step 7：自审并提交 v0.5 可见 bounce 修复**
 
 确认 plain root 仍到物理底边、presentation 不进入 contentSize/range/snapshot、UI test 不再使用瞬时 boolean。随后：
 
@@ -1150,7 +1152,7 @@ git commit -m "修复纵向边界可见回弹"
 - Consumes: Task 2/3 的 route 与 pass-through。
 - Produces: 默认 `.container`；`updateTopOverscrollHandlingMode(_:)`；configuration/reload/selection/layout/rotation 同步 cancel。
 
-- [ ] **Step 1：写 mode integration 与属性保持 RED 测试**
+- [x] **Step 1：写 mode integration 与属性保持 RED 测试**
 
 新增 coordinator 测试：
 
@@ -1246,7 +1248,7 @@ func testRuntimeTopModeChangeCancelsContainerPresentationAndKeepsChildConfigurat
 }
 ```
 
-- [ ] **Step 2：运行 RED**
+- [x] **Step 2：运行 RED**
 
 ```bash
 xcodebuild -scheme AnchorPager \
@@ -1257,7 +1259,7 @@ xcodebuild -scheme AnchorPager \
 
 Expected: update mode API 缺失；默认仍为 `.none`。
 
-- [ ] **Step 3：启用 public mode 与 coordinator 更新入口**
+- [x] **Step 3：启用 public mode 与 coordinator 更新入口**
 
 Configuration 默认参数改为：
 
@@ -1301,7 +1303,7 @@ func updateTopOverscrollHandlingMode(_ mode: AnchorPagerTopOverscrollHandlingMod
 }
 ```
 
-- [ ] **Step 4：装配 configuration 与同步取消路径**
+- [x] **Step 4：装配 configuration 与同步取消路径**
 
 ViewController `configuration.didSet` 增加：
 
@@ -1328,7 +1330,7 @@ scrollCoordinator?.cancelBoundaryHandling()
 
 固定入口为：`reloadData()` 开始、`reloadHeaderLayout` 开始、`pagingHost(willPerformReloadRequest:)` matching request、`pagingHost(willSelect:)`、`viewWillTransition(to:with:)`。selection complete/cancel 和 reload terminal 再按 committed Store 绑定，不读取 pending provider。
 
-- [ ] **Step 5：运行 mode GREEN 与完整框架测试**
+- [x] **Step 5：运行 mode GREEN 与完整框架测试**
 
 ```bash
 xcodebuild -scheme AnchorPager \
@@ -1342,7 +1344,7 @@ xcodebuild -scheme AnchorPager \
 
 Expected: 聚焦集与全部 framework tests 通过，0 failures、0 skips。
 
-- [ ] **Step 6：自审并提交 v0.6 mode 核心**
+- [x] **Step 6：自审并提交 v0.6 mode 核心**
 
 确认 public symbol 未增加、默认变化有 DocC、mode 只影响顶部、bottom owner 不受影响、cancel 不修改业务资源。随后：
 
@@ -1371,7 +1373,7 @@ git commit -m "启用顶部回弹所有权路由"
 - Consumes: Task 5 正式 public mode。
 - Produces: “顶部回弹”菜单、`--anchorPagerTopOverscrollMode` launch argument、container/child current/max presentation 探针、六类 XCUITest。
 
-- [ ] **Step 1：写菜单和状态 RED 单元测试**
+- [x] **Step 1：写菜单和状态 RED 单元测试**
 
 新增断言：
 
@@ -1393,7 +1395,7 @@ git commit -m "启用顶部回弹所有权路由"
 
 更新状态序列化期望，必须包含 `mode` 和七个 current/max presentation 数值键。
 
-- [ ] **Step 2：运行 RED**
+- [x] **Step 2：运行 RED**
 
 ```bash
 xcodebuild -project Examples/AnchorPagerExample.xcodeproj \
@@ -1404,7 +1406,7 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj \
 
 Expected: 找不到“顶部回弹”菜单；旧状态字符串字段不匹配。
 
-- [ ] **Step 3：实现菜单、launch argument 与业务 child 原生配置**
+- [x] **Step 3：实现菜单、launch argument 与业务 child 原生配置**
 
 菜单映射固定为：
 
@@ -1427,7 +1429,7 @@ scrollView.alwaysBounceVertical = true
 
 该设置属于业务 child，用于展示短内容 child mode；不得移入 framework。
 
-- [ ] **Step 4：实现六类真实 coordinate drag UI tests**
+- [x] **Step 4：实现六类真实 coordinate drag UI tests**
 
 新增 launch helper：
 
@@ -1561,7 +1563,7 @@ let childBottomMax: CGFloat
 
 initializer 对 `mode` 和七个数值键逐项 guard；数值统一使用 `Double` 转 `CGFloat`。另外保留切页/reload 测试，断言 active metrics 归零、页面 owner 与 committed index 一致且无跳动。所有拖拽使用 `press(...thenDragTo:)` 与 predicate，不使用固定 sleep。
 
-- [ ] **Step 5：运行 Example 聚焦与全量测试**
+- [x] **Step 5：运行 Example 聚焦与全量测试**
 
 ```bash
 xcodebuild -project Examples/AnchorPagerExample.xcodeproj \
@@ -1581,7 +1583,7 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj \
 
 Expected: 聚焦 6 类与 Example 全量全部通过，0 failures、0 skips。
 
-- [ ] **Step 6：自审并提交**
+- [x] **Step 6：自审并提交**
 
 确认 Example child 自己拥有 delegate/bounce 配置，探针只读 public layout/自身 scroll offset，不伪造框架 owner。随后：
 
@@ -1615,7 +1617,7 @@ git commit -m "验证顶部与底部真实回弹"
 - Consumes: Tasks 1–6 的实现、测试和提交记录。
 - Produces: v0.5 Task 7 与 v0.6 状态、完整验收证据、自审结论和真实完成标记。
 
-- [ ] **Step 1：同步接入文档和版本状态**
+- [x] **Step 1：同步接入文档和版本状态**
 
 README 必须明确：
 
@@ -1627,7 +1629,7 @@ README 必须明确：
 
 task-list 只勾选真实通过的条目；v0.5 Task 7 与 v0.6 Ready 必须分别记录测试数量、0 fail/skip、复审结论和提交。
 
-- [ ] **Step 2：运行静态架构门禁**
+- [x] **Step 2：运行静态架构门禁**
 
 ```bash
 rg -n 'scrollView\.delegate\s*=|panGestureRecognizer\.delegate\s*=' Sources/AnchorPager
@@ -1645,7 +1647,7 @@ Expected:
 - Public 不命中 Tabman/Pageboy。
 - Sources/Tests/现行接入文档不命中已删除 wrapper；历史 specs/plans 可保留带 superseded 说明的记录。
 
-- [ ] **Step 3：运行完整验收**
+- [x] **Step 3：运行完整验收**
 
 ```bash
 swift --version
@@ -1663,7 +1665,7 @@ git diff --check
 
 Expected: Swift 6.2 或更高；resolve、framework tests、Example 单元/UI tests 和 generic build 全部成功；0 failures、0 skips；无新增生产 warning。
 
-- [ ] **Step 4：执行代码自审**
+- [x] **Step 4：执行代码自审**
 
 逐项记录：
 
@@ -1689,6 +1691,37 @@ git diff --check
 git add README.md AGENTS.md docs
 git commit -m "完成纵向边界回弹验收"
 ```
+
+---
+
+## Task 7 实现者验收记录（2026-07-13）
+
+### 新鲜命令与结果
+
+- `swift --version`：exit 0，Apple Swift 6.3.3，满足 Swift 6.2 最低工具链。
+- `swift package resolve`：沙盒内因用户级 Clang/SwiftPM cache 权限 exit 1；按权限规则提升后同一命令 exit 0。
+- `xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' test`：提升 CoreSimulator 权限后 exit 0；xcresult 264 项、0 fail、0 skip、0 warning。
+- `xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' test`：exit 0；xcresult 36 项（9 单元 + 27 UI）、0 fail、0 skip、0 warning。
+- `xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'generic/platform=iOS Simulator' build`：exit 0；xcresult status succeeded、0 error、0 warning、0 analyzer warning。
+- `git diff --check` 与文档修改后的静态门禁在提交前复验；最终结果记录在本次文档提交与实施者报告。
+
+### 静态门禁与十项自审
+
+1. Public API 仅把既有顶部 mode 默认值设为 `.container`，Public 无 Tabman/Pageboy。
+2. Pageboy 继续对 plain/scroll page 执行唯一 containment 与 appearance complete/cancel；框架没有手工 appearance forwarding。
+3. Store committed/pending、generation-specific retention/snapshot/managed inset ownership 未被边界实现复制或改写。
+4. ScrollCoordinator 是 active handoff/boundary 的 offset writer；OverscrollCoordinator 只持有纯 owner 状态。managed inset、snapshot 和显式 Header layout adjustment 仅在各自结构性事务写 offset。
+5. framework 未设置业务 child scroll/pan delegate、`isScrollEnabled`、`bounces` 或 `alwaysBounceVertical`。
+6. active native owner 在 container delegate、child KVO、pan target 和 geometry refresh 中均不被反向 clamp；对应 framework 回归通过。
+7. container presentation 使用 `topOverflow - bottomOverflow` 对称位移，不进入 canonical output、range、managed inset 或 snapshot。
+8. mode switch、selection、reload、Header layout reload、rotation/rebind/deinit 的 cancel/cleanup 路径幂等且有测试。
+9. overscroll 与 guard 日志只在状态变化时输出；重复热路径测试没有逐帧噪声。
+10. Example 六类真实 drag 使用 current/max presentation distance；plain root 物理底边和 container-only pan 证据在本轮 36 项全量中通过。
+
+### 待完成门禁
+
+- 主代理必须独立比较 `be2d783...47abcd6`。本轮实现者未执行独立复审，不声称 Critical/Important 已由独立审查清零。
+- 文档验收记录提交标题为 `同步纵向边界回弹验收记录`；独立复审通过后再决定是否执行计划原 Step 6 的最终完成提交和 Ready 标记。
 
 ---
 

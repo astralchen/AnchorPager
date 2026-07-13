@@ -196,7 +196,7 @@ public enum AnchorPagerTopOverscrollHandlingMode: Sendable, Equatable {
 }
 ```
 
-正式启用顶部 overscroll mode 后默认值为 `.container`；`.child` 只在当前 committed page 存在真实 scroll target 时可用，不创建替代 scroll view。
+顶部 overscroll mode 默认值为 `.container`；`.child` 只在当前 committed page 存在真实 scroll target 时可用，不创建替代 scroll view，也不在不可用时回退到 container。
 
 ## 6. UIViewController Scroll 接入要求
 
@@ -224,6 +224,7 @@ extension UIViewController {
 9. 多个候选时只选第一个符合规则的候选，不做领域推断。
 10. 不跨 child view controller 边界查找。
 11. 必须支持关闭默认查找。
+12. AnchorPager 不得设置业务 child 的 `UIScrollView.delegate`、内建 `panGestureRecognizer.delegate` 或 `isScrollEnabled`；child observation 只能使用不占用这些所有权的机制。
 
 ## 7. Header 要求
 
@@ -297,6 +298,10 @@ extension UIViewController {
 10. 底部 bounce 不受顶部 mode 影响：真实 scroll page 由 child 处理，无滚动页由 verticalScrollView 处理。
 11. AnchorPager 不得修改业务 child 的 `bounces` 或 `alwaysBounceVertical`；`.child` 顶部和真实 child bottom 只允许业务 scroll view 按自身配置处理原生回弹，短内容是否回弹由业务方配置 `alwaysBounceVertical`。
 12. `.container` 或 `.none` 的顶部非 owner 约束通过 guarded stable-boundary write 完成，不得为了屏蔽瞬时越界而临时关闭业务 child bounce。
+13. stable range 与 native boundary 必须分离；原生 owner 越界期间，container delegate、child observation、pan target 和结构性 geometry update 都不得把 owner 反向夹回 canonical range。
+14. container 顶部和底部回弹必须使用对称 presentation，并且 presentation distance 不得进入 LayoutEngine canonical output、scroll range、managed inset、snapshot 或 page generation。
+15. mode 切换、selection will-select、matching reload、Header layout reload、尺寸过渡和控制器释放必须同步取消 active boundary；取消路径应幂等。
+16. overscroll 日志只在 boundary/owner/mode 的 begin、finish、cancel 或 unavailable 状态变化时输出，不得逐帧记录位移。
 
 ## 12. 状态栏点击顶滚要求
 

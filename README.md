@@ -1,8 +1,8 @@
 # AnchorPager
 
-AnchorPager 是一个 UIKit 容器框架，用于组合可变 Header、吸顶分段栏、多页面横向分页和 child scroll view 接入。当前仓库已完成 v0.4 Child 生命周期、缓存与 reload 代际原子性实现：在 v0.3 固定分页 viewport 和 managed inset ownership 基础上，实现按需页面创建、稳定页面身份、可选相邻页缓存、generation-specific lease/snapshot，以及页面卸载后的滚动位置恢复。固定 paging host 以同一 request identifier 串行化 reload，并把非空 page、empty 和最终 bar inset 作为 matching terminal 一次确认。Swift 6.2.4 下框架 193 项、Example 5 项单元测试与 16 项 UI 测试已通过；最终独立复审已清零 Critical/Important/Minor，v0.4 Ready，v0.5 设计与详细实施计划已确认但实现尚未开始。
+AnchorPager 是一个 UIKit 容器框架，用于组合可变 Header、吸顶分段栏、多页面横向分页和纵向嵌套滚动。当前实现已在 v0.4 page identity、cache、reload generation 与 managed inset 基础上完成 container/current child 连续 handoff、无滚动页面直接 Pageboy containment、稳定区间与原生边界分离，以及 `.none`、`.container`、`.child` 三种顶部 overscroll 路由。默认顶部模式为 `.container`。
 
-最新完整验收严格串行复用 iPhone 17：resolve 1.34 秒，框架墙钟 53.81 秒，Example generic build 15.71 秒，Example 全量墙钟 277.97 秒，均为 0 fail、0 skip。已知 warning 仅为 Pageboy 5.0.2 / Tabman 4.0.1 的 `PrivacyInfo.xcprivacy` unhandled resource 提示。
+2026-07-13 使用 Apple Swift 6.3.3、iPhone 17 Pro / iOS 26.5 运行新鲜完整验收：Framework 264 项、Example 9 项单元测试与 27 项 UI 测试全部通过，均为 0 failure、0 skip；Example generic iOS Simulator build 成功。三份 xcresult 的 error、warning 与 analyzer warning 均为 0。当前结论仅为实现者自审与验收通过，仍待主代理比较 `be2d783...47abcd6` 完成独立复审；在该门禁完成前不把 v0.5 或 v0.6 标记为 Ready。
 
 ## 安装
 
@@ -98,7 +98,7 @@ func headerContent(in pagerViewController: AnchorPagerViewController) -> AnchorP
 
 Header 使用 `UIViewController` 时，AnchorPager 内部通过标准 UIKit containment 承载。
 
-横向页面的实际分页和 page view controller containment 由内部 Tabman/Pageboy adapter 执行。AnchorPager 维护 public API、selection、reload、scroll discovery 和真实 scroll target 的 inset/scroll 策略，应用代码不需要直接使用 Tabman 或 Pageboy 类型。已确认的目标修订会让无滚动页直接作为 Pageboy page，不再建立 AnchorPager wrapper containment；当前开发分支限制见下文。
+横向页面的实际分页和 page view controller containment 由内部 Tabman/Pageboy adapter 执行。AnchorPager 维护 public API、selection、reload、scroll discovery 和真实 scroll target 的 inset/scroll 策略，应用代码不需要直接使用 Tabman 或 Pageboy 类型。无滚动页直接作为 Pageboy page，不建立 AnchorPager 对业务页面的第二层 containment。
 
 可见状态下调用 `setSelectedIndex(_:animated:)` 时，AnchorPager 会等内部分页 adapter 确认完成后再更新 `selectedIndex` 并通知 delegate；取消或回弹不会提前提交。若分页 adapter 正在处理上一笔切页而拒绝新请求，v0.1 不做请求排队，当前 public 选择状态保持不变。
 
@@ -173,6 +173,18 @@ final class ListPageViewController: UIViewController {
 
 AnchorPager 接管目标 scroll view 时会把 `contentInsetAdjustmentBehavior` 设为 `.never`、把 `automaticallyAdjustsScrollIndicatorInsets` 设为 `false`，并在现有外部 inset 上差量叠加 managed top/bottom。页面被 reload 移除或容器释放时，只移除最后一次 managed 部分，并恢复两项原始自动调整状态。调用方运行时修改外部 inset 时，应基于当前总 inset 做增量修改；若直接用不包含 managed 部分的绝对值覆盖整个 `contentInset`，框架无法从 UIKit 单一属性推断调用方意图。
 
+## 纵向协调与边界回弹
+
+默认 `configuration.topOverscrollHandlingMode == .container`。三种顶部模式的语义为：
+
+- `.none`：Header 展开后收敛到稳定顶部，不保留可见顶部回弹。
+- `.container`：由 AnchorPager 自有 `verticalScrollView` 呈现顶部回弹。
+- `.child`：只在当前已提交页面存在真实 scroll target 时，把顶部边界路由给该业务 scroll view；无滚动页或空态不会回退到 container。
+
+底部 owner 与顶部 mode 无关：真实 scroll page 的底部回弹由业务 child 处理，无滚动页的底部回弹由 container 处理。AnchorPager 不保存、修改或恢复业务 child 的 `bounces`、`alwaysBounceVertical`，也不设置业务 child 的 `UIScrollView.delegate`、内建 `panGestureRecognizer.delegate` 或 `isScrollEnabled`；短内容是否允许 child 原生回弹由业务方配置。
+
+纵向协调只绑定 Store 的 committed current scroll target。框架通过 KVO 和 pan target-action 观察 child，并由自有 container scroll view 子类只放行 committed pair 的 simultaneous recognition。原生边界 owner 活跃时不反向执行 canonical clamp；container 顶部与底部 presentation 使用对称位移，回弹结束后再收敛到稳定区间。切页、matching reload、Header layout reload、尺寸过渡和顶部 mode 切换都会同步取消 active boundary，且不会读取 pending provider page。
+
 ## 无 UIScrollView Child
 
 ```swift
@@ -184,7 +196,7 @@ final class PlainPageViewController: UIViewController {
 }
 ```
 
-当页面没有显式或默认发现的 `UIScrollView` 时，AnchorPager 直接把 original page 交给 Pageboy/UIKit containment，Store 保持 page 非 nil、scroll target 为 nil。框架不会为该页面创建替代 `UIScrollView`，也不会写入 managed inset、offset snapshot、child bounce、`additionalSafeAreaInsets` 或业务页面手势代理。页面根 view 按固定 paging viewport 铺开并至少覆盖宿主的物理屏幕底边；业务内容是否避开 safe area 由页面自身决定。
+当页面没有显式或默认发现的 `UIScrollView` 时，AnchorPager 直接把 original page 交给 Pageboy/UIKit containment，Store 保持 page 非 nil、scroll target 为 nil。框架不会为该页面创建替代 `UIScrollView`，也不会写入 managed inset、offset snapshot、child bounce、`additionalSafeAreaInsets` 或业务页面手势代理。页面根 view 按固定 paging viewport 铺开并至少覆盖宿主的物理屏幕底边；业务内容是否避开 safe area 由页面自身决定。该页只有 container pan：顶部 `.container` 可见回弹与底部回弹均由 container 呈现，`.child` 顶部因没有真实 scroll target 而不可用。
 
 ## 页面生命周期与缓存
 
@@ -221,7 +233,7 @@ log stream --predicate 'subsystem == "com.anchorpager.AnchorPager"'
 
 ## 当前限制
 
-v0.4 当前已交付固定分页 viewport、optional bar height、真实 child managed inset ownership、按需页面身份、generation-specific cache lease/snapshot、稳定 paging host 和 request-aware page/empty terminal；最终独立复审已清零 Critical/Important/Minor，v0.4 Ready。v0.5 纵向滚动协调 Task 1–6 与无滚动页直接承载修复已完成，Task 7 因可见边界 bounce 修订而暂停，在完整验收与最终复审前仍不标记为已交付。v0.5 只能只读 Store 已提交的 current page/optional scroll target（空态二者均为 nil，无滚动页只有 page），任何时刻都不能设置业务 child 的 `UIScrollView.delegate`，也不能替换 child pan delegate、缓存 Host/adapter/provider、读取 provider pending 或重复管理 page identity/cache/generation。当前代码中的 child `bounces` 临时租约属于待移除的过渡实现；已确认的目标设计改为 stable/native boundary 分离，保留业务 child 的 `bounces` 与 `alwaysBounceVertical` 原值，并由 `.none/.container/.child` 只路由顶部 owner。完整顶部 overscroll mode、状态栏点击顶滚、尺寸变化恢复和完整手势状态机仍在后续版本。Tabman/Pageboy 仅出现在 internal adapter 层，Public API 不暴露第三方类型。
+v0.5 连续纵向 handoff、无滚动页直接承载、stable/native boundary 分离、两类底部 owner 和 v0.6 顶部 mode 已完成实现者完整验收，但主代理独立复审尚未完成，因此当前不标记 v0.5/v0.6 Ready。尚未实现的后续能力包括跨 owner velocity 合成、完整 interaction state、状态栏点击顶滚 owner 和尺寸变化后的滚动位置恢复；refresh control 或业务刷新任务也不属于 AnchorPager。Tabman/Pageboy 仅出现在 internal adapter 层，Public API 不暴露第三方类型。
 
 在 Xcode 26.3 / Swift 6.2.4 的 x86_64 iPhone 17 Simulator 验证中，把控制器同步析构改为
 `isolated deinit` 会在生命周期析构后稳定触发 allocator `pointer being freed was not allocated` 崩溃。

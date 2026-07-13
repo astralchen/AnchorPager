@@ -6,9 +6,9 @@
 
 **日期：** 2026-07-13
 
-**状态：** 用户已确认；Task 1–6 已完成；无滚动页直接 containment 修订待实施，Task 7 暂停
+**状态：** Task 1–6、无滚动页直接 containment 与边界 owner 修订已实现；Task 7 实现者验收通过；待主代理独立复审
 
-**适用范围：** v0.5 `AnchorPagerScrollCoordinator`、当前 container/current child 连续纵向 handoff、最小 simultaneous recognition、顶部下拉临时边界和真实手势验收
+**适用范围：** v0.5 `AnchorPagerScrollCoordinator`、当前 container/current child 连续纵向 handoff、最小 simultaneous recognition、stable/native boundary 分离和真实手势验收
 
 **依赖基线：** v0.4 committed current page/scroll target、request-aware reload/selection terminal、固定 Pageboy viewport、managed inset ownership 和 `childDistanceFromTop` snapshot 已完成并通过最终复审。
 
@@ -318,3 +318,9 @@ resource.scrollObservation.release
 4. v0.5 临时顶部 bounce owner 与 v0.6 正式 overscroll owner 边界明确。
 5. committed current、Store、Inset、Paging、ScrollCoordinator 职责保持单向。
 6. UI test、资源清理、日志和已知限制均有明确验收，不存在占位符或未选方案。
+
+## 最终修订实施状态
+
+本文中被页首修订说明取代的临时 bounce/业务 `bounces` 租约仅保留为历史决策记录，当前生产实现已删除。最终实现只绑定 committed current scroll target，Binding 使用 KVO 与 pan target-action，container 子类只放行 committed pair，ScrollCoordinator 分配 stable position 并约束非 owner，顶部与底部 native boundary 由同日边界 owner 规格统一收口。
+
+2026-07-13 实现者完整验收为 Framework 264 项、Example 36 项、generic Simulator build 全部成功，0 fail、0 skip，xcresult 0 warning；十项自审未发现阻塞性缺陷。Task 7 的主代理独立复审仍未完成，因此本规格不把 v0.5 标记 Ready。

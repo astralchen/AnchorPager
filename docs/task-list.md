@@ -389,7 +389,7 @@
 
 ## v0.5：纵向嵌套滚动协调版
 
-设计与计划门禁已满足：设计见 `docs/superpowers/specs/2026-07-13-v0-5-scroll-coordination-design.md`，实施计划见 `docs/superpowers/plans/2026-07-13-v0-5-scroll-coordination.md`。Task 1–6 与无滚动页 direct containment 修复已完成；修订设计见 `docs/superpowers/specs/2026-07-13-plain-page-direct-containment-design.md`。无滚动 original page 由 Pageboy 直接 containment，committed page 非 nil、scroll target 为 nil，不应用 managed inset、snapshot 或 child bounce。Task 7 因可见边界 bounce 与业务 child bounce 配置保留修订而暂停，完整验收和最终复审前不得把 v0.5 标为 Ready。
+设计见 `docs/superpowers/specs/2026-07-13-v0-5-scroll-coordination-design.md`，direct page 修订见 `docs/superpowers/specs/2026-07-13-plain-page-direct-containment-design.md`，最终边界 owner 契约见 `docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md`。Task 1–6、direct containment 和边界实现均已完成；Task 7 实现者文档同步、自审和新鲜全量验收已通过，主代理独立复审仍待执行，因此 v0.5 尚未标记 Ready。
 
 - [x] 删除无滚动页 synthetic scroll wrapper 及其额外 containment
 - [x] 无滚动 original page 直接交给 Pageboy，Store 保存 page 非 nil、scroll target 为 nil
@@ -397,73 +397,86 @@
 - [x] 无滚动页不参与 managed inset、offset snapshot、child bounce 或 simultaneous pair
 - [x] 真实 pan UI 测试读取 plain root/window 几何，不再用写死 distance 代替内部事实
 
-- [ ] 创建 `Sources/AnchorPager/Core/AnchorPagerScrollCoordinator.swift`
-- [ ] Header 未完全折叠时优先响应向上滚动
-- [ ] Header 未完全展开时优先响应向下滚动
-- [ ] Header 完全折叠后当前 child scroll view 正常滚动
-- [ ] 支持不同 contentSize child 切换
-- [ ] 处理 Header 展开阈值附近抖动
-- [ ] 处理 Header 折叠阈值附近抖动
-- [ ] 处理 child top boundary rubber-band 抖动
-- [ ] 实现 guarded contentOffset update
-- [ ] 当前 container 与当前 child 支持受限纵向 simultaneous recognition
-- [ ] container `UIScrollView` 子类只放行 committed current child pair，且不设置 container/child 内建 pan delegate
-- [ ] child contentOffset/contentSize observation 与 pan target 在 rebind、empty、reload 和 deinit 时同步清理
-- [ ] 同一 pan 在 container/child 边界转移剩余 delta
-- [ ] container 未完全折叠时当前 child 保持顶部
-- [ ] child 离开顶部时 container 保持完全折叠
-- [ ] 避免 contentSize 变化重复写 managed inset
-- [ ] 为 Header 完全展开加入 scroll 日志
-- [ ] 为 Header 完全折叠加入 scroll 日志
-- [ ] 为 child top boundary 加入 scroll 日志
-- [ ] 为 scroll owner 切换加入 scroll 日志
-- [ ] 为 guarded contentOffset update 触发或跳过加入 scroll 日志
-- [ ] 测试高频滚动路径不逐帧输出普通日志
-- [ ] 测试 Header 展开和折叠
-- [ ] 测试 child top boundary 抖动
-- [ ] 测试不同 contentSize child 切换
-- [ ] 测试 guarded update 防重入
-- [ ] 测试向上和向下 handoff 不丢失剩余 delta
-- [ ] 测试 Header 折叠热路径不改变 Pageboy child bounds
-- [ ] 测试 contentSize 变化不震荡
+- [x] 创建 `Sources/AnchorPager/Core/AnchorPagerScrollCoordinator.swift`
+- [x] Header 未完全折叠时优先响应向上滚动
+- [x] Header 未完全展开时优先响应向下滚动
+- [x] Header 完全折叠后当前 child scroll view 正常滚动
+- [x] 支持不同 contentSize child 切换
+- [x] 处理 Header 展开阈值附近抖动
+- [x] 处理 Header 折叠阈值附近抖动
+- [x] 处理 child top boundary rubber-band 抖动
+- [x] 实现 guarded contentOffset update
+- [x] 当前 container 与当前 child 支持受限纵向 simultaneous recognition
+- [x] container `UIScrollView` 子类只放行 committed current child pair，且不设置 container/child 内建 pan delegate
+- [x] child contentOffset/contentSize observation 与 pan target 在 rebind、empty、reload 和 deinit 时同步清理
+- [x] 同一 pan 在 container/child 边界转移剩余 delta
+- [x] container 未完全折叠时当前 child 保持顶部
+- [x] child 离开顶部时 container 保持完全折叠
+- [x] contentSize 变化只触发有界协调，不重复写 managed inset
+- [x] 为 Header 完全展开加入 scroll 日志
+- [x] 为 Header 完全折叠加入 scroll 日志
+- [x] 为 child top boundary 加入 scroll 日志
+- [x] 为 scroll owner 切换加入 scroll 日志
+- [x] 移除 guarded write 逐帧日志，只保留 owner、handoff 和 boundary 状态变化事件
+- [x] 测试高频滚动路径不逐帧输出普通日志
+- [x] 测试 Header 展开和折叠
+- [x] 测试 child top boundary 抖动
+- [x] 测试不同 contentSize child 切换
+- [x] 测试 guarded update 防重入
+- [x] 测试向上和向下 handoff 不丢失剩余 delta
+- [x] 测试 Header 折叠热路径不改变 Pageboy child bounds
+- [x] 测试 contentSize 变化不震荡
 - [x] Example UI test 使用真实连续 drag 验证 container-to-child 与 child-to-container handoff
 - [x] Example UI test 覆盖短内容、plain direct page、页面切换和完全展开后仅 container bounce
-- [x] 历史真实 pan 曾通过临时 `bounces` 租约阻止 child delegate 顶部负 offset；该策略已被边界 owner 修订设计取代，最终实现必须删除租约并允许业务配置保持不变
-- [ ] UIKit 集成测试验证 child scroll delegate 与 child pan delegate 在绑定/解绑后保持原实例
-- [ ] UIKit 集成测试验证绑定、handoff、模式切换、切页、reload、empty 和释放全过程不修改业务 child 的 `bounces` 与 `alwaysBounceVertical`
+- [x] 删除历史 child `bounces` 临时租约，业务配置在绑定、handoff、模式切换、切页、reload、empty 和释放全过程保持不变
+- [x] UIKit 集成测试验证 child scroll delegate 与 child pan delegate 在绑定/解绑后保持原实例
+- [x] UIKit 集成测试验证全过程不修改业务 child 的 `bounces` 与 `alwaysBounceVertical`
+- [x] stable range 与 native boundary pass-through 分离；active owner 不被 container delegate、child KVO、pan target 或 geometry refresh 反向夹紧
+- [x] container top/bottom presentation 对称，且不污染 canonical layout/range、managed inset 或 snapshot
+- [x] plain page 保持 direct Pageboy containment、nil scroll target 和物理屏幕底边，底部 bounce 由 container 处理
+- [x] Task 7 实现者新鲜验收：Apple Swift 6.3.3；Framework 264 项、Example 36 项（9 单元 + 27 UI），0 fail、0 skip；Example generic Simulator build 成功；三份 xcresult 0 error/warning；实现提交链 `cff0e55`、`8805892`、`27390b4`、`f9fd570`、`687733a`、`c20e259`、`344317d`、`10f1799`、`a4f7c3f`、`47abcd6`
+- [x] Task 7 实现者验收记录提交：`同步纵向边界回弹验收记录`（本次文档提交）
+- [x] Task 7 十项实现者自审未发现阻塞性代码缺陷
+- [ ] Task 7 主代理独立复审：待比较 `be2d783...47abcd6`，Critical/Important 尚未由独立复审确认清零
+- [ ] v0.5 Ready：等待上述独立复审，不提前标记
 
 ## v0.6：顶部 Overscroll 事件处理版
 
 依赖门禁：OverscrollCoordinator 只消费 v0.5 已绑定的 committed current/empty owner；pending provider page 不能成为 overscroll owner。
 
-设计与计划门禁已确认：`docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md`、`docs/superpowers/plans/2026-07-13-boundary-bounce-ownership.md`。必须先完成 v0.5 stable range/native boundary pass-through 与无滚动页双边界可见 bounce 修复，再正式启用顶部 mode；当前仍未实施。
+设计与计划：`docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md`、`docs/superpowers/plans/2026-07-13-boundary-bounce-ownership.md`。mode、owner、cancel、日志与六类真实 UI 已完成实现者验收；独立复审仍待主代理执行，因此 v0.6 尚未标记 Ready。
 
-- [ ] 创建 `Sources/AnchorPager/Overscroll/AnchorPagerOverscrollCoordinator.swift`
-- [ ] 实现 `.none`
-- [ ] 实现 `.container`
-- [ ] 实现 `.child`
-- [ ] Header 完全展开前优先展开 Header
-- [ ] container 模式由 verticalScrollView 处理继续下拉
-- [ ] child 模式只由当前真实 child scroll view 处理继续下拉；nil scroll target 不创建替代 owner
-- [ ] 默认顶部模式调整为 container，并支持运行时同步切换
-- [ ] 无滚动页 container bottom bounce 与真实 scroll page child bottom bounce 不受顶部 mode 影响
-- [ ] child 顶部及真实 child bottom owner 尊重业务 `bounces`/`alwaysBounceVertical`，框架不保存、不修改、不恢复这两项属性
-- [ ] 同一次下拉手势只允许一个 top overscroll owner
-- [ ] 实现 owner 进入阈值
-- [ ] 实现 owner 退出阈值
-- [ ] 横向分页期间取消 active overscroll handling
-- [ ] Header layout reload 期间取消 active overscroll handling
-- [ ] 屏幕旋转期间取消 active overscroll handling
-- [ ] child 切换期间取消 active overscroll handling
-- [ ] 为 overscroll mode 加入 overscroll 日志
-- [ ] 为 owner 进入和退出加入 overscroll 日志
-- [ ] 为 owner cancel 加入 overscroll 日志
-- [ ] 为阈值判定加入 overscroll 日志
-- [ ] 测试三种 overscroll mode
-- [ ] 测试 owner 互斥
-- [ ] 测试 Header 展开优先级
-- [ ] 测试 owner 阈值稳定性
-- [ ] UI test 验证实际 presentation distance，不再只记录瞬时负 offset flag
+- [x] 创建 `Sources/AnchorPager/Overscroll/AnchorPagerOverscrollCoordinator.swift`
+- [x] 实现 `.none`
+- [x] 实现 `.container`
+- [x] 实现 `.child`
+- [x] Header 完全展开前优先展开 Header
+- [x] container 模式由 verticalScrollView 处理继续下拉
+- [x] child 模式只由当前真实 child scroll view 处理继续下拉；nil scroll target 不创建替代 owner且不回退
+- [x] 默认顶部模式调整为 container，并支持运行时同步切换
+- [x] 无滚动页 container bottom bounce 与真实 scroll page child bottom bounce 不受顶部 mode 影响
+- [x] child 顶部及真实 child bottom owner 尊重业务 `bounces`/`alwaysBounceVertical`，框架不保存、不修改、不恢复这两项属性
+- [x] 同一次下拉手势只允许一个 top overscroll owner
+- [x] 实现 owner 进入阈值
+- [x] 实现 owner 退出阈值
+- [x] 横向分页期间取消 active overscroll handling
+- [x] Header layout reload 期间取消 active overscroll handling
+- [x] 屏幕旋转期间取消 active overscroll handling
+- [x] child 切换、reload terminal 与 empty 期间取消 active overscroll handling
+- [x] 为 overscroll mode 加入 overscroll 日志
+- [x] 为 owner 进入和退出加入 overscroll 日志
+- [x] 为 owner cancel 加入 overscroll 日志
+- [x] boundary 与 unavailable 阈值跨越只记录一次状态日志
+- [x] 测试三种 overscroll mode
+- [x] 测试 owner 互斥
+- [x] 测试 Header 展开优先级
+- [x] 测试 owner 阈值稳定性
+- [x] UI test 验证实际 current/max presentation distance，不再只记录瞬时负 offset flag
+- [x] Example 顶部回弹菜单与 launch argument 覆盖默认 container、child、none
+- [x] 六类真实 UI：plain top/bottom、real child container top、real child child top、none top、real child bottom 全部通过
+- [x] v0.6 实现者验收复用本轮 Framework 264 / Example 36 / generic build，0 fail、0 skip、0 xcresult warning
+- [x] v0.6 实现提交为 `10f1799`、`a4f7c3f`、`47abcd6`，验收记录随 `同步纵向边界回弹验收记录` 提交
+- [ ] v0.6 独立复审与 Ready：待主代理完成 `be2d783...47abcd6` 审查后决定
 
 ## v0.7：手势与交互状态机版
 

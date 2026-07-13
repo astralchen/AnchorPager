@@ -8,6 +8,8 @@
 
 **Tech Stack:** Swift 6.2、Swift 6 language mode、UIKit、iOS 14+、Swift Package Manager、Tabman 4.0.1、Pageboy 5.0.2、XCTest/XCUITest、XcodeBuildMCP。
 
+**当前状态：** 专项修复已完成；boundary owner 集成后的新鲜全量复验通过，v0.5/v0.6 主代理独立复审仍待执行。
+
 ## Global Constraints
 
 - 所有 UIKit、Store、adapter、coordinator 和测试状态更新保持 `@MainActor`。
@@ -708,3 +710,10 @@ Expected: 工作区无未解释改动；最近四个实施提交依次覆盖 Sto
 5. UIKit 与真实 simulator drag 均证明 plain root 至少覆盖 pager/window 物理底边；当时的第二次上推验收证明没有 synthetic child distance。后续 container bottom 可见 bounce 由 `2026-07-13-boundary-bounce-ownership-design.md` 接管，不改变 nil child scroll target 事实。
 6. `scroll.target.none` 只在首次解析无目标状态时记录；Example 的 root/state probe 仅位于示例 target，不拦截触摸，也不伪造 synthetic offset。
 7. 文档已统一为 direct containment + nil scroll target；本专项修复完成，但 v0.5 Task 7 仍需独立复审，因此不将 v0.5 标记为 Ready。
+
+### 边界 owner 集成后的新鲜复验
+
+- Framework 264 项与 Example 36 项全部通过，0 fail、0 skip；generic Simulator build 成功。
+- plain page 仍为 original Pageboy containment、committed scroll target nil、无 managed inset/snapshot/child pan；顶部 `.container`、底部 container presentation、`.child` 顶部不可用且不回退的真实 UI 均通过。
+- `testPlainPageRootReachesPhysicalBottomAndUsesContainerOnlyPan`、plain top/bottom bounce 用例均包含在本轮 Example 全量 xcresult 中。
+- 本补充只记录实现者复验；主代理独立复审未完成，不改变 v0.5 Ready 门禁。
