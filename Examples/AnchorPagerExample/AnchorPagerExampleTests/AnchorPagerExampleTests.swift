@@ -133,6 +133,22 @@ struct AnchorPagerExampleTests {
         )
     }
 
+    @Test func scrollPresentationSamplerFollowsVisiblePageLifecycle() throws {
+        let viewController = ExamplePagerViewController()
+        viewController.loadViewIfNeeded()
+        let scrollPage = try #require(viewController.scrollPageForTesting(at: 1))
+        scrollPage.loadViewIfNeeded()
+        #expect(viewController.activeScrollPresentationSamplerCountForTesting == 0)
+
+        scrollPage.beginAppearanceTransition(true, animated: false)
+        scrollPage.endAppearanceTransition()
+        #expect(viewController.activeScrollPresentationSamplerCountForTesting == 1)
+
+        scrollPage.beginAppearanceTransition(false, animated: false)
+        scrollPage.endAppearanceTransition()
+        #expect(viewController.activeScrollPresentationSamplerCountForTesting == 0)
+    }
+
     @Test func headerTopBehaviorMenuAppliesExtendsUnderTopSafeAreaCoverage() async throws {
         try await withPagerWindow { viewController, window in
             viewController.loadViewIfNeeded()

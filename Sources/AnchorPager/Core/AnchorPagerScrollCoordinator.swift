@@ -126,7 +126,13 @@ final class AnchorPagerScrollCoordinator {
                 overscrollCoordinator.reachedStableRange()
                 apply(AnchorPagerScrollPositionResolver.resolve(input))
             } else {
-                enforceAndObserveActiveBoundary()
+                switch overscrollCoordinator.finishUnpresentedActiveOwner() {
+                case .inactive, .finished:
+                    overscrollCoordinator.reachedStableRange()
+                    apply(AnchorPagerScrollPositionResolver.resolve(input))
+                case .presented:
+                    enforceAndObserveActiveBoundary()
+                }
             }
         case .ended, .cancelled, .failed:
             gestureStartTotal = nil
@@ -343,8 +349,10 @@ private extension AnchorPagerScrollCoordinator {
             $0.contentOffset.y + $0.contentInset.top
         }
         if overscrollCoordinator.activeOwner == nil {
-            if containerScrollView.contentOffset.y < -boundaryEpsilon
-                || (childDistance ?? 0) < -boundaryEpsilon {
+            if containerScrollView.contentOffset.y < -boundaryEpsilon {
+                beginBoundary(.top)
+            } else if (childDistance ?? 0) < -boundaryEpsilon,
+                      containerScrollView.contentOffset.y <= boundaryEpsilon {
                 beginBoundary(.top)
             } else if let childDistance,
                       containerScrollView.contentOffset.y

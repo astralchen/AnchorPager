@@ -177,6 +177,7 @@ final class AnchorPagerExampleUITests: XCTestCase {
         })
         XCTAssertEqual(state.mode, "none")
         XCTAssertLessThan(state.containerTopMax, 0.5)
+        XCTAssertLessThan(state.childTopMax, 0.5)
         XCTAssertEqual(state.distance, 0, accuracy: 0.5)
     }
 

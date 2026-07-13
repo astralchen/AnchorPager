@@ -28,6 +28,12 @@ final class AnchorPagerOverscrollCoordinator {
         case finished
     }
 
+    enum UnpresentedOwnerFinishResult: Equatable {
+        case inactive
+        case presented
+        case finished
+    }
+
     private(set) var topMode: AnchorPagerTopOverscrollHandlingMode
     private(set) var activeOwner: ActiveOwner?
     private var activeHasPresentedOverflow = false
@@ -118,6 +124,13 @@ final class AnchorPagerOverscrollCoordinator {
         guard activeOwner != nil, !activeHasPresentedOverflow else { return false }
         finish()
         return true
+    }
+
+    func finishUnpresentedActiveOwner() -> UnpresentedOwnerFinishResult {
+        guard activeOwner != nil else { return .inactive }
+        guard !activeHasPresentedOverflow else { return .presented }
+        finish()
+        return .finished
     }
 
     func reachedStableRange() {

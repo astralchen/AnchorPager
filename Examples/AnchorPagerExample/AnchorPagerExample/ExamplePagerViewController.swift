@@ -410,6 +410,20 @@ final class ExamplePagerViewController: UIViewController {
         appearanceRecorder != nil
     }
 
+    var activeScrollPresentationSamplerCountForTesting: Int {
+        pages.compactMap { $0 as? ExampleScrollPageViewController }
+            .filter(\.isScrollPresentationSamplingActive)
+            .count
+    }
+
+    func scrollPageForTesting(at index: Int) -> UIViewController? {
+        guard pages.indices.contains(index),
+              pages[index] is ExampleScrollPageViewController else {
+            return nil
+        }
+        return pages[index]
+    }
+
     private func makePages() -> [UIViewController] {
         [
             ExampleScrollPageViewController(
@@ -584,6 +598,16 @@ private final class ExampleScrollPageViewController: UIViewController, UIScrollV
     private var didAppearCount = 0
     private var willDisappearCount = 0
     private var didDisappearCount = 0
+    private var needsScrollPresentationSample = false
+    private var scrollPresentationDisplayLink: CADisplayLink?
+    private lazy var scrollPresentationDisplayLinkTarget = ExampleDisplayLinkTarget {
+        [weak self] in
+        self?.sampleScrollPresentationIfNeeded()
+    }
+
+    var isScrollPresentationSamplingActive: Bool {
+        scrollPresentationDisplayLink != nil
+    }
 
     init(
         title: String,
@@ -620,6 +644,7 @@ private final class ExampleScrollPageViewController: UIViewController, UIScrollV
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        startScrollPresentationSampling()
         willAppearCount += 1
         updateAppearanceLabel()
         appearanceRecorder?.record(page: pageIdentifier, callback: "viewWillAppear")
@@ -641,9 +666,16 @@ private final class ExampleScrollPageViewController: UIViewController, UIScrollV
 
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
+        stopScrollPresentationSampling()
         didDisappearCount += 1
         updateAppearanceLabel()
         appearanceRecorder?.record(page: pageIdentifier, callback: "viewDidDisappear")
+    }
+
+    deinit {
+        MainActor.assumeIsolated {
+            scrollPresentationDisplayLink?.invalidate()
+        }
     }
 
     private func installScrollView() {
@@ -709,7 +741,7 @@ private final class ExampleScrollPageViewController: UIViewController, UIScrollV
     }
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        reportCurrentScrollState()
+        needsScrollPresentationSample = true
     }
 
     func reportCurrentScrollState() {
@@ -729,6 +761,40 @@ private final class ExampleScrollPageViewController: UIViewController, UIScrollV
             topOverflow,
             bottomOverflow
         )
+    }
+
+    private func startScrollPresentationSampling() {
+        guard scrollPresentationDisplayLink == nil else { return }
+        let displayLink = CADisplayLink(
+            target: scrollPresentationDisplayLinkTarget,
+            selector: #selector(ExampleDisplayLinkTarget.displayLinkDidFire)
+        )
+        displayLink.add(to: .main, forMode: .common)
+        scrollPresentationDisplayLink = displayLink
+    }
+
+    private func stopScrollPresentationSampling() {
+        scrollPresentationDisplayLink?.invalidate()
+        scrollPresentationDisplayLink = nil
+        needsScrollPresentationSample = false
+    }
+
+    private func sampleScrollPresentationIfNeeded() {
+        guard needsScrollPresentationSample else { return }
+        needsScrollPresentationSample = false
+        reportCurrentScrollState()
+    }
+}
+
+private final class ExampleDisplayLinkTarget: NSObject {
+    private let onDisplay: () -> Void
+
+    init(onDisplay: @escaping () -> Void) {
+        self.onDisplay = onDisplay
+    }
+
+    @objc func displayLinkDidFire() {
+        onDisplay()
     }
 }
 

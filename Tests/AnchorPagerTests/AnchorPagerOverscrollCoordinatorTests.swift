@@ -152,6 +152,30 @@ final class AnchorPagerOverscrollCoordinatorTests: XCTestCase {
         )
     }
 
+    func testFinishUnpresentedActiveOwnerOnlyFinishesBeforeVisibleOverflow() {
+        let coordinator = AnchorPagerOverscrollCoordinator(topMode: .child)
+
+        _ = coordinator.begin(boundary: .top, hasChild: true)
+
+        XCTAssertEqual(coordinator.finishUnpresentedActiveOwner(), .finished)
+        XCTAssertNil(coordinator.activeOwner)
+
+        _ = coordinator.begin(boundary: .top, hasChild: true)
+        XCTAssertEqual(coordinator.observeActiveOverflow(0.5001), .active)
+
+        XCTAssertEqual(coordinator.finishUnpresentedActiveOwner(), .presented)
+        XCTAssertEqual(
+            coordinator.activeOwner,
+            .init(boundary: .top, owner: .child)
+        )
+    }
+
+    func testFinishUnpresentedActiveOwnerReportsInactiveWithoutOwner() {
+        let coordinator = AnchorPagerOverscrollCoordinator(topMode: .container)
+
+        XCTAssertEqual(coordinator.finishUnpresentedActiveOwner(), .inactive)
+    }
+
     func testReachedStableRangeResetsBoundaryAndUnavailableState() {
         let coordinator = AnchorPagerOverscrollCoordinator(topMode: .child)
         var events: [AnchorPagerLogger.Event] = []
