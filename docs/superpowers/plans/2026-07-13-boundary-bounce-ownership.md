@@ -8,7 +8,7 @@
 
 **技术栈：** Swift 6.2、Swift 6 language mode、UIKit、iOS 14+、Swift Package Manager、Tabman 4.0.1、Pageboy 5.0.2、XCTest/XCUITest、Xcode 26.3。
 
-**当前状态：** Tasks 1–6 已实现；Task 7 Step 1–4 的实现者文档、静态门禁、完整验收与自审已完成；Step 5 主代理独立复审和 Step 6 最终状态提交仍待完成，v0.5/v0.6 不标记 Ready。
+**当前状态：** Tasks 1–6 已实现；Task 7 初次独立复审发现的 3 个 Important 已修复并完成新鲜验收；再次独立复审和最终状态提交仍待完成，v0.5/v0.6 不标记 Ready。
 
 ## Global Constraints
 
@@ -1680,9 +1680,15 @@ Expected: Swift 6.2 或更高；resolve、framework tests、Example 单元/UI te
 9. overscroll 日志只在状态变化时输出。
 10. 真实 UI 使用实际 presentation distance，并保留 plain 物理底边证据。
 
-- [ ] **Step 5：执行独立复审门禁**
+- [x] **Step 5：执行初次独立复审门禁**
 
 比较边界修复开始前提交 `be2d783` 到实现 HEAD。Critical/Important 必须清零；任何双 writer、业务属性写入、pending owner、synthetic wrapper、瞬时 flag 伪视觉证据或 UI 不稳定都先修复并重跑对应 RED/GREEN。
+
+初次独立复审发现 3 个 Important：未呈现 owner 反向回稳未同步收敛、Header 部分折叠时 child KVO 错误触发 top owner、`.none` UI 探针记录原始 delegate/KVO 瞬时 offset。`f81ca1e` 已按 RED→GREEN 修复并完成聚焦与全量验收。
+
+- [ ] **Step 5b：执行修复后的再次独立复审门禁**
+
+覆盖 `be2d783...HEAD` 并重点比较 `b00d204...f81ca1e`；再次独立复审确认 Critical/Important 清零前，不执行 Ready 提交。
 
 - [ ] **Step 6：提交最终文档与验收记录**
 
@@ -1720,8 +1726,9 @@ git commit -m "完成纵向边界回弹验收"
 
 ### 待完成门禁
 
-- 主代理必须独立比较 `be2d783...47abcd6`。本轮实现者未执行独立复审，不声称 Critical/Important 已由独立审查清零。
-- 文档验收记录提交标题为 `同步纵向边界回弹验收记录`；独立复审通过后再决定是否执行计划原 Step 6 的最终完成提交和 Ready 标记。
+- 初次独立复审的 3 个 Important 已修复；修复后新鲜验收为 Framework 271 项、Example 37 项、generic build 全部成功，0 fail、0 skip，三份 xcresult 0 error/warning/analyzer warning。
+- 再次独立复审待执行，必须覆盖 `be2d783...HEAD` 并重点比较 `b00d204...f81ca1e`。本轮修复者不声称 Critical/Important 已由再次独立审查清零。
+- 复审修复验收记录提交标题为 `更新边界回弹复审验收记录`；再次独立复审通过后再决定是否执行计划原 Step 6 的最终完成提交和 Ready 标记。
 
 ---
 

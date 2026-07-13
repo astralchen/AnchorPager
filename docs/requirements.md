@@ -20,6 +20,10 @@ AnchorPager 是一个全新的独立 UIKit 容器框架，用于实现可变 Hea
 10. Vertical nested scrolling model：参考 JXPagingView + JXSegmentedView 的设计思路
 11. 核心框架保持领域无关，不包含具体应用场景、内容类型、数据模型或场景命名
 
+### 当前复审门禁
+
+v0.5/v0.6 初次独立复审发现的 3 个 Important 已在 `f81ca1e` 修复；Apple Swift 6.3.3、iPhone 17 Pro / iOS 26.5 新鲜验收为 Framework 271 项、Example 37 项、0 fail、0 skip，generic iOS Simulator build 成功。再次独立复审待执行；在其确认 Critical/Important 清零前，不标记 v0.5/v0.6 Ready。
+
 ## 3. 参考项目
 
 1. JXPagingView：https://github.com/pujiaxin33/JXPagingView
