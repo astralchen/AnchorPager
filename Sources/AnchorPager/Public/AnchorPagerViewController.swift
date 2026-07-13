@@ -12,21 +12,6 @@ open class AnchorPagerViewController: UIViewController {
         var providerGenerationIsActive: Bool
     }
 
-    @MainActor
-    private final class VerticalScrollDelegate: NSObject, UIScrollViewDelegate {
-        weak var owner: AnchorPagerViewController?
-
-        init(owner: AnchorPagerViewController) {
-            self.owner = owner
-        }
-
-        func scrollViewDidScroll(_ scrollView: UIScrollView) {
-            guard let owner,
-                  scrollView === owner.verticalScrollView else { return }
-            owner.updateVisibleLayoutForScrolling()
-        }
-    }
-
     /// 提供页面、标题和 Header 内容的数据源。
     public weak var dataSource: AnchorPagerViewControllerDataSource?
 
@@ -59,7 +44,7 @@ open class AnchorPagerViewController: UIViewController {
     /// AnchorPager 管理的纵向容器滚动视图。
     ///
     /// 该滚动视图的 delegate 由 AnchorPager 内部管理，调用方不得替换。
-    public let verticalScrollView = UIScrollView()
+    public let verticalScrollView: UIScrollView = AnchorPagerContainerScrollView()
 
     private let scrollRangeView = UIView()
     private let viewportView = UIView()
@@ -73,7 +58,8 @@ open class AnchorPagerViewController: UIViewController {
     private var pagingHeightConstraint: NSLayoutConstraint?
     private var lastMeasuredHeaderHeight: CGFloat?
     private var isApplyingLayout = false
-    private lazy var verticalScrollDelegate = VerticalScrollDelegate(owner: self)
+    private lazy var verticalScrollDelegate = AnchorPagerVerticalScrollDelegate(owner: self)
+    private var scrollCoordinator: AnchorPagerScrollCoordinator?
     private var currentHeaderContent: AnchorPagerHeaderContent?
     private var currentTitles: [String] = []
     private var resolvedBarInsets: UIEdgeInsets = .zero
@@ -112,6 +98,7 @@ open class AnchorPagerViewController: UIViewController {
 
     deinit {
         MainActor.assumeIsolated {
+            scrollCoordinator?.invalidate()
             pageStateStore.releaseAll()
             managedInsetCoordinator.releaseAll()
         }
@@ -121,8 +108,10 @@ open class AnchorPagerViewController: UIViewController {
     open override func viewDidLoad() {
         super.viewDidLoad()
         installVerticalScrollViewIfNeeded()
+        installScrollCoordinatorIfNeeded()
         installVisibleContentIfNeeded()
         submitStagedReloadIfNeeded()
+        reconcileCommittedScrollBinding()
     }
 
     open override func viewDidLayoutSubviews() {
@@ -228,6 +217,7 @@ open class AnchorPagerViewController: UIViewController {
                 stagedReloadSnapshot?.selectedIndex = selectedIndex
             }
             pageStateStore.didSelect(selectedIndex, context: pageAccessContext)
+            reconcileCommittedScrollBinding()
             commitSelectedIndex(selectedIndex, animated: animated)
             return
         }
@@ -483,6 +473,9 @@ open class AnchorPagerViewController: UIViewController {
         pagingHeightConstraint?.constant = output.pagingFrame.height
 
         applyManagedInsets(output: output, logsChanges: logsChanges)
+        scrollCoordinator?.updateGeometry(
+            collapsibleDistance: output.resolvedHeaderHeight.collapsibleDistance
+        )
 
         if logsChanges {
             logLayoutChanges(output: output, environment: environment)
@@ -676,6 +669,20 @@ open class AnchorPagerViewController: UIViewController {
         pageStateStore.updateManagedInsets(target, logsChanges: logsChanges)
     }
 
+    private func installScrollCoordinatorIfNeeded() {
+        guard scrollCoordinator == nil else { return }
+        guard let container = verticalScrollView as? AnchorPagerContainerScrollView else {
+            preconditionFailure("verticalScrollView 必须由 AnchorPagerContainerScrollView 提供")
+        }
+        scrollCoordinator = AnchorPagerScrollCoordinator(containerScrollView: container)
+    }
+
+    private func reconcileCommittedScrollBinding() {
+        guard isViewLoaded else { return }
+        installScrollCoordinatorIfNeeded()
+        scrollCoordinator?.bindCommittedChild(pageStateStore.committedCurrentScrollView)
+    }
+
     private var pageAccessContext: AnchorPagerPageStateStore.AccessContext {
         AnchorPagerPageStateStore.AccessContext(
             managedInsetTarget: currentManagedInsetTarget,
@@ -688,6 +695,14 @@ open class AnchorPagerViewController: UIViewController {
         let collapsibleDistance = output.resolvedHeaderHeight.collapsibleDistance
         return collapsibleDistance <= 0.5
             || output.collapseOffset >= collapsibleDistance - 0.5
+    }
+}
+
+extension AnchorPagerViewController: AnchorPagerVerticalScrollDelegateOwner {
+    func verticalScrollViewDidScroll(_ scrollView: UIScrollView) {
+        guard scrollView === verticalScrollView else { return }
+        scrollCoordinator?.containerDidScroll()
+        updateVisibleLayoutForScrolling()
     }
 }
 
@@ -748,6 +763,7 @@ extension AnchorPagerViewController: AnchorPagerPagingHostViewControllerDelegate
     ) {
         guard index >= 0, index < pageCount else { return }
         pageStateStore.didSelect(index, context: pageAccessContext)
+        reconcileCommittedScrollBinding()
         commitSelectedIndex(index, animated: animated)
     }
 
@@ -762,6 +778,7 @@ extension AnchorPagerViewController: AnchorPagerPagingHostViewControllerDelegate
             returningTo: previousIndex,
             context: pageAccessContext
         )
+        reconcileCommittedScrollBinding()
         AnchorPagerLogger.log(.debug, category: .paging, event: "setSelectedIndex.cancel")
     }
 
@@ -791,6 +808,7 @@ extension AnchorPagerViewController: AnchorPagerPagingHostViewControllerDelegate
             selectedIndex = index
         }
         installVisibleContentIfNeeded()
+        reconcileCommittedScrollBinding()
         if activeReloadRequestIdentifier == requestIdentifier {
             activeReloadRequestIdentifier = nil
         }

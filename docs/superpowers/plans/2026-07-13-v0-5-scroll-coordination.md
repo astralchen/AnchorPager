@@ -1014,7 +1014,7 @@ git commit -m "实现纵向滚动协调状态"
 - Consumes: Task 4 coordinator、Store `committedCurrentScrollView`、既有 reload/selection terminal。
 - Produces: `reconcileCommittedScrollBinding()` 唯一接线入口；container scroll delegate 先协调 offset、再更新可见布局。
 
-- [ ] **Step 1: 写 ViewController RED 测试**
+- [x] **Step 1: 写 ViewController RED 测试**
 
 在 `AnchorPagerViewControllerTests` 加入以下完整场景；公共 arrange 使用 fixed 100 pt collapsible Header、真实 window 和现有 `installedAdapter(in:)` helper：
 
@@ -1194,7 +1194,7 @@ func testDeinitSynchronouslyReleasesScrollBindingAndPreservesBusinessDelegate() 
 private final class RecordingScrollDelegate: NSObject, UIScrollViewDelegate {}
 ```
 
-- [ ] **Step 2: 运行 ViewController 测试并确认 RED**
+- [x] **Step 2: 运行 ViewController 测试并确认 RED**
 
 ```bash
 xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17' \
@@ -1203,7 +1203,7 @@ xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 
 
 Expected: 新测试因没有 coordinator binding/terminal 接线而失败。
 
-- [ ] **Step 3: 提取 container delegate**
+- [x] **Step 3: 提取 container delegate**
 
 创建：
 
@@ -1231,7 +1231,7 @@ final class AnchorPagerVerticalScrollDelegate: NSObject, UIScrollViewDelegate {
 
 删除 ViewController 内嵌 `VerticalScrollDelegate`，保持 public `verticalScrollView.delegate` 仍由 AnchorPager 独占。
 
-- [ ] **Step 4: 接入 coordinator 与 committed rebind**
+- [x] **Step 4: 接入 coordinator 与 committed rebind**
 
 把现有 public 属性改为显式基类静态类型，保持 API 仍只暴露 UIKit：
 
@@ -1269,11 +1269,11 @@ private func reconcileCommittedScrollBinding() {
 
 不得从 `willSelect`、`willPerformReload`、provider callback 或 staged snapshot 绑定 child。
 
-- [ ] **Step 5: 添加源码门禁测试**
+- [x] **Step 5: 添加源码门禁测试**
 
 读取 `Sources/AnchorPager/Children/AnchorPagerChildScrollBinding.swift`、`Sources/AnchorPager/Core/AnchorPagerScrollCoordinator.swift`、`Sources/AnchorPager/Gesture/AnchorPagerContainerScrollView.swift` 和 `Sources/AnchorPager/Public/AnchorPagerViewController.swift`，断言不存在对 `committedCurrentScrollView.delegate`、`childScrollView.delegate`、`scrollView.delegate` 或任意 `.panGestureRecognizer.delegate` 的赋值；允许唯一既有 `verticalScrollView.delegate = verticalScrollDelegate`。同时断言生产源码不包含 `Task.detached`、`nonisolated(unsafe)` 或 `@unchecked Sendable`。
 
-- [ ] **Step 6: 运行框架聚焦回归**
+- [x] **Step 6: 运行框架聚焦回归**
 
 ```bash
 xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17' \
@@ -1287,7 +1287,9 @@ xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 
 
 Expected: 全部通过，0 failures；现有 Pageboy child bounds、inset、reload generation 和 appearance 测试不回归。
 
-- [ ] **Step 7: 自审并提交**
+Actual: 最小 RED 同时证明旧 container 类型和未绑定 child；接线后最小 2 tests GREEN。首次聚焦回归的 162 tests 中仅旧 v0.3 “部分折叠仍保留 child distance=37”两处断言失败；该预期与 v0.5 已确认唯一 owner 不变量冲突，更新为归顶且不延迟恢复后，最终 163 tests、0 failures。源码门禁确认只有 `verticalScrollView.delegate = verticalScrollDelegate`，不存在业务 child 或任意内建 pan delegate 写入。
+
+- [x] **Step 7: 自审并提交**
 
 ```bash
 git diff --check

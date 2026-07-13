@@ -24,6 +24,89 @@ final class AnchorPagerViewControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testInitialCommittedChildCoordinatesWithoutReplacingBusinessDelegate() {
+        var configuration = AnchorPagerConfiguration.default
+        configuration.header.heightMode = .fixed(max: 100, min: 0)
+        let child = ScrollChildViewController()
+        child.loadViewIfNeeded()
+        let businessDelegate = VerticalOwnershipScrollDelegate()
+        child.scrollView.delegate = businessDelegate
+        child.scrollView.contentSize = CGSize(width: 320, height: 1_200)
+        let pager = AnchorPagerViewController(configuration: configuration)
+        let dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [child],
+            headerContent: .view(FixedFittingView(height: 100))
+        )
+        pager.dataSource = dataSource
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = pager
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+
+        pager.reloadData()
+        window.layoutIfNeeded()
+        pager.verticalScrollView.contentOffset.y = 50
+        child.scrollView.contentOffset.y = -child.scrollView.contentInset.top + 20
+
+        XCTAssertEqual(
+            child.scrollView.contentOffset.y,
+            -child.scrollView.contentInset.top,
+            accuracy: 0.5
+        )
+        XCTAssertTrue(child.scrollView.delegate === businessDelegate)
+    }
+
+    @MainActor
+    func testPublicVerticalScrollViewUsesInternalContainerWithoutLeakingItsType() {
+        let pager = AnchorPagerViewController()
+
+        XCTAssertTrue(pager.verticalScrollView is AnchorPagerContainerScrollView)
+        XCTAssertTrue(
+            pager.verticalScrollView.panGestureRecognizer.delegate
+                === pager.verticalScrollView
+        )
+    }
+
+    func testVerticalCoordinationSourcesNeverAssignBusinessOrPanDelegates() throws {
+        let testURL = URL(fileURLWithPath: #filePath)
+        let packageRoot = testURL
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let relativePaths = [
+            "Sources/AnchorPager/Children/AnchorPagerChildScrollBinding.swift",
+            "Sources/AnchorPager/Core/AnchorPagerScrollCoordinator.swift",
+            "Sources/AnchorPager/Gesture/AnchorPagerContainerScrollView.swift"
+        ]
+
+        for relativePath in relativePaths {
+            let source = try String(
+                contentsOf: packageRoot.appendingPathComponent(relativePath),
+                encoding: .utf8
+            )
+            XCTAssertFalse(source.contains(".delegate ="), relativePath)
+            XCTAssertFalse(source.contains("panGestureRecognizer.delegate ="), relativePath)
+            XCTAssertFalse(source.contains("Task.detached"), relativePath)
+            XCTAssertFalse(source.contains("nonisolated(unsafe)"), relativePath)
+            XCTAssertFalse(source.contains("@unchecked Sendable"), relativePath)
+        }
+
+        let viewControllerSource = try String(
+            contentsOf: packageRoot.appendingPathComponent(
+                "Sources/AnchorPager/Public/AnchorPagerViewController.swift"
+            ),
+            encoding: .utf8
+        )
+        XCTAssertTrue(
+            viewControllerSource.contains(
+                "verticalScrollView.delegate = verticalScrollDelegate"
+            )
+        )
+        XCTAssertFalse(viewControllerSource.contains("panGestureRecognizer.delegate ="))
+    }
+
+    @MainActor
     func testReloadDataKeepsEmptyPageSelectionAtZero() {
         let pager = AnchorPagerViewController()
         let dataSource = StubDataSource(count: 0)
@@ -1469,7 +1552,7 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         )
         XCTAssertEqual(
             child.scrollView.contentOffset.y + child.scrollView.contentInset.top,
-            37,
+            0,
             accuracy: 0.5
         )
         XCTAssertEqual(adapter.view.bounds.height, fixedAdapterHeight, accuracy: 0.5)
@@ -1488,7 +1571,7 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         )
         XCTAssertEqual(
             child.scrollView.contentOffset.y + child.scrollView.contentInset.top,
-            37,
+            0,
             accuracy: 0.5
         )
         XCTAssertEqual(adapter.view.bounds.height, fixedAdapterHeight, accuracy: 0.5)
@@ -2358,6 +2441,9 @@ private final class DynamicFittingView: UIView {
         CGSize(width: targetSize.width, height: measuredHeight)
     }
 }
+
+@MainActor
+private final class VerticalOwnershipScrollDelegate: NSObject, UIScrollViewDelegate {}
 
 private final class SafeAreaSensitiveHeaderView: UIView {
     let contentView = UIView()
