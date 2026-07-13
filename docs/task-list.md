@@ -389,7 +389,7 @@
 
 ## v0.5：纵向嵌套滚动协调版
 
-设计与计划门禁已满足：设计见 `docs/superpowers/specs/2026-07-13-v0-5-scroll-coordination-design.md`，实施计划见 `docs/superpowers/plans/2026-07-13-v0-5-scroll-coordination.md`。实现进行中，Task 1 已完成；Task 2 已根据 UIKit 实测和 JXPagingView 参考验证改为 container scroll view 子类方案。ScrollCoordinator 只读 Store committed current page/scroll target，empty 时两者为 nil，并在 matching reload/selection complete/cancel terminal 后重新绑定。任何时刻都不得设置业务 child 的 `UIScrollView.delegate`，也不得设置 container/child 内建 pan delegate、缓存 Host/adapter/provider、读取 provider pending，或复制 page identity/cache/generation 职责。
+设计与计划门禁已满足：设计见 `docs/superpowers/specs/2026-07-13-v0-5-scroll-coordination-design.md`，实施计划见 `docs/superpowers/plans/2026-07-13-v0-5-scroll-coordination.md`。实现进行中，Task 1–2 已完成，Task 3 尚未开始。ScrollCoordinator 只读 Store committed current page/scroll target，empty 时两者为 nil，并在 matching reload/selection complete/cancel terminal 后重新绑定。任何时刻都不得设置业务 child 的 `UIScrollView.delegate`，也不得设置 container/child 内建 pan delegate、缓存 Host/adapter/provider、读取 provider pending，或复制 page identity/cache/generation 职责。
 
 - [ ] 创建 `Sources/AnchorPager/Core/AnchorPagerScrollCoordinator.swift`
 - [ ] Header 未完全折叠时优先响应向上滚动

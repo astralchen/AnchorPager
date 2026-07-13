@@ -242,7 +242,7 @@ git commit -m "实现纵向滚动位置解析器"
 - Consumes: AnchorPager 自有 container scroll view 与 Store committed current child pan。
 - Produces: `AnchorPagerContainerScrollView.bindCurrentChildPan(_:)`；scroll view 子类自身只允许 container/current child pair simultaneous，绝不设置 container 或 child pan delegate。
 
-- [ ] **Step 1: 保留 UIKit 失败证据并删除错误 proxy RED**
+- [x] **Step 1: 保留 UIKit 失败证据并删除错误 proxy RED**
 
 已执行原计划 proxy 测试，5/5 均稳定抛出：
 
@@ -252,7 +252,7 @@ UIScrollView's built-in pan gesture recognizer must have its scroll view as its 
 
 删除错误生产文件与测试，禁止通过捕获异常、KVC 或其他未公开入口绕过 UIKit 不变量。
 
-- [ ] **Step 2: 写 container 子类完整 RED 测试**
+- [x] **Step 2: 写 container 子类完整 RED 测试**
 
 ```swift
 import XCTest
@@ -332,7 +332,7 @@ final class AnchorPagerContainerScrollViewTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 3: 运行测试并确认 RED**
+- [x] **Step 3: 运行测试并确认 RED**
 
 ```bash
 xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17' \
@@ -341,13 +341,13 @@ xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 
 
 Expected: 编译失败，提示找不到 `AnchorPagerContainerScrollView`。
 
-- [ ] **Step 4: 实现 container scroll view 子类**
+- [x] **Step 4: 实现 container scroll view 子类**
 
 ```swift
 import UIKit
 
 @MainActor
-final class AnchorPagerContainerScrollView: UIScrollView {
+final class AnchorPagerContainerScrollView: UIScrollView, UIGestureRecognizerDelegate {
     private weak var currentChildPan: UIPanGestureRecognizer?
 
     func bindCurrentChildPan(_ pan: UIPanGestureRecognizer?) {
@@ -375,7 +375,7 @@ final class AnchorPagerContainerScrollView: UIScrollView {
 }
 ```
 
-- [ ] **Step 5: 运行子类与日志回归**
+- [x] **Step 5: 运行子类与日志回归**
 
 ```bash
 xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17' \
@@ -385,7 +385,9 @@ xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 
 
 Expected: 全部通过，0 failures；UIKit 实际 pan delegate 仍为 container，child pan delegate identity 不变。
 
-- [ ] **Step 6: 自审并提交**
+Actual: RED 因找不到 `AnchorPagerContainerScrollView` 失败；首次最小实现的直接方法测试通过，但 UIKit optional protocol dispatch 返回 nil。与 JXPagingView 对照后补充显式 `UIGestureRecognizerDelegate` 声明，最终 container 5 tests + logger 6 tests，共 11 tests，0 failures；新增 sink 测试确认相同 pair 幂等绑定只记录一次 `gesture.simultaneous.enabled`。
+
+- [x] **Step 6: 自审并提交**
 
 确认生产代码不存在 `.panGestureRecognizer.delegate =`，只通过子类方法建立 committed pair；Public API 尚未改变，Task 5 再把该 internal 实例装入 `verticalScrollView`。
 

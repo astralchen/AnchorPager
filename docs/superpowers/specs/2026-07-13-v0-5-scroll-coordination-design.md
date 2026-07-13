@@ -2,7 +2,7 @@
 
 **日期：** 2026-07-13
 
-**状态：** 用户已确认；Task 1 已完成；Task 2 因 UIKit 内建 pan delegate 不变量完成设计修订
+**状态：** 用户已确认；Task 1–2 已完成；Task 3 尚未开始
 
 **适用范围：** v0.5 `AnchorPagerScrollCoordinator`、当前 container/current child 连续纵向 handoff、最小 simultaneous recognition、顶部下拉临时边界和真实手势验收
 
@@ -88,7 +88,7 @@ MainActor internal 类型，只负责：
 
 仅作为 `verticalScrollView` 的 private runtime instance：
 
-1. 继承 `UIScrollView` 并实现 `gestureRecognizer(_:shouldRecognizeSimultaneouslyWith:)`。
+1. 继承 `UIScrollView`，显式声明 `UIGestureRecognizerDelegate` 并实现 `gestureRecognizer(_:shouldRecognizeSimultaneouslyWith:)`；显式声明是 Swift 6 下让 UIKit optional protocol dispatch 命中子类实现的必要条件。
 2. 仅当识别对恰好是自己的 pan 与当前 committed child pan 时返回 `true`；任意横向 pager pan、旧 child pan、非 pan 或无绑定均返回 `false`。
 3. `bindCurrentChildPan(_:)` 只 weak 保存 child pan，相同实例重绑幂等，nil 同步解除 pair。
 4. 不给 container/child pan delegate 赋值，不保存、转发或恢复 recognizer delegate。
