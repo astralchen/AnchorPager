@@ -389,7 +389,7 @@
 
 ## v0.5：纵向嵌套滚动协调版
 
-设计见 `docs/superpowers/specs/2026-07-13-v0-5-scroll-coordination-design.md`，direct page 修订见 `docs/superpowers/specs/2026-07-13-plain-page-direct-containment-design.md`，最终边界 owner 契约见 `docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md`。Task 1–6、direct containment 和边界实现均已完成；Task 7 初次独立复审发现的 3 个 Important 已修复并通过新鲜全量验收，再次独立复审待执行，因此 v0.5 尚未标记 Ready。
+设计见 `docs/superpowers/specs/2026-07-13-v0-5-scroll-coordination-design.md`，direct page 修订见 `docs/superpowers/specs/2026-07-13-plain-page-direct-containment-design.md`，最终边界 owner 契约见 `docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md`。Task 1–6、direct containment 和边界实现均已完成；Task 7 初次独立复审的 3 个 Important 与再次整分支复审剩余的 1 个 Important、1 个 Minor 均已修复并通过新鲜全量验收，修复后的再次独立复审待执行，因此 v0.5 尚未标记 Ready。
 
 - [x] 删除无滚动页 synthetic scroll wrapper 及其额外 containment
 - [x] 无滚动 original page 直接交给 Pageboy，Store 保存 page 非 nil、scroll target 为 nil
@@ -439,15 +439,17 @@
 - [x] Task 7 十项实现者自审未发现阻塞性代码缺陷
 - [x] Task 7 初次独立复审：发现未呈现 owner 反向回稳、部分折叠 Header 的 child top KVO 路由、`.none` UI 探针假阳性共 3 个 Important
 - [x] Task 7 复审问题修复提交：`f81ca1e`（`修复未呈现边界所有权收敛`）
-- [x] Task 7 复审修复新鲜验收：Apple Swift 6.3.3；Framework 271 项、Example 37 项（10 单元 + 27 UI），0 fail、0 skip；Example generic Simulator build 成功；三份 xcresult 0 error/warning/analyzer warning
-- [ ] Task 7 再次独立复审：待覆盖 `be2d783...HEAD` 并重点比较 `b00d204...f81ca1e`；Critical/Important 尚未由再次独立复审确认清零
+- [x] Task 7 再次整分支复审：发现零稳定区间跨越相反边界仍返回旧未呈现 owner 的 1 个 Important，以及 architecture 只描述顶部 presentation、仍把完整 child offset 转移写成后续 v0.5 的 1 个 Minor
+- [x] Task 7 零稳定区间修复提交：`5b80893`（`修复零区间边界反向切换`）；架构文档同步改为 top/bottom 对称公式与当前 v0.5/v0.7 职责
+- [x] Task 7 最新修复新鲜验收：Apple Swift 6.3.3；Framework 276 项、Example 37 项（10 单元 + 27 UI），0 fail、0 skip；Example generic Simulator build 成功；三份 xcresult 0 error/warning/analyzer warning
+- [ ] Task 7 修复后再次独立复审：待覆盖 `be2d783...HEAD` 并重点比较 `b00d204...5b80893`；Critical/Important 尚未由再次独立复审确认清零
 - [ ] v0.5 Ready：等待上述再次独立复审，不提前标记
 
 ## v0.6：顶部 Overscroll 事件处理版
 
 依赖门禁：OverscrollCoordinator 只消费 v0.5 已绑定的 committed current/empty owner；pending provider page 不能成为 overscroll owner。
 
-设计与计划：`docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md`、`docs/superpowers/plans/2026-07-13-boundary-bounce-ownership.md`。mode、owner、cancel、日志与六类真实 UI 已完成复审问题修复与新鲜验收；再次独立复审待执行，因此 v0.6 尚未标记 Ready。
+设计与计划：`docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md`、`docs/superpowers/plans/2026-07-13-boundary-bounce-ownership.md`。mode、owner、cancel、日志与六类真实 UI 已完成当前复审问题修复与新鲜验收；修复后的再次独立复审待执行，因此 v0.6 尚未标记 Ready。
 
 - [x] 创建 `Sources/AnchorPager/Overscroll/AnchorPagerOverscrollCoordinator.swift`
 - [x] 实现 `.none`
@@ -477,9 +479,9 @@
 - [x] UI test 验证实际 current/max presentation distance，不再只记录瞬时负 offset flag
 - [x] Example 顶部回弹菜单与 launch argument 覆盖默认 container、child、none
 - [x] 六类真实 UI：plain top/bottom、real child container top、real child child top、none top、real child bottom 全部通过
-- [x] v0.6 最新修复验收复用本轮 Framework 271 / Example 37 / generic build，0 fail、0 skip、0 xcresult warning
+- [x] v0.6 最新修复验收复用本轮 Framework 276 / Example 37 / generic build，0 fail、0 skip、0 xcresult warning
 - [x] v0.6 实现提交为 `10f1799`、`a4f7c3f`、`47abcd6`，验收记录随 `同步纵向边界回弹验收记录` 提交
-- [ ] v0.6 再次独立复审与 Ready：待主代理覆盖 `be2d783...HEAD` 并重点复查 `b00d204...f81ca1e` 后决定
+- [ ] v0.6 修复后再次独立复审与 Ready：待主代理覆盖 `be2d783...HEAD` 并重点复查 `b00d204...5b80893` 后决定
 
 ## v0.7：手势与交互状态机版
 

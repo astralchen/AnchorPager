@@ -22,7 +22,7 @@ AnchorPager 是一个全新的独立 UIKit 容器框架，用于实现可变 Hea
 
 ### 当前复审门禁
 
-v0.5/v0.6 初次独立复审发现的 3 个 Important 已在 `f81ca1e` 修复；Apple Swift 6.3.3、iPhone 17 Pro / iOS 26.5 新鲜验收为 Framework 271 项、Example 37 项、0 fail、0 skip，generic iOS Simulator build 成功。再次独立复审待执行；在其确认 Critical/Important 清零前，不标记 v0.5/v0.6 Ready。
+v0.5/v0.6 初次独立复审的 3 个 Important 已在 `f81ca1e` 修复，再次整分支复审剩余的零稳定区间边界反向切换 Important 已在 `5b80893` 修复，架构文档 Minor 同步修正；Apple Swift 6.3.3、iPhone 17 Pro / iOS 26.5 新鲜验收为 Framework 276 项、Example 37 项、0 fail、0 skip，generic iOS Simulator build 成功。修复后的再次独立复审待执行；在其确认 Critical/Important 清零前，不标记 v0.5/v0.6 Ready。
 
 ## 3. 参考项目
 

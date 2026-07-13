@@ -8,7 +8,7 @@
 
 **Tech Stack:** Swift 6.2、Swift 6 language mode、UIKit、iOS 14+、Swift Package Manager、Tabman 4.0.1、Pageboy 5.0.2、XCTest/XCUITest、XcodeBuildMCP。
 
-**当前状态：** 专项修复已完成；boundary owner 初次独立复审问题修复后的新鲜全量复验通过，v0.5/v0.6 再次独立复审待执行。
+**当前状态：** 专项修复已完成；当前 boundary owner 复审问题修复后的新鲜全量复验通过，v0.5/v0.6 修复后再次独立复审待执行。
 
 ## Global Constraints
 
@@ -713,7 +713,7 @@ Expected: 工作区无未解释改动；最近四个实施提交依次覆盖 Sto
 
 ### 边界 owner 集成后的新鲜复验
 
-- `f81ca1e` 复审修复后 Framework 271 项与 Example 37 项全部通过，0 fail、0 skip；generic Simulator build 成功。
+- `f81ca1e` 与 `5b80893` 复审修复后 Framework 276 项与 Example 37 项全部通过，0 fail、0 skip；generic Simulator build 成功。
 - plain page 仍为 original Pageboy containment、committed scroll target nil、无 managed inset/snapshot/child pan；顶部 `.container`、底部 container presentation、`.child` 顶部不可用且不回退的真实 UI 均通过。
 - `testPlainPageRootReachesPhysicalBottomAndUsesContainerOnlyPan`、plain top/bottom bounce 用例均包含在本轮 Example 全量 xcresult 中。
 - 本补充只记录实现者复验；再次独立复审待执行，不改变 v0.5 Ready 门禁。

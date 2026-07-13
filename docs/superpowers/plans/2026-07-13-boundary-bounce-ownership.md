@@ -8,7 +8,7 @@
 
 **技术栈：** Swift 6.2、Swift 6 language mode、UIKit、iOS 14+、Swift Package Manager、Tabman 4.0.1、Pageboy 5.0.2、XCTest/XCUITest、Xcode 26.3。
 
-**当前状态：** Tasks 1–6 已实现；Task 7 初次独立复审发现的 3 个 Important 已修复并完成新鲜验收；再次独立复审和最终状态提交仍待完成，v0.5/v0.6 不标记 Ready。
+**当前状态：** Tasks 1–6 已实现；Task 7 初次独立复审的 3 个 Important 与再次整分支复审剩余的 1 个 Important、1 个 Minor 均已修复并完成新鲜验收；修复后的再次独立复审和最终状态提交仍待完成，v0.5/v0.6 不标记 Ready。
 
 ## Global Constraints
 
@@ -1688,7 +1688,7 @@ Expected: Swift 6.2 或更高；resolve、framework tests、Example 单元/UI te
 
 - [ ] **Step 5b：执行修复后的再次独立复审门禁**
 
-覆盖 `be2d783...HEAD` 并重点比较 `b00d204...f81ca1e`；再次独立复审确认 Critical/Important 清零前，不执行 Ready 提交。
+覆盖 `be2d783...HEAD` 并重点比较 `b00d204...5b80893`；修复后的再次独立复审确认 Critical/Important 清零前，不执行 Ready 提交。
 
 - [ ] **Step 6：提交最终文档与验收记录**
 
@@ -1726,8 +1726,9 @@ git commit -m "完成纵向边界回弹验收"
 
 ### 待完成门禁
 
-- 初次独立复审的 3 个 Important 已修复；修复后新鲜验收为 Framework 271 项、Example 37 项、generic build 全部成功，0 fail、0 skip，三份 xcresult 0 error/warning/analyzer warning。
-- 再次独立复审待执行，必须覆盖 `be2d783...HEAD` 并重点比较 `b00d204...f81ca1e`。本轮修复者不声称 Critical/Important 已由再次独立审查清零。
+- 初次独立复审的 3 个 Important 与再次整分支复审的零稳定区间 Important、架构文档 Minor 均已修复；`5b80893` 只在纯 Overscroll policy 内切换不同 boundary 的未呈现 owner，同 boundary 与已呈现 owner 保持原语义。
+- 最新新鲜验收为 Framework 276 项、Example 37 项、generic build 全部成功，0 fail、0 skip，三份 xcresult 0 error/warning/analyzer warning。
+- 修复后的再次独立复审待执行，必须覆盖 `be2d783...HEAD` 并重点比较 `b00d204...5b80893`。本轮修复者不声称 Critical/Important 已由再次独立审查清零。
 - 复审修复验收记录提交标题为 `更新边界回弹复审验收记录`；再次独立复审通过后再决定是否执行计划原 Step 6 的最终完成提交和 Ready 标记。
 
 ---

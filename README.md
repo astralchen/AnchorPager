@@ -2,7 +2,7 @@
 
 AnchorPager 是一个 UIKit 容器框架，用于组合可变 Header、吸顶分段栏、多页面横向分页和纵向嵌套滚动。当前实现已在 v0.4 page identity、cache、reload generation 与 managed inset 基础上完成 container/current child 连续 handoff、无滚动页面直接 Pageboy containment、稳定区间与原生边界分离，以及 `.none`、`.container`、`.child` 三种顶部 overscroll 路由。默认顶部模式为 `.container`。
 
-2026-07-13 使用 Apple Swift 6.3.3、iPhone 17 Pro / iOS 26.5 对独立复审修复提交 `f81ca1e` 运行新鲜完整验收：Framework 271 项、Example 10 项单元测试与 27 项 UI 测试全部通过，均为 0 failure、0 skip；Example generic iOS Simulator build 成功。三份 xcresult 的 error、warning 与 analyzer warning 均为 0。初次独立复审发现的 3 个 Important 已完成实现者修复与验收，但再次独立复审待执行；在该门禁完成前不把 v0.5 或 v0.6 标记为 Ready，也不声称 Critical/Important 已由独立审查清零。
+2026-07-13 使用 Apple Swift 6.3.3、iPhone 17 Pro / iOS 26.5 对最新修复提交 `5b80893` 运行新鲜完整验收：Framework 276 项、Example 10 项单元测试与 27 项 UI 测试全部通过，均为 0 failure、0 skip；Example generic iOS Simulator build 成功。三份 xcresult 的 error、warning 与 analyzer warning 均为 0。当前复审发现的问题已完成实现者修复与验收，但修复后的再次独立复审待执行；在该门禁完成前不把 v0.5 或 v0.6 标记为 Ready，也不声称 Critical/Important 已由独立审查清零。
 
 ## 安装
 
@@ -233,7 +233,7 @@ log stream --predicate 'subsystem == "com.anchorpager.AnchorPager"'
 
 ## 当前限制
 
-v0.5 连续纵向 handoff、无滚动页直接承载、stable/native boundary 分离、两类底部 owner 和 v0.6 顶部 mode 已完成复审问题修复与新鲜完整验收，但再次独立复审待执行，因此当前不标记 v0.5/v0.6 Ready。尚未实现的后续能力包括跨 owner velocity 合成、完整 interaction state、状态栏点击顶滚 owner 和尺寸变化后的滚动位置恢复；refresh control 或业务刷新任务也不属于 AnchorPager。Tabman/Pageboy 仅出现在 internal adapter 层，Public API 不暴露第三方类型。
+v0.5 连续纵向 handoff、无滚动页直接承载、stable/native boundary 分离、两类底部回弹路径和 v0.6 三种顶部模式已完成当前复审问题修复与新鲜完整验收，但修复后再次独立复审待执行，因此当前不标记 v0.5/v0.6 Ready。尚未实现的后续能力包括跨滚动区域的减速速度合成、完整交互状态、状态栏点击顶滚和尺寸变化后的滚动位置恢复；refresh control 或业务刷新任务也不属于 AnchorPager。Tabman/Pageboy 仅出现在 internal adapter 层，Public API 不暴露第三方类型。
 
 在 Xcode 26.3 / Swift 6.2.4 的 x86_64 iPhone 17 Simulator 验证中，把控制器同步析构改为
 `isolated deinit` 会在生命周期析构后稳定触发 allocator `pointer being freed was not allocated` 崩溃。
