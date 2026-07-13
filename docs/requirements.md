@@ -77,7 +77,7 @@ open class AnchorPagerViewController: UIViewController {
 
 `verticalScrollView` 的实例只读暴露，供接入方读取容器滚动状态；其 `delegate` 由 AnchorPager
 内部保留，用于驱动 Header/bar 可见几何和 collapse progress，调用方不得替换。主容器 scroll range
-只表示 Header 折叠距离，横纵滚动指示器必须隐藏；用户可见滚动进度只由当前 child/fallback 表达。
+只表示 Header 折叠距离，横纵滚动指示器必须隐藏；用户可见滚动进度只由当前真实 child scroll target 表达，无滚动页没有滚动指示器。
 
 数据源协议：
 
@@ -261,15 +261,15 @@ extension UIViewController {
 
 1. AnchorPagerViewController 是 child lifecycle 策略、page identity、reload 清理和对外状态语义的唯一管理者。
 2. 横向 page 的实际 UIKit containment 由内部 Tabman/Pageboy adapter 执行；AnchorPager 不得对同一个 page view controller 重复执行 `addChild`。
-3. Header view controller、fallback page scroll host 和其他 AnchorPager 自有 wrapper 必须通过标准 UIKit containment 管理。
-4. fallback host 首次承载普通 child 时必须执行 `addChild`、添加 view、`didMove(toParent:)`；清理时必须执行 `willMove(toParent: nil)`、移除 view、`removeFromParent`。
+3. Header view controller 和其他 AnchorPager 自有 wrapper 必须通过标准 UIKit containment 管理；无滚动横向业务页不得创建 AnchorPager wrapper。
+4. 无滚动横向业务页必须把 original controller 直接交给 Pageboy/UIKit containment，AnchorPager 不得对同一页面再次执行 `addChild`。
 5. 横向分页切换、懒加载、卸载、reloadData、setSelectedIndex 都不能破坏生命周期语义。
 6. page 切换必须正确收敛 Tabman/Pageboy 的 appearance 和 selection 回调，不能让取消或回弹提前提交 public 状态。
 7. 必须定义 page view controller 缓存窗口和 page identity 策略，默认至少保留 current page，可选择保留相邻 page。
 8. 卸载或替换 page 前必须保存 scroll offset、managed inset 状态和必要 appearance 状态。
-9. reloadData 必须清理旧 page state、旧 fallback host content、旧 offset snapshot 和旧 Tabman/Pageboy 状态。
+9. reloadData 必须清理旧 page state、真实 scroll ownership、旧 offset snapshot 和旧 Tabman/Pageboy 状态。
 10. Tabman/Pageboy 事件必须通过 adapter 标准化后再驱动 AnchorPager 的 public selection、scroll/inset 和 lifecycle 策略。
-11. 测试必须覆盖 Tabman 驱动下的生命周期语义、selection cancel、reloadData 后旧 child 可释放，以及 fallback host containment 顺序。
+11. 测试必须覆盖 Tabman 驱动下的生命周期语义、selection cancel、reloadData 后旧 child 可释放，以及无滚动 original page 的直接 containment。
 12. AnchorPager 不得设置横向业务 child 的 `UIScrollView.delegate`；纵向协调对 child offset、contentSize 和 pan state 的观察必须保留接入方原 delegate 身份与回调语义。
 
 ## 10. API Contract 要求
@@ -345,7 +345,7 @@ extension UIViewController {
 
 1. KVO、Notification、gesture delegate、display link、Task、closure callback 必须在 child 卸载或 deinit 时释放。
 2. 不允许 page state store、adapter、coordinator 之间形成 retain cycle。
-3. reloadData 后旧 page state、fallback host 和不再使用的 child 应可释放。
+3. reloadData 后旧 page state、scroll ownership 和不再使用的 child 应可释放。
 4. deinit 时必须清理内部 observer、gesture 关系和 pending transition。
 
 ## 17. 日志与可观测性要求
@@ -362,7 +362,7 @@ extension UIViewController {
 10. 必须记录顶部 overscroll 事件：mode、owner 进入、owner 退出、owner cancel、阈值判定结果。
 11. 必须记录手势和交互状态机事件：state begin、state update 中的重要边界、state finish、state cancel、非法或重复 transition 被忽略。
 12. 必须记录状态栏点击顶滚 owner 变化。
-13. 必须记录异常和降级策略：重复 viewController、无 scroll view fallback host、Header 测量异常、Tabman/Pageboy 回调缺失或乱序。
+13. 必须记录异常和降级策略：重复 viewController、无 scroll target、共享 scroll 冲突、Header 测量异常、Tabman/Pageboy 回调缺失或乱序。
 14. 高频滚动路径不得逐帧打印普通日志，只能记录状态变化、阈值跨越、owner 切换、异常或显式调试开关下的采样日志。
 15. 日志不得输出业务数据、用户内容、完整 view 层级或可能包含隐私的数据。
 16. 日志必须可测试。实现时应通过内部可注入 log sink 或等价机制验证关键事件确实发出，不依赖人工查看控制台。
@@ -431,7 +431,7 @@ README.md
 6. 实现 UIViewController anchorPagerScrollView extension、associated object 显式设置、默认嵌套查找和测试。
 7. 实现 AnchorPagerLayoutEngine 和单元测试。
 8. 实现 Header 管理、Header controller containment 和 Header 动态 frame 更新。
-9. 实现 page state store、fallback containment、缓存窗口和 Tabman 驱动的 lifecycle 语义转发。
+9. 实现 page state store、无滚动页直接 containment、缓存窗口和 Tabman 驱动的 lifecycle 语义转发。
 10. 封装 Tabman/Pageboy adapter。
 11. 实现纵向嵌套滚动协调。
 12. 实现顶部 overscroll event handling。
@@ -469,10 +469,10 @@ README.md
 20. 显式设置优先于默认查找测试
 21. 多个 UIScrollView 时选择规则稳定性测试
 22. hidden、alpha、userInteractionEnabled 过滤测试
-23. 关闭默认查找后使用内部 page scroll host 测试
-24. 无候选 UIScrollView 时使用内部 page scroll host 测试
+23. 关闭默认查找后 original page 直接 containment 且 scroll target 为 nil 的测试
+24. 无候选 UIScrollView 时 original page 直接 containment 且根 view 铺满 viewport 的测试
 25. 不跨 child view controller 边界查找测试
-26. fallback host child add/remove containment 单测
+26. 无滚动 original page 仅由 Pageboy containment 的单测
 27. Tabman 驱动的 child appearance lifecycle 顺序测试
 28. top overscroll owner 互斥单测
 29. top overscroll handling mode 单测

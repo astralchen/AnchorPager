@@ -98,7 +98,7 @@ func headerContent(in pagerViewController: AnchorPagerViewController) -> AnchorP
 
 Header 使用 `UIViewController` 时，AnchorPager 内部通过标准 UIKit containment 承载。
 
-横向页面的实际分页和 page view controller containment 由内部 Tabman/Pageboy adapter 执行。AnchorPager 维护 public API、selection、reload、scroll discovery、fallback host 和后续 inset/scroll 策略，应用代码不需要直接使用 Tabman 或 Pageboy 类型。
+横向页面的实际分页和 page view controller containment 由内部 Tabman/Pageboy adapter 执行。AnchorPager 维护 public API、selection、reload、scroll discovery 和真实 scroll target 的 inset/scroll 策略，应用代码不需要直接使用 Tabman 或 Pageboy 类型。已确认的目标修订会让无滚动页直接作为 Pageboy page，不再建立 AnchorPager wrapper containment；当前开发分支限制见下文。
 
 可见状态下调用 `setSelectedIndex(_:animated:)` 时，AnchorPager 会等内部分页 adapter 确认完成后再更新 `selectedIndex` 并通知 delegate；取消或回弹不会提前提交。若分页 adapter 正在处理上一笔切页而拒绝新请求，v0.1 不做请求排队，当前 public 选择状态保持不变。
 
@@ -184,7 +184,7 @@ final class PlainPageViewController: UIViewController {
 }
 ```
 
-无候选 `UIScrollView` 时，AnchorPager 会先使用内部 fallback scroll host 包装普通 child，再交给横向分页 adapter。fallback 与真实 scroll page 使用同一套 managed inset 规则；普通 child 的最小高度按扣除 managed top/bottom 后的可用 viewport 计算。
+当前 v0.5 开发分支在无候选 `UIScrollView` 时仍使用内部 fallback scroll host 包装普通 child，但真实视图层级已确认该方案会把业务根 view 缩短到 managed inset 后的高度，底边不能到达物理屏幕底部。该设计已废止，待按 `docs/superpowers/specs/2026-07-13-plain-page-direct-containment-design.md` 改为 original page 直接由 Pageboy containment、scroll target 为 nil；修复完成前不得把 v0.5 标为 Ready。
 
 ## 页面生命周期与缓存
 

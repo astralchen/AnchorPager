@@ -389,7 +389,13 @@
 
 ## v0.5：纵向嵌套滚动协调版
 
-设计与计划门禁已满足：设计见 `docs/superpowers/specs/2026-07-13-v0-5-scroll-coordination-design.md`，实施计划见 `docs/superpowers/plans/2026-07-13-v0-5-scroll-coordination.md`。实现进行中，Task 1–6 已完成，Task 7 最终验收尚未开始。ScrollCoordinator 只读 Store committed current page/scroll target，empty 时两者为 nil，并在 matching reload/selection complete/cancel terminal 后重新绑定。任何时刻都不得设置业务 child 的 `UIScrollView.delegate`，也不得设置 container/child 内建 pan delegate、缓存 Host/adapter/provider、读取 provider pending，或复制 page identity/cache/generation 职责。真实 pan 验收补充了可恢复 child `bounces` 租约：顶部或 container pan 活跃期间关闭，离开顶部且手势结束或解绑时恢复绑定前值。
+设计与计划门禁已满足：设计见 `docs/superpowers/specs/2026-07-13-v0-5-scroll-coordination-design.md`，实施计划见 `docs/superpowers/plans/2026-07-13-v0-5-scroll-coordination.md`。Task 1–6 已完成，但真实视图层级发现无滚动页 synthetic fallback host 会缩短业务根 view，Task 7 暂停。修订设计见 `docs/superpowers/specs/2026-07-13-plain-page-direct-containment-design.md`：无滚动 original page 改为 Pageboy 直接 containment，committed page 非 nil、scroll target 为 nil，不应用 managed inset、snapshot 或 child bounce。修复和重新验收完成前不得把 v0.5 标为 Ready。
+
+- [ ] 删除无滚动页 synthetic fallback scroll host 及其 wrapper containment
+- [ ] 无滚动 original page 直接交给 Pageboy，Store 保存 page 非 nil、scroll target 为 nil
+- [ ] 无滚动页根 view 铺满 paging viewport，并在 Example root 下到达 window 物理底边
+- [ ] 无滚动页不参与 managed inset、offset snapshot、child bounce 或 simultaneous pair
+- [ ] 真实 pan UI 测试读取 plain root/window 几何，不再用写死 distance 代替内部事实
 
 - [ ] 创建 `Sources/AnchorPager/Core/AnchorPagerScrollCoordinator.swift`
 - [ ] Header 未完全折叠时优先响应向上滚动

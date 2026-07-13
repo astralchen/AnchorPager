@@ -1,8 +1,10 @@
 # v0.5 纵向滚动协调与代理所有权设计
 
+> 2026-07-13 修订：本文关于 fallback 页作为 child scroll owner 或 simultaneous pair 的描述已被 `2026-07-13-plain-page-direct-containment-design.md` 取代。无 scroll 当前页的 committed page 非 nil、scroll target 为 nil，纵向手势只由 container 消费。
+
 **日期：** 2026-07-13
 
-**状态：** 用户已确认；Task 1–5 已完成；Task 6 尚未开始
+**状态：** 用户已确认；Task 1–6 已完成；无滚动页直接 containment 修订待实施，Task 7 暂停
 
 **适用范围：** v0.5 `AnchorPagerScrollCoordinator`、当前 container/current child 连续纵向 handoff、最小 simultaneous recognition、顶部下拉临时边界和真实手势验收
 

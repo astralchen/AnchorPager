@@ -1,7 +1,9 @@
 # 固定分页视口、Inset Ownership 与纵向滚动所有权设计
 
+> 2026-07-13 修订：本文关于无 scroll 页面创建 fallback scroll host、复用 managed inset 和 fallback indicator owner 的设计已被 `2026-07-13-plain-page-direct-containment-design.md` 取代。真实 scroll page 的固定 viewport 与 inset ownership 设计继续有效。
+
 **日期：** 2026-07-11
-**状态：** v0.3 已实现；v0.4 generation atomicity Task 1–3、完整验收与最终独立复审已完成；v0.5 专用设计与实施计划已确认，实现尚未开始
+**状态：** v0.3 已实现；v0.4 generation atomicity Task 1–3、完整验收与最终独立复审已完成；v0.5 Task 1–6 已完成，无滚动页直接 containment 修订待实施
 **适用版本：** v0.3、v0.4、v0.5
 
 **最新验收：** Swift 6.2.4；Framework 193 项、Example 5 项单元 + 16 项 UI，均 0 fail、0 skip；resolve / Framework / Example build / Example test 墙钟分别为 1.34 / 53.81 / 15.71 / 277.97 秒；warning 仅为 Pageboy/Tabman `PrivacyInfo.xcprivacy` unhandled resource 提示。
