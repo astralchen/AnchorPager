@@ -214,7 +214,7 @@ extension UIViewController {
 1. 每个 UIViewController 默认都可以作为 AnchorPager child。
 2. 显式设置的 scroll view 优先级最高。
 3. 未显式设置时，默认实现按确定性规则在 view 层级查找 UIScrollView。
-4. 如果最终没有 scroll view，则 AnchorPager 使用内部 page scroll host 承载 child.view。
+4. 如果最终没有 scroll view，则 original page 直接由 Pageboy/UIKit containment，AnchorPager 记录 nil scroll target，不创建替代 scroll view。
 5. extension 属性通过 associated object 存储显式设置值。
 6. `anchorPagerDefaultScrollView` 是只读计算属性，不缓存失效 view 引用。
 7. 默认查找必须确定性，建议深度优先，并在 `docs/architecture.md` 固定。
@@ -288,7 +288,7 @@ extension UIViewController {
 3. AnchorPager 只处理顶部 overscroll 相关 scroll event 和 gesture state。
 4. 支持 none、container、child 三种模式。
 5. container 模式下，Header 完全展开后的继续下拉由 verticalScrollView 处理。
-6. child 模式下，Header 完全展开后的继续下拉由当前 child scroll view 或内部 page scroll host 处理。
+6. child 模式下，Header 完全展开后的继续下拉只可由当前真实 child scroll view 处理；无滚动页没有 child overscroll owner，不创建替代 scroll view。
 7. 同一次下拉手势中只能有一个 top overscroll owner。
 8. Header 展开优先级高于 top overscroll handling。
 9. 横向分页、Header layout reload、屏幕旋转或 child 切换期间，active top overscroll handling 必须有明确暂停、取消或恢复策略。
@@ -299,7 +299,7 @@ extension UIViewController {
 2. AnchorPager 管理范围内任一时刻只能有一个 UIScrollView 的 scrollsToTop 为 true。
 3. 横向分页 scroll view 永远不能响应 scrollsToTop。
 4. Header 未完全折叠时，verticalScrollView 作为唯一 scroll-to-top 响应者。
-5. Header 已完全折叠且当前 child 可见时，当前 child scroll view 或内部 page scroll host 作为唯一响应者。
+5. Header 已完全折叠且当前真实 child scroll view 可见时，该 scroll view 作为唯一响应者；无滚动页不创建替代 scroll-to-top owner。
 6. 非当前 child、已卸载 child、横向 paging scroll view、内部辅助 scroll view 必须关闭 scrollsToTop。
 7. 页面切换、reloadData、Header layout reload、屏幕旋转、child 加载或卸载后必须重新计算 scrollsToTop owner。
 8. 空页状态下，AnchorPager 管理的所有 scroll view 都关闭 scrollsToTop。

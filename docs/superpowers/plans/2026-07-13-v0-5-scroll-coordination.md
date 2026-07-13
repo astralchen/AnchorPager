@@ -1365,6 +1365,7 @@ Expected: 状态类型/元素不存在或 handoff 断言失败。
 ```swift
 struct ExampleScrollCoordinationState: Equatable {
     var page: String
+    var hasScrollTarget: Bool
     var collapseProgress: CGFloat
     var childDistance: CGFloat
     var containerSawTopBounce: Bool
@@ -1372,8 +1373,9 @@ struct ExampleScrollCoordinationState: Equatable {
 
     var accessibilityValue: String {
         String(
-            format: "page=%@;collapse=%.2f;distance=%.2f;containerBounce=%d;childBounce=%d",
+            format: "page=%@;hasScrollTarget=%d;collapse=%.2f;distance=%.2f;containerBounce=%d;childBounce=%d",
             page,
+            hasScrollTarget ? 1 : 0,
             collapseProgress,
             childDistance,
             containerSawTopBounce ? 1 : 0,
@@ -1387,7 +1389,7 @@ struct ExampleScrollCoordinationState: Equatable {
 
 - [x] **Step 4: 实现并稳定五个 UI 场景**
 
-坐标使用页面内容中央，避开 navigation/tab bar 和横向边缘。用 predicate 等待状态，不使用固定 sleep。fallback 页无法直接读取内部 scroll offset时，以 `page=plain`、container bounce flag、plain content frame 和 Header/bar frame 作为替代自动化证据，并在计划验收记录中说明内部 fallback offset 已由框架集成测试覆盖。
+坐标使用页面内容中央，避开 navigation/tab bar 和横向边缘。用 predicate 等待状态，不使用固定 sleep。plain page 通过 `hasScrollTarget=0`、container bounce flag、plain root/window 几何和 Header/bar frame 证明没有 child scroll owner，不使用 synthetic offset 替代事实。
 
 首轮真实 pan 结果：Example 单元测试和单次上推 handoff 通过，但展开态下拉记录到 `childBounce=1`。根因是 UIKit 可能先向业务 child delegate 发布原生负 offset，再触发框架 KVO 收敛；现有只断言最终 offset 的 coordinator 单元测试未覆盖该瞬态。
 
@@ -1420,6 +1422,14 @@ git commit -m "验证纵向滚动真实手势交接"
 **Actual:** 首轮 Example 状态类型 RED 因类型不存在而编译失败；探针实现后聚焦集 7 项通过、1 项真实 pan 失败，失败明确记录到展开态下拉时 `childBounce=1`。根因确认是 UIKit 先向业务 delegate 发布原生负 offset、框架 KVO 后收敛，原“最终 offset 等于顶部”测试不足以证明唯一 bounce owner。设计先补充 committed child `bounces` 临时租约，再增加 2 个 coordinator RED 测试；iOS simulator 上 12 项 coordinator 测试由 2 failures 转为 12/12。修复后关键真实 pan 2/2、Task 6 聚合集 12/12 通过。旧 v0.3 UI 用例同步改为显式满足 v0.5 前置条件：长页到底时 Header 已折叠；在短页真实下拉展开后切回长页才验证回顶。最终 iPhone 17 Pro / iOS 26.5 Example 全量 28 tests、0 failures、0 skips，墙钟 218.3 秒。
 
 **Review:** 探针和序列化类型仅位于 Example target；框架 public API、Tabman/Pageboy adapter containment、Store generation/page identity、managed inset 和业务 delegate/pan delegate 均未变化。Example 页面自己设置其 scroll delegate；框架仅在 committed binding 内由 binding 保存/恢复业务 `bounces`，ScrollCoordinator 决定顶部/手势期间的临时租约，解绑、空态和 invalidate 同步恢复原值。五个新 UI 场景全部使用真实 coordinate drag 和 predicate，没有固定 sleep。
+
+---
+
+### 无滚动页面 direct containment 专项修复门禁
+
+Task 1–6 完成后的真实视图层级检查发现，历史 synthetic scroll wrapper 会缩短无滚动业务页根 view。专项设计与计划见 `docs/superpowers/specs/2026-07-13-plain-page-direct-containment-design.md` 和 `docs/superpowers/plans/2026-07-13-plain-page-direct-containment.md`。
+
+专项修复已完成：Store 采用 page/optional scroll 三态，plain original page 直接交给 Pageboy，synthetic wrapper 已删除；plain page 不参与 managed inset、snapshot、child bounce 或 simultaneous pair。专项全量验收为 Framework 220 tests、Example 30 tests，均 0 failures、0 skips；Example generic simulator build 成功。v0.5 Task 7 因此重新开放，但在其独立复审与最终完整验收完成前仍不得标记 v0.5 Ready。
 
 ---
 
@@ -1504,7 +1514,7 @@ git commit -m "完成 v0.5 纵向滚动协调验收"
 3. Task 3 后确认业务 child `UIScrollView.delegate` 没有任何写入路径。
 4. Task 4 后确认 handoff、guard、binding 和日志不复制 Store/Inset/Paging 职责。
 5. Task 5 后确认只在 committed reload/selection complete/cancel terminal 后 rebind。
-6. Task 6 后确认真实 drag 覆盖长页、短页、fallback、切页和唯一 container bounce。
+6. Task 6 后确认真实 drag 覆盖长页、短页、plain direct page、切页和唯一 container bounce。
 7. Task 7 后确认完整测试、代码自审和独立复审均有记录。
 
 ## 计划自审

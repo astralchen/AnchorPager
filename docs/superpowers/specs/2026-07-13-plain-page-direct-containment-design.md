@@ -2,7 +2,7 @@
 
 **日期：** 2026-07-13
 
-**状态：** 用户已确认，待实施计划与实现
+**状态：** 已实施并完成专项验收；v0.5 Task 7 已重新开放但尚未完成
 
 ## 背景
 
@@ -106,7 +106,7 @@ UIKit 的祖先 `verticalScrollView.panGestureRecognizer` 可以从普通 descen
 
 1. 无滚动页没有 managed inset ownership，Store managed update count 不包含它。
 2. 页面根 view 在 Header 展开、折叠、切页和 reload 后始终等于 Pageboy content viewport。
-3. 页面根 view 底边等于 AnchorPager bounds 底边；示例 root under Tab Bar 时等于 window 物理底边。
+3. 页面根 view 底边至少覆盖 AnchorPager bounds 底边；示例 root under Tab Bar 时至少覆盖 window 物理底边。
 4. UIKit safe area 或业务 `additionalSafeAreaInsets` 不被 AnchorPager 改写。
 
 ### 手势与 UI
@@ -119,7 +119,7 @@ UIKit 的祖先 `verticalScrollView.panGestureRecognizer` 可以从普通 descen
 
 ## 文件影响
 
-预计删除 fallback host 生产实现及其专用测试；预计修改 PageStateStore、Store/ViewController/PagingAdapter/Example 测试，以及 README、architecture、requirements、task-list 和 v0.3/v0.4/v0.5 相关状态文档。
+已删除 synthetic scroll wrapper 生产实现及其专用测试；已修改 PageStateStore、Store/ViewController/PagingAdapter/Example 测试，以及 README、architecture、requirements、task-list 和 v0.3/v0.4/v0.5 相关状态文档。
 
 ## 回归风险
 

@@ -32,7 +32,7 @@
 - Consumes: `UIViewController.anchorPagerScrollView: UIScrollView?`、`AnchorPagerManagedInsetCoordinator`、generation/retention API。
 - Produces: `pageViewController(at:context:originalProvider:) -> UIViewController?` 对无滚动页返回 original；`scrollView(at:)` 与 `committedCurrentScrollView` 返回 nil；日志事件 `scroll.target.none`。
 
-- [ ] **Step 1: 把 fallback 单测改为 direct page RED**
+- [x] **Step 1: 把 fallback 单测改为 direct page RED**
 
 把 `testPlainPageUsesSingleFallbackContainment` 替换为：
 
@@ -93,7 +93,7 @@ func testPlainPageWritesNoScrollTargetLogOnceAcrossReuse() {
 }
 ```
 
-- [ ] **Step 2: 更新 collision、generation 与 duplicate RED 期望**
+- [x] **Step 2: 更新 collision、generation 与 duplicate RED 期望**
 
 逐项重命名并固定以下语义：
 
@@ -131,7 +131,7 @@ XCTAssertTrue(second?.children.isEmpty == true)
 
 原先断言 Store 主动执行 fallback `willMove/removeFromParent` 的测试改为断言 plain child 始终没有 AnchorPager parent；Pageboy containment 留给 Task 2 集成测试。
 
-- [ ] **Step 3: 运行 Store RED**
+- [x] **Step 3: 运行 Store RED**
 
 Run:
 
@@ -144,7 +144,7 @@ xcodebuild -scheme AnchorPager \
 
 Expected: FAIL；plain page 仍返回 `AnchorPagerPageScrollHostViewController`、scroll 非 nil、缺少 `scroll.target.none`。
 
-- [ ] **Step 4: 最小化 PageIdentityPayload 与 CleanupPlan**
+- [x] **Step 4: 最小化 PageIdentityPayload 与 CleanupPlan**
 
 将 identity/cleanup 改为只保存 page 与 optional scroll：
 
@@ -178,7 +178,7 @@ private struct CleanupPlan {
 
 删除 `fallbackHost`、`ContainmentPreservation`、`makeFallbackHost` 以及 cleanup 中的 fallback containment 分支；generation cleanup 只释放真实 scroll ownership 并清空 state maps。
 
-- [ ] **Step 5: 实现 direct page + optional scroll 解析**
+- [x] **Step 5: 实现 direct page + optional scroll 解析**
 
 把页面解析局部变量改为 optional scroll：
 
@@ -217,7 +217,7 @@ state.identity.claimedScrollViewIdentifier = scrollView.map(ObjectIdentifier.ini
 
 `applyManagedInsets`、snapshot save/restore 和 ownership release 保持现有 `guard let scrollView else { return }`；不得给 nil scroll page 创建替代 owner。
 
-- [ ] **Step 6: 运行 Store GREEN 与相邻 inset/cache 测试**
+- [x] **Step 6: 运行 Store GREEN 与相邻 inset/cache 测试**
 
 Run:
 
@@ -231,7 +231,7 @@ xcodebuild -scheme AnchorPager \
 
 Expected: PASS，0 failures、0 skips；plain page 不进入 managed update count，真实 scroll snapshot/inset 测试保持通过。
 
-- [ ] **Step 7: 自审并提交 Store 三态**
+- [x] **Step 7: 自审并提交 Store 三态**
 
 确认：page/scroll/empty 三态、generation migration、shared scroll collision、retention、ownership preservation、日志不重复、无 fallback containment。
 
@@ -256,7 +256,7 @@ git commit -m "重建无滚动页面状态语义"
 - Consumes: Task 1 的 original page + nil scroll target。
 - Produces: Pageboy 对 plain original page 的唯一 containment；plain root 未裁剪几何至少覆盖 pager/window 底部；nil binding 不建立 simultaneous pair。
 
-- [ ] **Step 1: 写直接 containment 与物理底边 RED**
+- [x] **Step 1: 写直接 containment 与物理底边 RED**
 
 把 `testReloadDataWrapsChildWithoutScrollViewInFallbackHost` 替换为：
 
@@ -315,7 +315,7 @@ func testPlainPageRootReachesPagerAndWindowBottomWithoutFrameworkInsets() throws
 }
 ```
 
-- [ ] **Step 2: 写 nil binding 与 container-only gesture RED**
+- [x] **Step 2: 写 nil binding 与 container-only gesture RED**
 
 新增：
 
@@ -345,7 +345,7 @@ func testCommittedPlainPageBindsNoChildPanAndContainerStillCollapses() throws {
 }
 ```
 
-- [ ] **Step 3: 运行 UIKit RED**
+- [x] **Step 3: 运行 UIKit RED**
 
 ```bash
 xcodebuild -scheme AnchorPager \
@@ -357,7 +357,7 @@ xcodebuild -scheme AnchorPager \
 
 Expected: FAIL；旧 fallback 类型/几何期望仍存在，plain root bottom 尚未满足 direct page 契约。
 
-- [ ] **Step 4: 更新 adapter teardown 测试为普通 direct page**
+- [x] **Step 4: 更新 adapter teardown 测试为普通 direct page**
 
 把 `testPrepareForRemovalSynchronouslyClearsFallbackPageWithoutPagingEvents` 改为：
 
@@ -386,11 +386,11 @@ func testPrepareForRemovalSynchronouslyClearsPlainPageWithoutPagingEvents() {
 }
 ```
 
-- [ ] **Step 5: 删除 fallback host 生产文件与专用测试**
+- [x] **Step 5: 删除 fallback host 生产文件与专用测试**
 
 使用 `apply_patch` 删除两个文件，并删除 ViewController tests 中所有 `AnchorPagerPageScrollHostViewController` 类型断言、fallback managed inset 断言和 AnchorPager wrapper containment 断言。保留真实 scroll page inset、reload terminal、appearance 和资源释放测试。
 
-- [ ] **Step 6: 运行 UIKit GREEN 与生命周期回归**
+- [x] **Step 6: 运行 UIKit GREEN 与生命周期回归**
 
 ```bash
 xcodebuild -scheme AnchorPager \
@@ -404,7 +404,7 @@ xcodebuild -scheme AnchorPager \
 
 Expected: PASS，0 failures、0 skips；plain page 由 Pageboy parent 管理，真实 scroll binding 保持不变。
 
-- [ ] **Step 7: 源码边界扫描、自审并提交**
+- [x] **Step 7: 源码边界扫描、自审并提交**
 
 ```bash
 rg -n 'AnchorPagerPageScrollHostViewController|fallbackHost.create' Sources Tests
@@ -435,7 +435,7 @@ git commit -m "移除无滚动页面包装容器"
 - Consumes: direct plain page、public `verticalScrollView` 与 collapse delegate。
 - Produces: `scroll-coordination-state` 新字段 `hasScrollTarget`；`plain-page-root` 可访问几何；真实 container-only pan UI 证据。
 
-- [ ] **Step 1: 写状态序列化 RED**
+- [x] **Step 1: 写状态序列化 RED**
 
 为 `ExampleScrollCoordinationState` 增加 `hasScrollTarget: Bool` 的测试期望：
 
@@ -457,7 +457,7 @@ git commit -m "移除无滚动页面包装容器"
 }
 ```
 
-- [ ] **Step 2: 写 physical-bottom 与真实 pan UI RED**
+- [x] **Step 2: 写 physical-bottom 与真实 pan UI RED**
 
 用以下测试替换 `testShortAndFallbackPagesRemainStableAcrossVerticalDrag` 的 plain 部分并新增独立测试：
 
@@ -494,7 +494,7 @@ func testPlainPageRootReachesPhysicalBottomAndUsesContainerOnlyPan() throws {
 
 `ScrollCoordinationState` UI parser 同步解析 `hasScrollTarget`。
 
-- [ ] **Step 3: 运行 Example RED**
+- [x] **Step 3: 运行 Example RED**
 
 ```bash
 xcodebuild -project Examples/AnchorPagerExample.xcodeproj \
@@ -507,7 +507,7 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj \
 
 Expected: FAIL；状态缺少 `hasScrollTarget`、plain root 缺少 identifier 或 frame bottom 不匹配。
 
-- [ ] **Step 4: 实现 Example-only 状态与根 view 几何探针**
+- [x] **Step 4: 实现 Example-only 状态与根 view 几何探针**
 
 状态序列化字段顺序固定为：
 
@@ -541,13 +541,13 @@ NSLayoutConstraint.activate([
 ])
 ```
 
-- [ ] **Step 5: 运行 Example 聚焦 GREEN**
+- [x] **Step 5: 运行 Example 聚焦 GREEN**
 
 使用 Step 3 相同命令。
 
 Expected: PASS，状态序列化与 physical-bottom/pan UI 均 0 failures、0 skips。
 
-- [ ] **Step 6: 运行全部 Task 6 手势场景**
+- [x] **Step 6: 运行全部 Task 6 手势场景**
 
 ```bash
 xcodebuild -project Examples/AnchorPagerExample.xcodeproj \
@@ -565,7 +565,7 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj \
 
 Expected: PASS；记录实际测试数、0 failures、0 skips 和墙钟时间。
 
-- [ ] **Step 7: 自审并提交 Example 验收**
+- [x] **Step 7: 自审并提交 Example 验收**
 
 确认 root probe 仅存在 Example target、不拦截触摸、不隐藏 label accessibility；所有手势使用真实 coordinate drag，无固定 sleep。
 
@@ -596,7 +596,7 @@ git commit -m "验证无滚动页面完整几何"
 - Consumes: Task 1–3 的实现、测试结果和提交。
 - Produces: 无 fallback owner 的当前文档、完整验收证据、可重新进入 v0.5 Task 7 的门禁状态。
 
-- [ ] **Step 1: 清理当前文档中的 fallback 现行语义**
+- [x] **Step 1: 清理当前文档中的 fallback 现行语义**
 
 执行：
 
@@ -607,7 +607,7 @@ rg -n 'fallback host|fallback scroll host|AnchorPagerPageScrollHostViewControlle
 
 保留历史计划/旧规格中的 superseded 记录；README、architecture、requirements 的现行描述必须统一为：original page 直接 Pageboy containment、scroll target nil、无 managed inset/snapshot/bounce。把 task-list 本修复五项标记为完成，并把 v0.5 Task 7 从“暂停”改为“可重新开始但尚未完成”。
 
-- [ ] **Step 2: 运行依赖与源码静态门禁**
+- [x] **Step 2: 运行依赖与源码静态门禁**
 
 ```bash
 swift package resolve
@@ -618,7 +618,7 @@ rg -n '\.delegate\s*=|panGestureRecognizer\.delegate\s*=' Sources/AnchorPager
 
 Expected: resolve 成功；diff check 无输出；fallback 生产/测试符号无结果；delegate 扫描只有框架自有 container delegate proxy 允许项。
 
-- [ ] **Step 3: 运行 Framework 全量测试**
+- [x] **Step 3: 运行 Framework 全量测试**
 
 ```bash
 xcodebuild -scheme AnchorPager \
@@ -628,7 +628,7 @@ xcodebuild -scheme AnchorPager \
 
 Expected: 全部 Framework tests 0 failures、0 skips；记录测试数与墙钟时间。
 
-- [ ] **Step 4: 运行 Example generic build 与全量测试**
+- [x] **Step 4: 运行 Example generic build 与全量测试**
 
 ```bash
 xcodebuild -project Examples/AnchorPagerExample.xcodeproj \
@@ -643,7 +643,7 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj \
 
 Expected: build 成功；全部 Example unit/UI tests 0 failures、0 skips；记录测试数与墙钟时间。
 
-- [ ] **Step 5: 完成代码自审**
+- [x] **Step 5: 完成代码自审**
 
 逐项记录结论：
 
@@ -658,7 +658,7 @@ Expected: build 成功；全部 Example unit/UI tests 0 failures、0 skips；记
 9. Example probe 不写入框架 API且不伪造 fallback offset；
 10. 文档与真实实现一致，v0.5 只重新开放 Task 7，不提前 Ready。
 
-- [ ] **Step 6: 写入实际验收结果并提交**
+- [x] **Step 6: 写入实际验收结果并提交**
 
 把 Step 2–5 的实际命令、测试数、失败/跳过数、墙钟时间和自审结论写入本计划与 v0.5 总计划。
 
@@ -668,7 +668,7 @@ git add README.md docs AGENTS.md
 git commit -m "完成无滚动页面直接承载验收"
 ```
 
-- [ ] **Step 7: 确认工作区状态**
+- [x] **Step 7: 确认工作区状态**
 
 ```bash
 git status --short
@@ -676,3 +676,35 @@ git log -4 --oneline
 ```
 
 Expected: 工作区无未解释改动；最近四个实施提交依次覆盖 Store 三态、wrapper 移除、Example 验收和最终文档，设计提交 `1801b8f` 位于它们之前。
+
+## 实际验收记录
+
+### 实施提交与 RED/GREEN
+
+1. `1b4d542 重建无滚动页面状态语义`：Store RED 共 34 项、26 项按预期失败；实现后 Store 与 managed inset 相关 40 项全部通过。
+2. `7e92fdd 移除无滚动页面包装容器`：删除 synthetic wrapper，Pageboy 直接 containment、nil binding、reload/teardown 和生命周期相关 126 项全部通过。
+3. `62a34a8 验证无滚动页面完整几何`：状态序列化 RED 先因缺少 `hasScrollTarget` 编译失败；实现后 8 项单元测试与 6 个真实手势场景共 14 项全部通过，0 failures、0 skips，墙钟约 77.6 秒。重命名整理后，8 项单元测试与 3 个 plain page 聚焦 UI 场景再次通过。
+
+### 完整验收
+
+- `swift --version`：Apple Swift 6.3.3，满足最低 Swift 6.2 基线。
+- `swift package resolve`：成功。
+- `xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' -parallel-testing-enabled NO test`：提交前复验 220 tests、0 failures、0 skips；xcresult 记录约 4.511 秒，测试 observer 约 3.229 秒。
+- `xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'generic/platform=iOS Simulator' build`：提交前复验成功。
+- `xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' -parallel-testing-enabled NO test`：提交前复验 30 tests、0 failures、0 skips；xcresult 记录约 233.599 秒，测试 observer 约 230.004 秒。
+- `git diff --check`：通过。
+- `rg -n 'AnchorPagerPageScrollHostViewController|fallbackHost.create' Sources Tests`：无结果。
+- public API Tabman/Pageboy 扫描：无结果。
+- unsafe 并发标记扫描：无结果。
+- delegate 赋值扫描仅命中框架自有 `verticalScrollView.delegate = verticalScrollDelegate`，没有业务 child `UIScrollView.delegate` 或 pan delegate 写入。
+- 唯一剩余输出为运行目标/LLDB 模拟器环境提示，没有新增生产 warning。
+
+### 代码自审结论
+
+1. public API 未扩大，Tabman/Pageboy 类型未泄漏；Pageboy 继续对 plain/scroll page 执行唯一 containment 与 appearance complete/cancel。
+2. Store 明确区分 empty、plain page 和真实 scroll page 三态；generation migration、retention、reload commit/cancel 与 cleanup 只归还真实 scroll ownership。
+3. nil scroll page 不参与 managed inset、snapshot、child observation、bounce、simultaneous pair 或 scroll-to-top 替代 owner；shared scroll 冲突目标不会被写入。
+4. 真实 scroll page 的业务 delegate/pan delegate、managed inset、snapshot 与纵向 handoff 路径保持不变。
+5. UIKit 与真实 simulator drag 均证明 plain root 至少覆盖 pager/window 物理底边；第二次上推不会产生额外 child distance。
+6. `scroll.target.none` 只在首次解析无目标状态时记录；Example 的 root/state probe 仅位于示例 target，不拦截触摸，也不伪造 synthetic offset。
+7. 文档已统一为 direct containment + nil scroll target；本专项修复完成，但 v0.5 Task 7 仍需独立复审，因此不将 v0.5 标记为 Ready。
