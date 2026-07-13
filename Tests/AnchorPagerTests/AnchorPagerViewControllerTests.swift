@@ -1679,87 +1679,8 @@ final class AnchorPagerViewControllerTests: XCTestCase {
     }
 
     @MainActor
-    func testReloadDataWrapsChildWithoutScrollViewInFallbackHost() {
+    func testReloadDataProvidesPlainChildDirectlyToPagingAdapter() throws {
         let pager = AnchorPagerViewController()
-        let plainChild = UIViewController()
-        let dataSource = StubDataSource(
-            count: 1,
-            viewControllers: [plainChild]
-        )
-        pager.dataSource = dataSource
-        pager.loadViewIfNeeded()
-
-        pager.reloadData()
-
-        guard let adapter = installedAdapter(in: pager) else {
-            XCTFail("reloadData 应安装分页 adapter。")
-            return
-        }
-
-        let page = adapter.viewController(for: adapter, at: 0)
-        let fallbackHost = page as? AnchorPagerPageScrollHostViewController
-        XCTAssertNotNil(fallbackHost, "无 UIScrollView child 应由内部 fallback scroll host 承载。")
-
-        fallbackHost?.loadViewIfNeeded()
-        XCTAssertTrue(plainChild.parent === fallbackHost)
-    }
-
-    @MainActor
-    func testFallbackPageHostKeepsPlainChildAboveBottomObstruction() throws {
-        var configuration = AnchorPagerConfiguration.default
-        configuration.header.heightMode = .fixed(max: 80, min: 0)
-        let pager = AnchorPagerViewController(configuration: configuration)
-        let plainChild = UIViewController()
-        plainChild.view.backgroundColor = .systemBlue
-        let delegate = StubDelegate()
-        let dataSource = StubDataSource(
-            count: 1,
-            viewControllers: [plainChild],
-            headerContent: .view(FixedFittingView(height: 80))
-        )
-        pager.dataSource = dataSource
-        pager.delegate = delegate
-        let tabBarController = UITabBarController()
-        tabBarController.viewControllers = [pager]
-        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
-        window.rootViewController = tabBarController
-        window.makeKeyAndVisible()
-        defer { window.isHidden = true }
-
-        pager.reloadData()
-        window.layoutIfNeeded()
-        delegate.layoutContexts.removeAll()
-        pager.reloadHeaderLayout(offsetAdjustment: .resetToExpanded)
-        window.layoutIfNeeded()
-
-        _ = try XCTUnwrap(delegate.layoutContexts.last)
-        let adapter = try XCTUnwrap(installedAdapter(in: pager))
-        let fallbackHost = try XCTUnwrap(
-            adapter.viewController(for: adapter, at: 0) as? AnchorPagerPageScrollHostViewController
-        )
-        fallbackHost.loadViewIfNeeded()
-        window.layoutIfNeeded()
-
-        let childFrame = plainChild.view.convert(plainChild.view.bounds, to: pager.view)
-        XCTAssertEqual(fallbackHost.scrollView.contentInsetAdjustmentBehavior, .never)
-        XCTAssertEqual(
-            fallbackHost.scrollView.adjustedContentInset.bottom,
-            pager.view.safeAreaInsets.bottom + 80,
-            accuracy: 0.5
-        )
-        XCTAssertEqual(
-            childFrame.maxY,
-            pager.view.safeAreaLayoutGuide.layoutFrame.maxY,
-            accuracy: 4
-        )
-    }
-
-    @MainActor
-    func testFallbackHostUsesBarAndBottomManagedInsets() throws {
-        var configuration = AnchorPagerConfiguration.default
-        configuration.bar.height = 56
-        let pager = AnchorPagerViewController(configuration: configuration)
-        pager.additionalSafeAreaInsets.bottom = 23
         let plainChild = UIViewController()
         let dataSource = StubDataSource(count: 1, viewControllers: [plainChild])
         pager.dataSource = dataSource
@@ -1770,17 +1691,70 @@ final class AnchorPagerViewControllerTests: XCTestCase {
 
         pager.reloadData()
         window.layoutIfNeeded()
-
         let adapter = try XCTUnwrap(installedAdapter(in: pager))
-        let fallbackHost = try XCTUnwrap(
-            adapter.viewController(for: adapter, at: 0) as? AnchorPagerPageScrollHostViewController
+        let page = adapter.viewController(for: adapter, at: 0)
+
+        XCTAssertTrue(page === plainChild)
+        XCTAssertNotNil(plainChild.parent)
+        XCTAssertFalse(plainChild.parent is AnchorPagerViewController)
+        XCTAssertTrue(plainChild.view.window === window)
+    }
+
+    @MainActor
+    func testPlainPageRootReachesPagerAndWindowBottomWithoutFrameworkInsets() throws {
+        var configuration = AnchorPagerConfiguration.default
+        configuration.header.heightMode = .fixed(max: 80, min: 0)
+        let pager = AnchorPagerViewController(configuration: configuration)
+        let plainChild = UIViewController()
+        plainChild.additionalSafeAreaInsets = UIEdgeInsets(top: 3, left: 0, bottom: 7, right: 0)
+        let dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [plainChild],
+            headerContent: .view(FixedFittingView(height: 80))
         )
-        XCTAssertEqual(fallbackHost.scrollView.contentInset.top, adapter.barInsets.top, accuracy: 0.5)
-        XCTAssertEqual(
-            fallbackHost.scrollView.contentInset.bottom,
-            pager.view.safeAreaInsets.bottom,
-            accuracy: 0.5
+        pager.dataSource = dataSource
+        let tabBarController = UITabBarController()
+        tabBarController.viewControllers = [pager]
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = tabBarController
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+
+        pager.reloadData()
+        window.layoutIfNeeded()
+        let pageFrameInPager = plainChild.view.convert(plainChild.view.bounds, to: pager.view)
+        let pageFrameInWindow = plainChild.view.convert(plainChild.view.bounds, to: window)
+
+        XCTAssertGreaterThanOrEqual(pageFrameInPager.maxY, pager.view.bounds.maxY - 1)
+        XCTAssertGreaterThanOrEqual(pageFrameInWindow.maxY, window.bounds.maxY - 1)
+        XCTAssertEqual(plainChild.additionalSafeAreaInsets.top, 3, accuracy: 0.001)
+        XCTAssertEqual(plainChild.additionalSafeAreaInsets.bottom, 7, accuracy: 0.001)
+    }
+
+    @MainActor
+    func testCommittedPlainPageBindsNoChildPanAndContainerStillCollapses() throws {
+        var configuration = AnchorPagerConfiguration.default
+        configuration.header.heightMode = .fixed(max: 100, min: 0)
+        let pager = AnchorPagerViewController(configuration: configuration)
+        let dataSource = StubDataSource(count: 1, viewControllers: [UIViewController()])
+        pager.dataSource = dataSource
+        pager.view.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+        pager.view.layoutIfNeeded()
+        let container = try XCTUnwrap(
+            pager.verticalScrollView as? AnchorPagerContainerScrollView
         )
+        let unrelatedPan = UIPanGestureRecognizer()
+
+        XCTAssertFalse(container.gestureRecognizer(
+            container.panGestureRecognizer,
+            shouldRecognizeSimultaneouslyWith: unrelatedPan
+        ))
+
+        pager.verticalScrollView.contentOffset.y = 60
+        pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
+        XCTAssertEqual(pager.verticalScrollView.contentOffset.y, 60, accuracy: 0.5)
     }
 
     @MainActor
@@ -1843,7 +1817,7 @@ final class AnchorPagerViewControllerTests: XCTestCase {
     }
 
     @MainActor
-    func testReloadDataFromFallbackPageToEmptyRemovesBusinessChildAndPagingContent() throws {
+    func testReloadDataFromPlainPageToEmptyRemovesPagingContainment() throws {
         let child = UIViewController()
         let dataSource = StubDataSource(count: 1, viewControllers: [child])
         let pager = AnchorPagerViewController()
@@ -1852,17 +1826,11 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         pager.reloadData()
 
         let pagingHost = try XCTUnwrap(installedPagingHost(in: pager))
-        let fallbackHost = try autoreleasepool {
+        try autoreleasepool {
             let adapter = try XCTUnwrap(pagingHost.activeAdapter)
-            let fallbackHost = try XCTUnwrap(
-                adapter.viewController(
-                    for: adapter,
-                    at: 0
-                ) as? AnchorPagerPageScrollHostViewController
-            )
-            fallbackHost.loadViewIfNeeded()
-            XCTAssertTrue(child.parent === fallbackHost)
-            return fallbackHost
+            XCTAssertTrue(adapter.viewController(for: adapter, at: 0) === child)
+            XCTAssertNotNil(child.parent)
+            XCTAssertFalse(child.parent is AnchorPagerViewController)
         }
 
         dataSource.count = 0
@@ -1874,7 +1842,6 @@ final class AnchorPagerViewControllerTests: XCTestCase {
 
         XCTAssertNil(pager.effectiveSelectedIndex)
         XCTAssertNil(pagingHost.activeAdapter)
-        XCTAssertNil(fallbackHost.parent)
         XCTAssertNil(child.parent)
         XCTAssertNil(child.view.superview)
     }
@@ -1945,7 +1912,7 @@ final class AnchorPagerViewControllerTests: XCTestCase {
     }
 
     @MainActor
-    func testReloadDataRemovesStaleFallbackChildAndWritesChildrenLog() {
+    func testReloadDataReplacesStalePlainPageThroughPagingAdapter() throws {
         let pager = AnchorPagerViewController()
         let stalePlainChild = UIViewController()
         let replacementPlainChild = UIViewController()
@@ -1957,27 +1924,16 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         pager.loadViewIfNeeded()
         pager.reloadData()
 
-        guard let adapter = installedAdapter(in: pager),
-              let staleFallbackHost = adapter.viewController(
-                for: adapter,
-                at: 0
-              ) as? AnchorPagerPageScrollHostViewController else {
-            XCTFail("无 UIScrollView child 应由内部 fallback scroll host 承载。")
-            return
-        }
-        staleFallbackHost.loadViewIfNeeded()
-        XCTAssertTrue(stalePlainChild.parent === staleFallbackHost)
-
-        var events: [AnchorPagerLogger.Event] = []
-        AnchorPagerLogger.sink = { events.append($0) }
-        defer { AnchorPagerLogger.sink = nil }
+        let adapter = try XCTUnwrap(installedAdapter(in: pager))
+        XCTAssertTrue(adapter.viewController(for: adapter, at: 0) === stalePlainChild)
+        XCTAssertNotNil(stalePlainChild.parent)
 
         dataSource.viewControllers = [replacementPlainChild]
         pager.reloadData()
 
         XCTAssertNil(stalePlainChild.parent)
         XCTAssertNil(stalePlainChild.view.superview)
-        XCTAssertTrue(events.contains(.init(category: .children, level: .info, event: "reloadData.child.remove")))
+        XCTAssertTrue(adapter.viewController(for: adapter, at: 0) === replacementPlainChild)
     }
 
     @MainActor
@@ -2089,7 +2045,7 @@ final class AnchorPagerViewControllerTests: XCTestCase {
     }
 
     @MainActor
-    func testSharedExplicitScrollTargetFallsBackForLaterPageAndWritesLog() throws {
+    func testSharedExplicitScrollTargetUsesOriginalLaterPageWithNilBindingAndWritesLog() throws {
         let sharedScrollView = UIScrollView()
         let first = ExplicitScrollChildViewController(scrollView: sharedScrollView)
         let second = ExplicitScrollChildViewController(scrollView: sharedScrollView)
@@ -2113,9 +2069,7 @@ final class AnchorPagerViewControllerTests: XCTestCase {
             )
         }
         XCTAssertTrue(pages.0 === first)
-        XCTAssertTrue(
-            pages.1 is AnchorPagerPageScrollHostViewController
-        )
+        XCTAssertTrue(pages.1 === second)
         XCTAssertTrue(events.contains(.init(category: .inset, level: .debug, event: "inset.targetCollision")))
     }
 

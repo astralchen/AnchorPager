@@ -327,19 +327,15 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
     }
 
     @MainActor
-    func testPrepareForRemovalSynchronouslyClearsFallbackPageWithoutPagingEvents() {
-        let content = UIViewController()
-        let fallbackPage = AnchorPagerPageScrollHostViewController(
-            contentViewController: content
-        )
-        fallbackPage.loadViewIfNeeded()
+    func testPrepareForRemovalSynchronouslyClearsPlainPageWithoutPagingEvents() {
+        let plainPage = UIViewController()
         let adapter = AnchorPagerPagingAdapter()
         let delegate = RecordingPagingDelegate()
         adapter.eventDelegate = delegate
         reload(
             adapter,
-            titles: ["Fallback"],
-            viewControllers: [fallbackPage],
+            titles: ["Plain"],
+            viewControllers: [plainPage],
             selectedIndex: 0
         )
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
@@ -347,17 +343,15 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
         window.makeKeyAndVisible()
         defer { window.isHidden = true }
         window.layoutIfNeeded()
-        XCTAssertNotNil(fallbackPage.parent)
-        XCTAssertNotNil(fallbackPage.view.superview)
-        XCTAssertTrue(content.parent === fallbackPage)
+        XCTAssertNotNil(plainPage.parent)
+        XCTAssertNotNil(plainPage.view.superview)
         delegate.events.removeAll()
 
         let didCompleteSynchronously = adapter.prepareForRemoval()
 
         XCTAssertTrue(didCompleteSynchronously)
-        XCTAssertNil(fallbackPage.parent)
-        XCTAssertNil(fallbackPage.view.superview)
-        XCTAssertTrue(content.parent === fallbackPage)
+        XCTAssertNil(plainPage.parent)
+        XCTAssertNil(plainPage.view.superview)
         XCTAssertEqual(delegate.events, [])
     }
 
