@@ -18,7 +18,6 @@ final class AnchorPagerPageStateStore {
         weak var originalViewController: UIViewController?
         weak var actualPageViewController: UIViewController?
         weak var scrollView: UIScrollView?
-        weak var fallbackHost: AnchorPagerPageScrollHostViewController?
         var claimedScrollViewIdentifier: ObjectIdentifier?
         var originalViewControllerIdentifier: ObjectIdentifier?
         var hasLoadedBefore = false
@@ -64,9 +63,7 @@ final class AnchorPagerPageStateStore {
     private struct CleanupPlan {
         struct Entry {
             let state: GenerationPageState
-            let actualPageViewController: UIViewController?
             let scrollView: UIScrollView?
-            let fallbackHost: AnchorPagerPageScrollHostViewController?
         }
 
         let generation: GenerationState
@@ -77,9 +74,7 @@ final class AnchorPagerPageStateStore {
             entries = generation.pages.values.map { state in
                 Entry(
                     state: state,
-                    actualPageViewController: state.identity.actualPageViewController,
-                    scrollView: state.identity.scrollView,
-                    fallbackHost: state.identity.fallbackHost
+                    scrollView: state.identity.scrollView
                 )
             }
         }
@@ -135,7 +130,6 @@ final class AnchorPagerPageStateStore {
         if let pendingGeneration {
             release(
                 pendingGeneration,
-                preservingContainment: containmentPreservation(in: committedGeneration),
                 preservingOwnership: ownershipPreservation(in: committedGeneration)
             )
             AnchorPagerLogger.log(
@@ -250,13 +244,12 @@ final class AnchorPagerPageStateStore {
         }
 
         originalViewController.loadViewIfNeeded()
-        let actualPageViewController: UIViewController
-        let scrollView: UIScrollView
+        let actualPageViewController = originalViewController
+        let scrollView: UIScrollView?
         let resolvedScrollView = originalViewController.anchorPagerScrollView
         if let resolvedScrollView,
            generation.claimedScrollViewIdentifiers
             .insert(ObjectIdentifier(resolvedScrollView)).inserted {
-            actualPageViewController = originalViewController
             scrollView = resolvedScrollView
         } else if resolvedScrollView != nil {
             AnchorPagerAssertions.failure("AnchorPager pages must not share a scroll view.")
@@ -268,32 +261,22 @@ final class AnchorPagerPageStateStore {
             if let defaultScrollView = originalViewController.anchorPagerDefaultScrollView,
                generation.claimedScrollViewIdentifiers
                 .insert(ObjectIdentifier(defaultScrollView)).inserted {
-                actualPageViewController = originalViewController
                 scrollView = defaultScrollView
             } else {
-                let fallbackHost = makeFallbackHost(
-                    for: originalViewController,
-                    state: state,
-                    generation: generation
-                )
-                actualPageViewController = fallbackHost
-                scrollView = fallbackHost.scrollView
+                scrollView = nil
             }
         } else {
-            let fallbackHost = makeFallbackHost(
-                for: originalViewController,
-                state: state,
-                generation: generation
-            )
-            actualPageViewController = fallbackHost
-            scrollView = fallbackHost.scrollView
+            scrollView = nil
+        }
+        if scrollView == nil {
+            AnchorPagerLogger.log(.debug, category: .scroll, event: "scroll.target.none")
         }
 
         state.identity.originalViewController = originalViewController
         state.identity.originalViewControllerIdentifier = originalIdentifier
         state.identity.actualPageViewController = actualPageViewController
         state.identity.scrollView = scrollView
-        state.identity.claimedScrollViewIdentifier = ObjectIdentifier(scrollView)
+        state.identity.claimedScrollViewIdentifier = scrollView.map(ObjectIdentifier.init)
         applyManagedInsets(context.managedInsetTarget, to: state)
         reconcileRetention(in: generation)
         AnchorPagerLogger.log(
@@ -429,7 +412,6 @@ final class AnchorPagerPageStateStore {
         if let oldCleanupPlan {
             cleanup(
                 oldCleanupPlan,
-                preservingContainment: containmentPreservation(in: committedGeneration),
                 preservingOwnership: ownershipPreservation(in: committedGeneration)
             )
         }
@@ -443,7 +425,6 @@ final class AnchorPagerPageStateStore {
             releaseLeases(in: pendingCleanupPlan.generation)
             cleanup(
                 pendingCleanupPlan,
-                preservingContainment: containmentPreservation(in: committedGeneration),
                 preservingOwnership: ownershipPreservation(in: committedGeneration)
             )
         }
@@ -451,7 +432,6 @@ final class AnchorPagerPageStateStore {
             releaseLeases(in: committedCleanupPlan.generation)
             cleanup(
                 committedCleanupPlan,
-                preservingContainment: .empty,
                 preservingOwnership: []
             )
         }
@@ -473,23 +453,8 @@ final class AnchorPagerPageStateStore {
         logsChanges: Bool = true
     ) {
         guard let scrollView = state.identity.scrollView else { return }
-        state.identity.fallbackHost?.setManagedContentInsets(target.content)
         managedInsetCoordinator.apply(target, to: scrollView, logsChanges: logsChanges)
         state.ownsManagedInset = true
-    }
-
-    private func makeFallbackHost(
-        for originalViewController: UIViewController,
-        state: GenerationPageState,
-        generation: GenerationState
-    ) -> AnchorPagerPageScrollHostViewController {
-        let fallbackHost = AnchorPagerPageScrollHostViewController(
-            contentViewController: originalViewController
-        )
-        fallbackHost.loadViewIfNeeded()
-        generation.claimedScrollViewIdentifiers.insert(ObjectIdentifier(fallbackHost.scrollView))
-        state.identity.fallbackHost = fallbackHost
-        return fallbackHost
     }
 
     private func migratedState(
@@ -595,7 +560,6 @@ final class AnchorPagerPageStateStore {
         releaseOwnership(
             for: state,
             scrollView: state.identity.scrollView,
-            fallbackHost: state.identity.fallbackHost,
             in: generation,
             preserving: explicitPreservation
         )
@@ -604,7 +568,6 @@ final class AnchorPagerPageStateStore {
     private func releaseOwnership(
         for state: GenerationPageState,
         scrollView: UIScrollView?,
-        fallbackHost: AnchorPagerPageScrollHostViewController?,
         in generation: GenerationState,
         preserving explicitPreservation: Set<ObjectIdentifier>?
     ) {
@@ -617,7 +580,6 @@ final class AnchorPagerPageStateStore {
             ?? ownershipPreservation(in: otherGeneration(for: generation))
         guard !preservation.contains(ObjectIdentifier(scrollView)) else { return }
         managedInsetCoordinator.release(scrollView)
-        fallbackHost?.setManagedContentInsets(.zero)
     }
 
     private func applySnapshot(
@@ -669,51 +631,6 @@ final class AnchorPagerPageStateStore {
         return indexes
     }
 
-    private struct ContainmentPreservation {
-        var pageIdentifiers: Set<ObjectIdentifier> = []
-        var fallbackHostIdentifiers: Set<ObjectIdentifier> = []
-
-        static let empty = ContainmentPreservation()
-
-        func contains(_ identity: PageIdentityPayload) -> Bool {
-            contains(
-                actualPageViewController: identity.actualPageViewController,
-                fallbackHost: identity.fallbackHost
-            )
-        }
-
-        func contains(
-            actualPageViewController: UIViewController?,
-            fallbackHost: AnchorPagerPageScrollHostViewController?
-        ) -> Bool {
-            if let page = actualPageViewController,
-               pageIdentifiers.contains(ObjectIdentifier(page)) {
-                return true
-            }
-            if let fallbackHost,
-               fallbackHostIdentifiers.contains(ObjectIdentifier(fallbackHost)) {
-                return true
-            }
-            return false
-        }
-    }
-
-    private func containmentPreservation(
-        in generation: GenerationState?
-    ) -> ContainmentPreservation {
-        guard let generation else { return .empty }
-        var preservation = ContainmentPreservation()
-        for state in generation.pages.values {
-            if let page = state.identity.actualPageViewController {
-                preservation.pageIdentifiers.insert(ObjectIdentifier(page))
-            }
-            if let fallbackHost = state.identity.fallbackHost {
-                preservation.fallbackHostIdentifiers.insert(ObjectIdentifier(fallbackHost))
-            }
-        }
-        return preservation
-    }
-
     private func ownershipPreservation(
         in generation: GenerationState?
     ) -> Set<ObjectIdentifier> {
@@ -740,14 +657,12 @@ final class AnchorPagerPageStateStore {
 
     private func release(
         _ generation: GenerationState,
-        preservingContainment containmentPreservation: ContainmentPreservation,
         preservingOwnership ownershipPreservation: Set<ObjectIdentifier>
     ) {
         let cleanupPlan = CleanupPlan(generation: generation)
         releaseLeases(in: generation)
         cleanup(
             cleanupPlan,
-            preservingContainment: containmentPreservation,
             preservingOwnership: ownershipPreservation
         )
     }
@@ -761,24 +676,15 @@ final class AnchorPagerPageStateStore {
 
     private func cleanup(
         _ plan: CleanupPlan,
-        preservingContainment containmentPreservation: ContainmentPreservation,
         preservingOwnership ownershipPreservation: Set<ObjectIdentifier>
     ) {
         for entry in plan.entries {
             releaseOwnership(
                 for: entry.state,
                 scrollView: entry.scrollView,
-                fallbackHost: entry.fallbackHost,
                 in: plan.generation,
                 preserving: ownershipPreservation
             )
-            if !containmentPreservation.contains(
-                actualPageViewController: entry.actualPageViewController,
-                fallbackHost: entry.fallbackHost
-            ) {
-                entry.fallbackHost?.setManagedContentInsets(.zero)
-                entry.fallbackHost?.removeContentForReloadData()
-            }
         }
         let generation = plan.generation
         generation.pages.removeAll()
