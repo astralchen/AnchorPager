@@ -8,7 +8,7 @@
 
 **Tech Stack:** Swift 6.2、Swift 6 language mode、UIKit、iOS 14+、Swift Package Manager、Tabman 4.0.1、Pageboy 5.0.2、XCTest/XCUITest、XcodeBuildMCP。
 
-**当前状态：** 专项修复已完成；当前 boundary owner 复审问题修复后的新鲜全量复验通过，v0.5/v0.6 修复后再次独立复审待执行。
+**当前状态：** Ready；专项修复已完成，boundary owner 复审问题均已修复并完成最终验收；第四次整分支独立复审 Critical 0、Important 0，两个最终 Minor 已修复。
 
 ## Global Constraints
 
@@ -709,11 +709,11 @@ Expected: 工作区无未解释改动；最近四个实施提交依次覆盖 Sto
 4. 真实 scroll page 的业务 delegate/pan delegate、managed inset、snapshot 与纵向 handoff 路径保持不变。
 5. UIKit 与真实 simulator drag 均证明 plain root 至少覆盖 pager/window 物理底边；当时的第二次上推验收证明没有 synthetic child distance。后续 container bottom 可见 bounce 由 `2026-07-13-boundary-bounce-ownership-design.md` 接管，不改变 nil child scroll target 事实。
 6. `scroll.target.none` 只在首次解析无目标状态时记录；Example 的 root/state probe 仅位于示例 target，不拦截触摸，也不伪造 synthetic offset。
-7. 文档已统一为 direct containment + nil scroll target；本专项修复完成，但 v0.5 Task 7 再次独立复审待执行，因此不将 v0.5 标记为 Ready。
+7. 文档已统一为 direct containment + nil scroll target；本专项修复完成，第四次整分支独立复审和最终状态门禁均已完成，v0.5 Task 7 标记 Ready。
 
 ### 边界 owner 集成后的新鲜复验
 
-- `f81ca1e`、`5b80893` 与 `128821f` 复审修复后 Framework 283 项与 Example 37 项全部通过，0 fail、0 skip；generic Simulator build 成功；第三次复审问题修复后的再次独立复审仍待执行。
+- `f81ca1e`、`5b80893` 与 `128821f` 复审修复后，生产代码 HEAD `128821f` 对应 Framework 283/283 结果包 `/private/tmp/AnchorPagerPresentedTopFrameworkFull-20260713-2258.xcresult`；最终 Example 37/37 与 generic Simulator build 通过，0 fail、0 skip。
 - plain page 仍为 original Pageboy containment、committed scroll target nil、无 managed inset/snapshot/child pan；顶部 `.container`、底部 container presentation、`.child` 顶部不可用且不回退的真实 UI 均通过。
 - `testPlainPageRootReachesPhysicalBottomAndUsesContainerOnlyPan`、plain top/bottom bounce 用例均包含在本轮 Example 全量 xcresult 中。
-- 本补充只记录实现者复验；再次独立复审待执行，不改变 v0.5 Ready 门禁。
+- 第四次整分支独立复审为 Critical 0、Important 0、Minor 2；两个 Minor 已在最终状态提交中修复，本补充随 v0.5/v0.6 标记 Ready。

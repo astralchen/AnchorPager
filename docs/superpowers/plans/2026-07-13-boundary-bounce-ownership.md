@@ -8,7 +8,7 @@
 
 **技术栈：** Swift 6.2、Swift 6 language mode、UIKit、iOS 14+、Swift Package Manager、Tabman 4.0.1、Pageboy 5.0.2、XCTest/XCUITest、Xcode 26.3。
 
-**当前状态：** Tasks 1–6 已实现；Task 7 初次独立复审、第二次和第三次整分支复审发现的问题均已修复并完成新鲜验收；第三次复审问题修复后的再次独立复审和最终状态提交仍待完成，v0.5/v0.6 不标记 Ready。
+**当前状态：** Ready；Tasks 1–7 已实现，前三轮复审问题均已修复；第四次整分支独立复审 Critical 0、Important 0，两个 Minor 已在最终状态提交中修复，v0.5/v0.6 发布门禁完成。
 
 ## Global Constraints
 
@@ -1686,11 +1686,11 @@ Expected: Swift 6.2 或更高；resolve、framework tests、Example 单元/UI te
 
 初次独立复审发现 3 个 Important：未呈现 owner 反向回稳未同步收敛、Header 部分折叠时 child KVO 错误触发 top owner、`.none` UI 探针记录原始 delegate/KVO 瞬时 offset。`f81ca1e` 已按 RED→GREEN 修复并完成聚焦与全量验收。
 
-- [ ] **Step 5b：执行修复后的再次独立复审门禁**
+- [x] **Step 5b：执行修复后的再次独立复审门禁**
 
-覆盖 `be2d783...HEAD` 并重点比较 `b00d204...128821f`，尤其是 `5b80893...128821f`；修复后的再次独立复审确认 Critical/Important 清零前，不执行 Ready 提交。
+第四次整分支独立复审覆盖 `be2d783...13b3d95` 并重点比较 `b00d204...128821f`，尤其是 `5b80893...128821f`；结论为 Critical 0、Important 0、Minor 2。两个 Minor 已在最终状态提交中修复。
 
-- [ ] **Step 6：提交最终文档与验收记录**
+- [x] **Step 6：提交最终文档与验收记录**
 
 ```bash
 git diff --check
@@ -1724,12 +1724,13 @@ git commit -m "完成纵向边界回弹验收"
 9. overscroll 与 guard 日志只在状态变化时输出；重复热路径测试没有逐帧噪声。
 10. Example 六类真实 drag 使用 current/max presentation distance；plain root 物理底边和 container-only pan 证据在本轮 36 项全量中通过。
 
-### 待完成门禁
+### 最终门禁结论
 
 - 初次独立复审的 3 个 Important、第二次整分支复审的零稳定区间 Important/架构文档 Minor，以及第三次整分支复审的已呈现 `.top/.child` 回稳 Important/requirements 日志 Minor 均已修复；`128821f` 显式返回 finish owner，按有无 pan input 分别重放当前 Resolver 或保留 observer raw total，其他 finish 路径保持原语义。
 - 最新新鲜验收为 Framework 283 项、Example 37 项、generic build 全部成功，0 fail、0 skip，三份 xcresult 0 error/warning/analyzer warning。
-- 第三次复审问题修复后的再次独立复审待执行，必须覆盖 `be2d783...HEAD` 并重点比较 `b00d204...128821f`，尤其是 `5b80893...128821f`。本轮修复者不声称 Critical/Important 已由再次独立审查清零。
-- 本轮文档验收记录提交标题为 `更新子页面顶部回稳验收记录`；再次独立复审通过后再决定是否执行计划原 Step 6 的最终完成提交和 Ready 标记。
+- 第四次整分支独立复审已覆盖 `be2d783...13b3d95` 并重点比较 `b00d204...128821f`、尤其 `5b80893...128821f`；结论为 Critical 0、Important 0、Minor 2。README 旧验收摘要已更新，`testRealChildContainerTopBounceIsVisible` 已增加严格 `XCTAssertLessThan(state.childTopMax, 0.5)` 证明 `.container` 顶部 owner 排他。
+- 最终证据：生产代码 HEAD `128821f` 对应 Framework 283/283 结果包 `/private/tmp/AnchorPagerPresentedTopFrameworkFull-20260713-2258.xcresult`；新增严格断言的目标 UI 1/1、Example 37/37（10 单元 + 27 UI）和 generic Simulator build 均通过，0 fail、0 skip、0 error/warning/analyzer warning。
+- Step 5b/6 已完成；最终统一提交标题为 `完成纵向边界回弹验收`，v0.5 Task 7 与 v0.6 标记 Ready。
 
 ---
 

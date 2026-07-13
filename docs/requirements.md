@@ -22,7 +22,7 @@ AnchorPager 是一个全新的独立 UIKit 容器框架，用于实现可变 Hea
 
 ### 当前复审门禁
 
-v0.5/v0.6 初次独立复审的 3 个 Important 已在 `f81ca1e` 修复，第二次整分支复审的零稳定区间边界反向切换 Important 已在 `5b80893` 修复，第三次整分支复审的已呈现 `.top/.child` 回稳总量跳变 Important 已在 `128821f` 修复；两轮对应文档 Minor 均已同步修正。Apple Swift 6.3.3、iPhone 17 Pro / iOS 26.5 最新新鲜验收为 Framework 283 项、Example 37 项、0 fail、0 skip，generic iOS Simulator build 成功。第三次整分支复审问题修复后的再次独立复审待执行；在其确认 Critical/Important 清零前，不标记 v0.5/v0.6 Ready。
+v0.5/v0.6 初次独立复审的 3 个 Important 已在 `f81ca1e` 修复，第二次整分支复审的零稳定区间边界反向切换 Important 已在 `5b80893` 修复，第三次整分支复审的已呈现 `.top/.child` 回稳总量跳变 Important 已在 `128821f` 修复；第二、三次复审的文档 Minor 均已同步修正。第四次整分支独立复审覆盖 `be2d783...13b3d95`，结论为 Critical 0、Important 0、Minor 2；README 旧验收摘要与 `.container` 顶部 UI 缺少严格 child owner 排他断言两个 Minor 已在最终状态提交中修复。Apple Swift 6.3.3、iPhone 17 Pro / iOS 26.5 最终验收为 Framework 283/283、Example 37/37（10 单元 + 27 UI）、0 fail、0 skip，generic iOS Simulator build 成功；Framework 结果包 `/private/tmp/AnchorPagerPresentedTopFrameworkFull-20260713-2258.xcresult` 对应生产代码 HEAD `128821f`。v0.5 Task 7 与 v0.6 均为 Ready。
 
 ## 3. 参考项目
 

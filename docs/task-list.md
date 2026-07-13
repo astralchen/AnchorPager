@@ -389,7 +389,7 @@
 
 ## v0.5：纵向嵌套滚动协调版
 
-设计见 `docs/superpowers/specs/2026-07-13-v0-5-scroll-coordination-design.md`，direct page 修订见 `docs/superpowers/specs/2026-07-13-plain-page-direct-containment-design.md`，最终边界 owner 契约见 `docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md`。Task 1–6、direct containment 和边界实现均已完成；Task 7 初次独立复审的 3 个 Important、第二次整分支复审的 1 个 Important/1 个 Minor，以及第三次整分支复审的 1 个 Important/1 个 Minor 均已修复并通过新鲜全量验收，修复后的再次独立复审待执行，因此 v0.5 尚未标记 Ready。
+设计见 `docs/superpowers/specs/2026-07-13-v0-5-scroll-coordination-design.md`，direct page 修订见 `docs/superpowers/specs/2026-07-13-plain-page-direct-containment-design.md`，最终边界 owner 契约见 `docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md`。Task 1–6、direct containment 和边界实现均已完成；前三轮复审问题均已修复，第四次整分支独立复审为 Critical 0、Important 0、Minor 2，两个 Minor 已在最终状态提交中修复。v0.5 Task 7 已完成并达到 Ready。
 
 - [x] 删除无滚动页 synthetic scroll wrapper 及其额外 containment
 - [x] 无滚动 original page 直接交给 Pageboy，Store 保存 page 非 nil、scroll target 为 nil
@@ -444,14 +444,16 @@
 - [x] Task 7 第三次整分支复审：发现已呈现 `.top/.child` owner 在 child KVO 从 `-12` 越过到 `+6` 时递归 stable settle，把 canonical total 从 6 跳到 106 的 1 个 Important；同时发现 requirements 仍要求 guarded apply/skip 逐帧日志、与现行热路径日志契约冲突的 1 个 Minor
 - [x] Task 7 已呈现顶部回稳修复提交：`128821f`（`修复已呈现子页面顶部回稳`）；enforcement 显式返回 finish owner，pan 同轮应用当前 resolver input，observer-only `.top/.child` 保留 raw total 并经同一 Resolver container-first 分配
 - [x] Task 7 最新修复新鲜验收：Apple Swift 6.3.3；Framework 283 项、Example 37 项（10 单元 + 27 UI），0 fail、0 skip；Example generic Simulator build 成功；三份 xcresult 0 error/warning/analyzer warning
-- [ ] Task 7 修复后再次独立复审：待覆盖 `be2d783...HEAD` 并重点比较 `b00d204...128821f`、尤其 `5b80893...128821f`；Critical/Important 尚未由再次独立复审确认清零
-- [ ] v0.5 Ready：等待上述再次独立复审，不提前标记
+- [x] Task 7 第四次整分支独立复审：覆盖 `be2d783...13b3d95` 并重点比较 `b00d204...128821f`、尤其 `5b80893...128821f`；结论为 Critical 0、Important 0、Minor 2
+- [x] Task 7 最终 Minor 修复：README 验收摘要更新到生产代码 HEAD `128821f` / Framework 283；`testRealChildContainerTopBounceIsVisible` 增加严格 `childTopMax < 0.5`，证明 `.container` 顶部 owner 排他
+- [x] Task 7 最终验收：Framework 283/283 对应 `/private/tmp/AnchorPagerPresentedTopFrameworkFull-20260713-2258.xcresult` 和生产代码 HEAD `128821f`；Example 37/37（10 单元 + 27 UI），0 fail、0 skip；generic Simulator build 成功；全部结果 0 error/warning/analyzer warning
+- [x] v0.5 Ready：Task 7 实现、四轮复审、两个最终 Minor 修复与验收门禁全部完成
 
 ## v0.6：顶部 Overscroll 事件处理版
 
 依赖门禁：OverscrollCoordinator 只消费 v0.5 已绑定的 committed current/empty owner；pending provider page 不能成为 overscroll owner。
 
-设计与计划：`docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md`、`docs/superpowers/plans/2026-07-13-boundary-bounce-ownership.md`。mode、owner、cancel、日志与六类真实 UI 已完成当前复审问题修复与新鲜验收；修复后的再次独立复审待执行，因此 v0.6 尚未标记 Ready。
+设计与计划：`docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md`、`docs/superpowers/plans/2026-07-13-boundary-bounce-ownership.md`。mode、owner、cancel、日志与六类真实 UI 已完成实现、四轮复审与最终验收；第四次复审的两个 Minor 已修复，v0.6 达到 Ready。
 
 - [x] 创建 `Sources/AnchorPager/Overscroll/AnchorPagerOverscrollCoordinator.swift`
 - [x] 实现 `.none`
@@ -483,7 +485,7 @@
 - [x] 六类真实 UI：plain top/bottom、real child container top、real child child top、none top、real child bottom 全部通过
 - [x] v0.6 最新修复验收复用本轮 Framework 283 / Example 37 / generic build，0 fail、0 skip、0 xcresult warning
 - [x] v0.6 实现提交为 `10f1799`、`a4f7c3f`、`47abcd6`，验收记录随 `同步纵向边界回弹验收记录` 提交
-- [ ] v0.6 修复后再次独立复审与 Ready：待主代理覆盖 `be2d783...HEAD` 并重点复查 `b00d204...128821f`、尤其 `5b80893...128821f` 后决定
+- [x] v0.6 第四次独立复审与 Ready：Critical 0、Important 0；两个 Minor 已修复，Framework 283/283、Example 37/37 与 generic build 门禁通过
 
 ## v0.7：手势与交互状态机版
 
