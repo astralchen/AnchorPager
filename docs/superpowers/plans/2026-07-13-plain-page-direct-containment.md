@@ -713,7 +713,7 @@ Expected: 工作区无未解释改动；最近四个实施提交依次覆盖 Sto
 
 ### 边界 owner 集成后的新鲜复验
 
-- `f81ca1e` 与 `5b80893` 复审修复后 Framework 276 项与 Example 37 项全部通过，0 fail、0 skip；generic Simulator build 成功。
+- `f81ca1e`、`5b80893` 与 `128821f` 复审修复后 Framework 283 项与 Example 37 项全部通过，0 fail、0 skip；generic Simulator build 成功；第三次复审问题修复后的再次独立复审仍待执行。
 - plain page 仍为 original Pageboy containment、committed scroll target nil、无 managed inset/snapshot/child pan；顶部 `.container`、底部 container presentation、`.child` 顶部不可用且不回退的真实 UI 均通过。
 - `testPlainPageRootReachesPhysicalBottomAndUsesContainerOnlyPan`、plain top/bottom bounce 用例均包含在本轮 Example 全量 xcresult 中。
 - 本补充只记录实现者复验；再次独立复审待执行，不改变 v0.5 Ready 门禁。

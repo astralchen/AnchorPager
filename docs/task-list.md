@@ -389,7 +389,7 @@
 
 ## v0.5：纵向嵌套滚动协调版
 
-设计见 `docs/superpowers/specs/2026-07-13-v0-5-scroll-coordination-design.md`，direct page 修订见 `docs/superpowers/specs/2026-07-13-plain-page-direct-containment-design.md`，最终边界 owner 契约见 `docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md`。Task 1–6、direct containment 和边界实现均已完成；Task 7 初次独立复审的 3 个 Important 与再次整分支复审剩余的 1 个 Important、1 个 Minor 均已修复并通过新鲜全量验收，修复后的再次独立复审待执行，因此 v0.5 尚未标记 Ready。
+设计见 `docs/superpowers/specs/2026-07-13-v0-5-scroll-coordination-design.md`，direct page 修订见 `docs/superpowers/specs/2026-07-13-plain-page-direct-containment-design.md`，最终边界 owner 契约见 `docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md`。Task 1–6、direct containment 和边界实现均已完成；Task 7 初次独立复审的 3 个 Important、第二次整分支复审的 1 个 Important/1 个 Minor，以及第三次整分支复审的 1 个 Important/1 个 Minor 均已修复并通过新鲜全量验收，修复后的再次独立复审待执行，因此 v0.5 尚未标记 Ready。
 
 - [x] 删除无滚动页 synthetic scroll wrapper 及其额外 containment
 - [x] 无滚动 original page 直接交给 Pageboy，Store 保存 page 非 nil、scroll target 为 nil
@@ -441,8 +441,10 @@
 - [x] Task 7 复审问题修复提交：`f81ca1e`（`修复未呈现边界所有权收敛`）
 - [x] Task 7 再次整分支复审：发现零稳定区间跨越相反边界仍返回旧未呈现 owner 的 1 个 Important，以及 architecture 只描述顶部 presentation、仍把完整 child offset 转移写成后续 v0.5 的 1 个 Minor
 - [x] Task 7 零稳定区间修复提交：`5b80893`（`修复零区间边界反向切换`）；架构文档同步改为 top/bottom 对称公式与当前 v0.5/v0.7 职责
-- [x] Task 7 最新修复新鲜验收：Apple Swift 6.3.3；Framework 276 项、Example 37 项（10 单元 + 27 UI），0 fail、0 skip；Example generic Simulator build 成功；三份 xcresult 0 error/warning/analyzer warning
-- [ ] Task 7 修复后再次独立复审：待覆盖 `be2d783...HEAD` 并重点比较 `b00d204...5b80893`；Critical/Important 尚未由再次独立复审确认清零
+- [x] Task 7 第三次整分支复审：发现已呈现 `.top/.child` owner 在 child KVO 从 `-12` 越过到 `+6` 时递归 stable settle，把 canonical total 从 6 跳到 106 的 1 个 Important；同时发现 requirements 仍要求 guarded apply/skip 逐帧日志、与现行热路径日志契约冲突的 1 个 Minor
+- [x] Task 7 已呈现顶部回稳修复提交：`128821f`（`修复已呈现子页面顶部回稳`）；enforcement 显式返回 finish owner，pan 同轮应用当前 resolver input，observer-only `.top/.child` 保留 raw total 并经同一 Resolver container-first 分配
+- [x] Task 7 最新修复新鲜验收：Apple Swift 6.3.3；Framework 283 项、Example 37 项（10 单元 + 27 UI），0 fail、0 skip；Example generic Simulator build 成功；三份 xcresult 0 error/warning/analyzer warning
+- [ ] Task 7 修复后再次独立复审：待覆盖 `be2d783...HEAD` 并重点比较 `b00d204...128821f`、尤其 `5b80893...128821f`；Critical/Important 尚未由再次独立复审确认清零
 - [ ] v0.5 Ready：等待上述再次独立复审，不提前标记
 
 ## v0.6：顶部 Overscroll 事件处理版
@@ -479,9 +481,9 @@
 - [x] UI test 验证实际 current/max presentation distance，不再只记录瞬时负 offset flag
 - [x] Example 顶部回弹菜单与 launch argument 覆盖默认 container、child、none
 - [x] 六类真实 UI：plain top/bottom、real child container top、real child child top、none top、real child bottom 全部通过
-- [x] v0.6 最新修复验收复用本轮 Framework 276 / Example 37 / generic build，0 fail、0 skip、0 xcresult warning
+- [x] v0.6 最新修复验收复用本轮 Framework 283 / Example 37 / generic build，0 fail、0 skip、0 xcresult warning
 - [x] v0.6 实现提交为 `10f1799`、`a4f7c3f`、`47abcd6`，验收记录随 `同步纵向边界回弹验收记录` 提交
-- [ ] v0.6 修复后再次独立复审与 Ready：待主代理覆盖 `be2d783...HEAD` 并重点复查 `b00d204...5b80893` 后决定
+- [ ] v0.6 修复后再次独立复审与 Ready：待主代理覆盖 `be2d783...HEAD` 并重点复查 `b00d204...128821f`、尤其 `5b80893...128821f` 后决定
 
 ## v0.7：手势与交互状态机版
 

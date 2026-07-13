@@ -142,4 +142,4 @@ UIKit 的祖先 `verticalScrollView.panGestureRecognizer` 可以从普通 descen
 
 ## 边界集成复验（2026-07-13）
 
-最终边界实现、`f81ca1e` 与 `5b80893` 复审修复均未改变 direct containment、committed page 非 nil / scroll target nil、无 managed inset/snapshot/child observation 和物理底边契约。plain page 顶部 `.container` 与底部边界均由外层 container 呈现；`.child` 顶部不可用且不回退。新鲜 Framework 276 项与 Example 37 项全量中包含 plain root 物理底边、container-only pan、顶部与底部实际 presentation distance 用例，全部 0 fail、0 skip；修复后的再次独立复审待执行。
+最终边界实现、`f81ca1e`、`5b80893` 与 `128821f` 复审修复均未改变 direct containment、committed page 非 nil / scroll target nil、无 managed inset/snapshot/child observation 和物理底边契约。plain page 顶部 `.container` 与底部边界均由外层 container 呈现；`.child` 顶部不可用且不回退。新鲜 Framework 283 项与 Example 37 项全量中包含 plain root 物理底边、container-only pan、顶部与底部实际 presentation distance 用例，全部 0 fail、0 skip；第三次复审问题修复后的再次独立复审待执行。

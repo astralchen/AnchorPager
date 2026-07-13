@@ -6,7 +6,7 @@
 
 **日期：** 2026-07-13
 
-**状态：** Task 1–6、无滚动页直接 containment 与边界 owner 修订已实现；初次独立复审的 3 个 Important 与再次整分支复审剩余问题均已修复并完成验收；修复后的再次独立复审待执行
+**状态：** Task 1–6、无滚动页直接 containment 与边界 owner 修订已实现；初次独立复审、第二次和第三次整分支复审发现的问题均已修复并完成验收；第三次复审问题修复后的再次独立复审待执行
 
 **适用范围：** v0.5 `AnchorPagerScrollCoordinator`、当前 container/current child 连续纵向 handoff、最小 simultaneous recognition、stable/native boundary 分离和真实手势验收
 
@@ -323,4 +323,4 @@ resource.scrollObservation.release
 
 本文中被页首修订说明取代的临时 bounce/业务 `bounces` 租约仅保留为历史决策记录，当前生产实现已删除。最终实现只绑定 committed current scroll target，Binding 使用 KVO 与 pan target-action，container 子类只放行 committed pair，ScrollCoordinator 分配 stable position 并约束非 owner，顶部与底部 native boundary 由同日边界 owner 规格统一收口。
 
-2026-07-13 初始实现者完整验收为 Framework 264 项、Example 36 项、generic Simulator build 全部成功，0 fail、0 skip，xcresult 0 warning。其后初次独立复审发现 3 个 Important：未呈现 owner 反向回稳丢失 delta、Header 部分折叠时 child top KVO 错误创建顶部 owner，以及 `.none` 探针把 delegate/KVO 同轮瞬时 offset 误记为可见 presentation。`f81ca1e` 分别以“只同步结束从未呈现的 active owner 并重放 resolver”“child top 仅在 container expanded epsilon 内路由”“Example 使用显示帧采样并同步清理生命周期”修复。再次整分支复审随后发现零稳定区间的 callback 可直接跨到相反 boundary；`5b80893` 在纯 Overscroll policy 内同步结束不同 boundary 的未呈现 owner 并继续新 route，同 boundary 与已呈现 owner 保持不变。最新验收为 Framework 276 项、Example 37 项与 generic Simulator build 全部成功，0 fail、0 skip，三份 xcresult 0 error/warning/analyzer warning。修复后的再次独立复审待执行，因此本规格不把 v0.5 标记 Ready，也不声称 Critical/Important 已由独立审查清零。
+2026-07-13 初始实现者完整验收为 Framework 264 项、Example 36 项、generic Simulator build 全部成功，0 fail、0 skip，xcresult 0 warning。其后初次独立复审发现 3 个 Important：未呈现 owner 反向回稳丢失 delta、Header 部分折叠时 child top KVO 错误创建顶部 owner，以及 `.none` 探针把 delegate/KVO 同轮瞬时 offset 误记为可见 presentation。`f81ca1e` 分别以“只同步结束从未呈现的 active owner 并重放 resolver”“child top 仅在 container expanded epsilon 内路由”“Example 使用显示帧采样并同步清理生命周期”修复。第二次整分支复审随后发现零稳定区间的 callback 可直接跨到相反 boundary；`5b80893` 在纯 Overscroll policy 内同步结束不同 boundary 的未呈现 owner并继续新 route，同 boundary 与已呈现 owner 保持不变。第三次整分支复审发现已呈现 `.top/.child` owner 由 child KVO 从 `-12` 越过到 `+6` 时，递归 stable settle 会把 raw total 6 错分配成 collapsed container + child 6；`128821f` 让 enforcement 显式返回 finish owner，pan 路径同轮应用当前 resolver input，observer-only `.top/.child` 以 `containerBoundary + rawChildDistance` 保留总量并交给同一 Resolver container-first 分配，其他 finish 语义保持不变。同期 requirements 的旧 guarded apply/skip 逐帧日志条款已改为只记录 owner/handoff/boundary 状态变化或受控采样。最新验收为 Framework 283 项、Example 37 项与 generic Simulator build 全部成功，0 fail、0 skip，三份 xcresult 0 error/warning/analyzer warning。第三次复审问题修复后的再次独立复审待执行，因此本规格不把 v0.5 标记 Ready，也不声称 Critical/Important 已由独立审查清零。

@@ -22,7 +22,7 @@ AnchorPager 是一个全新的独立 UIKit 容器框架，用于实现可变 Hea
 
 ### 当前复审门禁
 
-v0.5/v0.6 初次独立复审的 3 个 Important 已在 `f81ca1e` 修复，再次整分支复审剩余的零稳定区间边界反向切换 Important 已在 `5b80893` 修复，架构文档 Minor 同步修正；Apple Swift 6.3.3、iPhone 17 Pro / iOS 26.5 新鲜验收为 Framework 276 项、Example 37 项、0 fail、0 skip，generic iOS Simulator build 成功。修复后的再次独立复审待执行；在其确认 Critical/Important 清零前，不标记 v0.5/v0.6 Ready。
+v0.5/v0.6 初次独立复审的 3 个 Important 已在 `f81ca1e` 修复，第二次整分支复审的零稳定区间边界反向切换 Important 已在 `5b80893` 修复，第三次整分支复审的已呈现 `.top/.child` 回稳总量跳变 Important 已在 `128821f` 修复；两轮对应文档 Minor 均已同步修正。Apple Swift 6.3.3、iPhone 17 Pro / iOS 26.5 最新新鲜验收为 Framework 283 项、Example 37 项、0 fail、0 skip，generic iOS Simulator build 成功。第三次整分支复审问题修复后的再次独立复审待执行；在其确认 Critical/Important 清零前，不标记 v0.5/v0.6 Ready。
 
 ## 3. 参考项目
 
@@ -372,7 +372,7 @@ extension UIViewController {
 6. 必须记录关键生命周期事件：init、deinit、reloadData begin/end、child add/remove、header controller add/remove。
 7. 必须记录关键布局事件：Header 测量结果、Header frame 变化、bar frame 变化、safe area 变化、bounds 变化、managed inset 变化。
 8. 必须记录关键分页事件：setSelectedIndex 请求、越界 no-op、分页开始、分页完成、分页取消、selectedIndex commit。
-9. 必须记录关键滚动协调事件：Header 完全展开、Header 完全折叠、child top boundary、scroll owner 切换、guarded contentOffset update 被触发或跳过。
+9. 必须记录关键滚动协调事件：Header 完全展开、Header 完全折叠、child top boundary，以及 scroll/overscroll owner、handoff、boundary phase 的状态变化。高频 guarded contentOffset correction 不得逐帧记录 apply/skip；只有状态变化、异常或显式调试开关下的受控采样可以输出。
 10. 必须记录顶部 overscroll 事件：mode、owner 进入、owner 退出、owner cancel、阈值判定结果。
 11. 必须记录手势和交互状态机事件：state begin、state update 中的重要边界、state finish、state cancel、非法或重复 transition 被忽略。
 12. 必须记录状态栏点击顶滚 owner 变化。
