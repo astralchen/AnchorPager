@@ -605,7 +605,7 @@ git commit -m "添加子页面滚动只读绑定"
 - Consumes: Task 1 resolver、Task 2 `AnchorPagerContainerScrollView`、Task 3 binding、committed child `UIScrollView?`。
 - Produces: `updateGeometry(collapsibleDistance:)`、`bindCommittedChild(_:)`、`containerDidScroll()`、`handlePan(state:translationY:)`、`invalidate()`。
 
-- [ ] **Step 1: 写 coordinator RED 测试**
+- [x] **Step 1: 写 coordinator RED 测试**
 
 ```swift
 import XCTest
@@ -713,7 +713,7 @@ private final class Fixture {
 }
 ```
 
-- [ ] **Step 2: 运行测试并确认 RED**
+- [x] **Step 2: 运行测试并确认 RED**
 
 ```bash
 xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17' \
@@ -722,7 +722,7 @@ xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 
 
 Expected: 编译失败，提示找不到 coordinator 类型。
 
-- [ ] **Step 3: 实现 coordinator 固定接口**
+- [x] **Step 3: 实现 coordinator 固定接口**
 
 ```swift
 import UIKit
@@ -768,8 +768,8 @@ final class AnchorPagerScrollCoordinator {
             token: token,
             onContentOffsetChanged: { [weak self] _ in self?.childDidChange(token: token) },
             onContentSizeChanged: { [weak self] _ in self?.childDidChange(token: token) },
-            onPan: { [weak self] state, translationY in
-                self?.handlePan(state: state, translationY: translationY)
+            onPan: { [weak self] state, _ in
+                self?.childPanStateDidChange(state: state, token: token)
             }
         )
         settleStableOffsets()
@@ -931,6 +931,19 @@ private func childDidChange(token: Int) {
     settleStableOffsets()
 }
 
+private func childPanStateDidChange(
+    state: UIGestureRecognizer.State,
+    token: Int
+) {
+    guard token == bindingToken else {
+        AnchorPagerLogger.log(.debug, category: .scroll, event: "scroll.binding.stale")
+        return
+    }
+    guard gestureStartTotal == nil,
+          state == .ended || state == .cancelled || state == .failed else { return }
+    settleStableOffsets()
+}
+
 private func transitionOwnerIfNeeded(to nextOwner: Owner) {
     guard owner != nextOwner else { return }
     owner = nextOwner
@@ -948,7 +961,7 @@ private func transitionOwnerIfNeeded(to nextOwner: Owner) {
 
 在 `apply(_:)` 中以旧/新 position 判断 expanded、collapsed、child top 与双向 handoff，仅在跨越时输出对应事件；测试固定验证这些事件不会因重复 callback 重发。
 
-- [ ] **Step 4: 添加日志与乱序/旧 token 测试**
+- [x] **Step 4: 添加日志与乱序/旧 token 测试**
 
 新增以下测试并使用 `AnchorPagerLogger.sink` 做精确事件计数：
 
@@ -961,7 +974,7 @@ func testInvalidateEmitsOneBindingAndResourceReleaseEvent()
 
 `testOldBindingTokenCannotModifyReplacementChild` 必须通过 internal 测试入口 `handleChildChangeForTesting(token:)` 传入 rebind 前 token，断言 replacement offset 未变化且只出现一次 `scroll.binding.stale`。该入口只包一层 `childDidChange(token:)`，不进入 public API。
 
-- [ ] **Step 5: 运行 coordinator 组合测试**
+- [x] **Step 5: 运行 coordinator 组合测试**
 
 ```bash
 xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17' \
@@ -974,7 +987,9 @@ xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 
 
 Expected: 全部通过，0 failures；无逐帧普通日志断言失败。
 
-- [ ] **Step 6: 自审并提交**
+Actual: coordinator RED 因找不到类型失败；首轮 10 tests 全部 GREEN。Task 1–4 组合回归共 31 tests，0 failures，覆盖双向 handoff、短内容上限、container 单 bounce、guard 重入、旧 binding token、幂等 rebind/teardown 和状态变化日志。child pan target 仅观察绑定终态，canonical delta 始终只取 container pan translation，消除了计划初稿的双输入矛盾。
+
+- [x] **Step 6: 自审并提交**
 
 重点检查唯一 owner、不设置 child delegate、guard 重入、KVO/pan target 释放、container bounce 临时边界、MainActor 和不读取 page/provider。
 
