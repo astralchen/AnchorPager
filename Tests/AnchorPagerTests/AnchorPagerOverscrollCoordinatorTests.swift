@@ -93,6 +93,84 @@ final class AnchorPagerOverscrollCoordinatorTests: XCTestCase {
         )
     }
 
+    func testUnpresentedTopOwnerFinishesBeforeRoutingBottomBoundary() {
+        let coordinator = AnchorPagerOverscrollCoordinator(topMode: .child)
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+
+        _ = coordinator.begin(boundary: .top, hasChild: true)
+
+        XCTAssertEqual(
+            coordinator.begin(boundary: .bottom, hasChild: true),
+            .passThrough(.init(boundary: .bottom, owner: .child))
+        )
+        XCTAssertEqual(
+            coordinator.activeOwner,
+            .init(boundary: .bottom, owner: .child)
+        )
+        XCTAssertEqual(
+            events.map(\.event),
+            [
+                "overscroll.boundary.top",
+                "overscroll.owner.child.begin",
+                "overscroll.owner.finish",
+                "overscroll.boundary.bottom",
+                "overscroll.owner.child.begin"
+            ]
+        )
+    }
+
+    func testUnpresentedBottomOwnerFinishesBeforeRoutingTopBoundary() {
+        let coordinator = AnchorPagerOverscrollCoordinator(topMode: .container)
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+
+        _ = coordinator.begin(boundary: .bottom, hasChild: false)
+
+        XCTAssertEqual(
+            coordinator.begin(boundary: .top, hasChild: false),
+            .passThrough(.init(boundary: .top, owner: .container))
+        )
+        XCTAssertEqual(
+            coordinator.activeOwner,
+            .init(boundary: .top, owner: .container)
+        )
+        XCTAssertEqual(
+            events.map(\.event),
+            [
+                "overscroll.boundary.bottom",
+                "overscroll.owner.container.begin",
+                "overscroll.owner.finish",
+                "overscroll.boundary.top",
+                "overscroll.owner.container.begin"
+            ]
+        )
+    }
+
+    func testPresentedOwnerKeepsBoundaryUntilOverflowReturnsToStableRange() {
+        let coordinator = AnchorPagerOverscrollCoordinator(topMode: .container)
+
+        _ = coordinator.begin(boundary: .top, hasChild: false)
+        XCTAssertEqual(coordinator.observeActiveOverflow(8), .active)
+
+        XCTAssertEqual(
+            coordinator.begin(boundary: .bottom, hasChild: false),
+            .passThrough(.init(boundary: .top, owner: .container))
+        )
+        XCTAssertEqual(
+            coordinator.activeOwner,
+            .init(boundary: .top, owner: .container)
+        )
+
+        XCTAssertEqual(coordinator.observeActiveOverflow(0.5), .finished)
+        XCTAssertEqual(
+            coordinator.begin(boundary: .bottom, hasChild: false),
+            .passThrough(.init(boundary: .bottom, owner: .container))
+        )
+    }
+
     func testOwnerLifecycleAndModeChangeLogsOnceInRequiredOrder() {
         let coordinator = AnchorPagerOverscrollCoordinator(topMode: .container)
         var events: [AnchorPagerLogger.Event] = []

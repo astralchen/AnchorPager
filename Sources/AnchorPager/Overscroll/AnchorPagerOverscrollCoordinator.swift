@@ -54,7 +54,11 @@ final class AnchorPagerOverscrollCoordinator {
 
     func begin(boundary: Boundary, hasChild: Bool) -> Route {
         if let activeOwner {
-            return .passThrough(activeOwner)
+            guard activeOwner.boundary != boundary,
+                  !activeHasPresentedOverflow else {
+                return .passThrough(activeOwner)
+            }
+            finish()
         }
         if requestedBoundary != boundary {
             requestedBoundary = boundary

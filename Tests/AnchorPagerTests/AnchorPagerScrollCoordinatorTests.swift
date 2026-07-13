@@ -179,6 +179,61 @@ final class AnchorPagerScrollCoordinatorTests: XCTestCase {
         )
     }
 
+    func testZeroStableRangeSwitchesFromUnpresentedChildTopToBottomWithoutStableCallback() {
+        let fixture = Fixture(collapsedOffset: 0, childMaximumDistance: 0)
+        fixture.coordinator.updateTopOverscrollHandlingMode(.child)
+        fixture.child.bounces = false
+
+        fixture.coordinator.handlePan(state: .began, translationY: 0)
+        fixture.coordinator.handlePan(state: .changed, translationY: 24)
+        XCTAssertEqual(
+            fixture.coordinator.activeBoundaryForTesting,
+            .init(boundary: .top, owner: .child)
+        )
+
+        fixture.coordinator.handlePan(state: .changed, translationY: -24)
+
+        XCTAssertEqual(
+            fixture.coordinator.activeBoundaryForTesting,
+            .init(boundary: .bottom, owner: .child)
+        )
+        XCTAssertEqual(fixture.container.contentOffset.y, 0, accuracy: 0.001)
+        XCTAssertEqual(
+            fixture.child.contentOffset.y,
+            -fixture.child.contentInset.top,
+            accuracy: 0.001
+        )
+        XCTAssertFalse(fixture.child.bounces)
+    }
+
+    func testZeroStableRangeSwitchesFromUnpresentedChildBottomToContainerTopWithoutStableCallback() {
+        let fixture = Fixture(collapsedOffset: 0, childMaximumDistance: 0)
+        fixture.child.bounces = true
+        fixture.child.alwaysBounceVertical = false
+
+        fixture.coordinator.handlePan(state: .began, translationY: 0)
+        fixture.coordinator.handlePan(state: .changed, translationY: -24)
+        XCTAssertEqual(
+            fixture.coordinator.activeBoundaryForTesting,
+            .init(boundary: .bottom, owner: .child)
+        )
+
+        fixture.coordinator.handlePan(state: .changed, translationY: 24)
+
+        XCTAssertEqual(
+            fixture.coordinator.activeBoundaryForTesting,
+            .init(boundary: .top, owner: .container)
+        )
+        XCTAssertEqual(fixture.container.contentOffset.y, 0, accuracy: 0.001)
+        XCTAssertEqual(
+            fixture.child.contentOffset.y,
+            -fixture.child.contentInset.top,
+            accuracy: 0.001
+        )
+        XCTAssertTrue(fixture.child.bounces)
+        XCTAssertFalse(fixture.child.alwaysBounceVertical)
+    }
+
     func testCancelBoundaryHandlingClearsOwnerAndSettlesStableOffsets() {
         let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
         fixture.container.contentOffset.y = -24
