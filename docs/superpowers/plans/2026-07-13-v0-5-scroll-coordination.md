@@ -410,7 +410,7 @@ git commit -m "建立容器纵向手势识别边界"
 - Consumes: Store committed current `UIScrollView?`。
 - Produces: `AnchorPagerChildScrollBinding`，通过 KVO/target-action发出 offset、contentSize 和 pan state，提供同步 `invalidate()`。
 
-- [ ] **Step 1: 写 RED 测试**
+- [x] **Step 1: 写 RED 测试**
 
 ```swift
 import XCTest
@@ -475,7 +475,7 @@ final class AnchorPagerChildScrollBindingTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2: 运行测试并确认 RED**
+- [x] **Step 2: 运行测试并确认 RED**
 
 ```bash
 xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17' \
@@ -484,7 +484,7 @@ xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 
 
 Expected: 编译失败，提示找不到 binding 类型。
 
-- [ ] **Step 3: 实现 binding**
+- [x] **Step 3: 实现 binding**
 
 ```swift
 import UIKit
@@ -537,6 +537,11 @@ final class AnchorPagerChildScrollBinding: NSObject {
         onContentOffsetChanged = nil
         onContentSizeChanged = nil
         onPan = nil
+        AnchorPagerLogger.log(
+            .debug,
+            category: .resource,
+            event: "resource.scrollObservation.release"
+        )
     }
 
     @objc private func handlePan(_ pan: UIPanGestureRecognizer) {
@@ -548,7 +553,7 @@ final class AnchorPagerChildScrollBinding: NSObject {
 
 若 Swift 6 对 KVO closure 隔离产生诊断，只允许把 closure 内容同步桥接到 `MainActor.assumeIsolated`；不得给类型增加 unsafe Sendable 标记或异步 Task。
 
-- [ ] **Step 4: 增加生产源码禁止项测试并运行 GREEN**
+- [x] **Step 4: 增加生产源码禁止项测试并运行 GREEN**
 
 把以下测试加入 `AnchorPagerChildScrollBindingTests`：
 
@@ -574,7 +579,9 @@ Run: Task 3 Step 2 命令。
 
 Expected: 3+ tests，0 failures。
 
-- [ ] **Step 5: 自审并提交**
+Actual: RED 因找不到 `AnchorPagerChildScrollBinding` 失败；GREEN 中 binding 5 tests + logger 6 tests，共 11 tests，0 failures。测试额外确认 `invalidate()` 幂等且只记录一次 `resource.scrollObservation.release`，生产源码不存在 scroll/pan delegate 写入或保存路径。
+
+- [x] **Step 5: 自审并提交**
 
 确认 invalidation 顺序是先失效、再移除 target、最后 invalidate KVO；不保存 child delegate；旧 callback 无法穿透 token/resource 生命周期。
 
