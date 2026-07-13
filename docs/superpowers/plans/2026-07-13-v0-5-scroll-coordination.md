@@ -71,7 +71,7 @@ docs/superpowers/plans/2026-07-13-v0-5-scroll-coordination.md
 - Consumes: pan 起点 total、起点/当前 translation、collapsible distance、child 最大 distance、稳定 fallback pair。
 - Produces: `AnchorPagerScrollPositionResolver.Position` 与 `resolve(_:)`，供 Task 4 的 ScrollCoordinator 使用。
 
-- [ ] **Step 1: 写完整 RED 测试**
+- [x] **Step 1: 写完整 RED 测试**
 
 ```swift
 import XCTest
@@ -144,7 +144,7 @@ final class AnchorPagerScrollPositionResolverTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2: 运行测试并确认 RED**
+- [x] **Step 2: 运行测试并确认 RED**
 
 Run:
 
@@ -155,7 +155,7 @@ xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 
 
 Expected: 编译失败，提示找不到 `AnchorPagerScrollPositionResolver`。
 
-- [ ] **Step 3: 实现纯解析器**
+- [x] **Step 3: 实现纯解析器**
 
 ```swift
 import CoreGraphics
@@ -211,15 +211,17 @@ struct AnchorPagerScrollPositionResolver {
 }
 ```
 
-- [ ] **Step 4: 运行解析器测试并确认 GREEN**
+- [x] **Step 4: 运行解析器测试并确认 GREEN**
 
 Run: Task 1 Step 2 的同一命令。
 
 Expected: 5 tests，0 failures。
 
-- [ ] **Step 5: 自审并提交**
+- [x] **Step 5: 自审并提交**
 
 确认文件只 import CoreGraphics、不绑定 MainActor、不出现 UIKit/Tabman/Pageboy、所有非有限输入有确定降级。
+
+实际结果（2026-07-13，Swift 6.3.3 / iPhone 17）：RED 因目标类型不存在而失败；GREEN 5 项通过，0 fail。
 
 ```bash
 git diff --check
