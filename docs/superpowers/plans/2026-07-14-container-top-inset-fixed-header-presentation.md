@@ -601,7 +601,7 @@ git commit -m "迁移纵向协调到逻辑 offset"
 - Preserves: `AnchorPagerPagingHostViewController.setPagePresentationTranslationY(_:)` 作为 plain bottom 唯一 page-only surface。
 - Prohibits: 直接修改业务 Header 根 view、业务 page 根 view或 Pageboy containment。
 
-- [ ] **Step 1：先写层级、固定高度与 presentation owner 的失败测试**
+- [x] **Step 1：先写层级、固定高度与 presentation owner 的失败测试**
 
 在 `AnchorPagerViewControllerTests.swift` 增加私有 `FixedHeaderPresentationFixture`。其 initializer 接收 `topBehavior`、expanded/collapsed height 和 plain/scroll child 类型；从 `headerView.superview` 取得 HeaderHost、从 HeaderHost 的父视图取得 `contentPresentationView`、再从其父视图取得 `viewportView`，不增加 production test hook 或 public API。fixture 提供 `setLogicalOffset(_:)`（内部执行 `logical - contentInset.top`）、`layout()`、`capturePresentation()` 和 `collapsibleDistance`。snapshot 固定包含 Header/paging/plain page frame、viewport/canonical transform。
 
@@ -653,7 +653,9 @@ func testStableCollapseKeepsPagingViewportHeightAndPlainPagePhysicalBottom() thr
 
 同时更新既有 `testNegativeContainerOffsetTranslatesViewportAndLayoutContextWithoutChangingRange` 与 `testPlainBottomOverflowMovesOnlyPageSurfaceAndRestoresCanonicalChrome`：顶部 container owner 只断言 `viewportView.transform.ty > 0`；plain bottom 只断言 Pageboy page surface 上移，并严格断言 viewport、canonical content surface、Header/bar 均不动。
 
-- [ ] **Step 2：运行 RED，确认旧层级和缩高行为失败**
+另增 `testCanonicalPresentationSurfaceInstallationLogsOnce`，验证重复结构性布局不会重复记录安装事件。
+
+- [x] **Step 2：运行 RED，确认旧层级和缩高行为失败**
 
 ```bash
 xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testStableCollapseKeepsHeaderHostHeightAndMovesCanonicalContentSurface -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testCanonicalSurfaceSitsBetweenViewportAndBothHosts -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testStableCollapseKeepsPagingViewportHeightAndPlainPagePhysicalBottom test
@@ -661,7 +663,7 @@ xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=
 
 预期：旧实现没有中间 surface，Header host 随 collapse 缩高，测试失败。
 
-- [ ] **Step 3：建立 canonical surface 和 expanded canonical constraints**
+- [x] **Step 3：建立 canonical surface 和 expanded canonical constraints**
 
 在 `AnchorPagerViewController` 增加：
 
@@ -695,7 +697,7 @@ AnchorPagerLogger.log(
 )
 ```
 
-- [ ] **Step 4：分离 normal collapse、top bounce 与 plain bottom 三个 surface**
+- [x] **Step 4：分离 normal collapse、top bounce 与 plain bottom 三个 surface**
 
 在本任务先以 `topInset == 0` 的临时 geometry 接通固定呈现，Task 5 再接真实 inset：
 
@@ -734,7 +736,7 @@ pagingHeightConstraint.constant = output.pagingFrame.height
 
 `measureHeaderHeight`、reload/selection cancel 和 `deinit` 都必须把 `viewportView`、`contentPresentationView` 与 Pageboy page surface 恢复为 identity/zero；不得依赖父视图释放隐式清理。
 
-- [ ] **Step 5：运行 ViewController presentation GREEN 与日志回归**
+- [x] **Step 5：运行 ViewController presentation GREEN 与日志回归**
 
 ```bash
 xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testStableCollapseKeepsHeaderHostHeightAndMovesCanonicalContentSurface -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testCanonicalSurfaceSitsBetweenViewportAndBothHosts -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testStableCollapseKeepsPagingViewportHeightAndPlainPagePhysicalBottom -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testNegativeContainerOffsetTranslatesViewportAndLayoutContextWithoutChangingRange -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testPlainBottomOverflowMovesOnlyPageSurfaceAndRestoresCanonicalChrome -only-testing:AnchorPagerTests/AnchorPagerLoggerTests test
@@ -743,7 +745,9 @@ git diff --check
 
 预期：normal collapse 的 viewport transform 始终 identity；顶部 container bounce、plain bottom page-only bounce 和固定 paging height 同时通过；安装日志只出现一次。
 
-- [ ] **Step 6：自审并提交 Task 4**
+- [x] **Step 6：自审并提交 Task 4**
+
+自审确认 Header UIViewController containment 与 PagingHost/Pageboy containment 均未改变，新增层仅作为两个 host 的共同 presentation 父视图；稳定折叠不再改写 host required height，顶部与 plain 底部 presentation owner 严格排他，业务 Header/page 根 view 均未写 transform。reload、selection、rotation、measurement 与释放路径显式清理三层 presentation；安装日志只记录一次，滚动热路径没有新增日志。
 
 重点检查 Header UIViewController containment、Pageboy containment、host 父子层级、reload/deinit 清理和日志频率；确认没有业务根 view transform。
 

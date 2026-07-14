@@ -1357,6 +1357,82 @@ final class AnchorPagerViewControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testStableCollapseKeepsHeaderHostHeightAndMovesCanonicalContentSurface() throws {
+        let fixture = try FixedHeaderPresentationFixture(
+            expandedHeaderHeight: 100,
+            collapsedHeaderHeight: 20
+        )
+        defer { fixture.window.isHidden = true }
+        let expanded = fixture.capturePresentation()
+
+        fixture.setLogicalOffset(30)
+        fixture.layout()
+        let partial = fixture.capturePresentation()
+
+        fixture.setLogicalOffset(80)
+        fixture.layout()
+        let collapsed = fixture.capturePresentation()
+
+        XCTAssertEqual(
+            [expanded.headerHeight, partial.headerHeight, collapsed.headerHeight],
+            [100, 100, 100]
+        )
+        XCTAssertEqual(partial.headerMinY, expanded.headerMinY - 30, accuracy: 0.5)
+        XCTAssertEqual(collapsed.headerMinY, expanded.headerMinY - 80, accuracy: 0.5)
+        XCTAssertEqual(partial.viewportTransform, .identity)
+        XCTAssertEqual(collapsed.viewportTransform, .identity)
+        XCTAssertEqual(partial.contentPresentationTransform.ty, -30, accuracy: 0.5)
+        XCTAssertEqual(collapsed.contentPresentationTransform.ty, -80, accuracy: 0.5)
+    }
+
+    @MainActor
+    func testCanonicalSurfaceSitsBetweenViewportAndBothHosts() throws {
+        let fixture = try FixedHeaderPresentationFixture()
+        defer { fixture.window.isHidden = true }
+
+        XCTAssertTrue(fixture.headerHost.superview === fixture.contentPresentationView)
+        XCTAssertTrue(fixture.pagingHostView.superview === fixture.contentPresentationView)
+        XCTAssertTrue(fixture.contentPresentationView.superview === fixture.viewportView)
+        XCTAssertTrue(fixture.viewportView.superview === fixture.pager.verticalScrollView)
+        XCTAssertFalse(fixture.viewportView === fixture.pager.verticalScrollView)
+    }
+
+    @MainActor
+    func testStableCollapseKeepsPagingViewportHeightAndPlainPagePhysicalBottom() throws {
+        let fixture = try FixedHeaderPresentationFixture(usesPlainPage: true)
+        defer { fixture.window.isHidden = true }
+        let expanded = fixture.capturePresentation()
+
+        fixture.setLogicalOffset(fixture.collapsibleDistance)
+        fixture.layout()
+        let collapsed = fixture.capturePresentation()
+
+        XCTAssertEqual(collapsed.pagingHeight, expanded.pagingHeight, accuracy: 0.5)
+        XCTAssertEqual(
+            collapsed.plainPageFrame.maxY,
+            fixture.pager.view.bounds.maxY,
+            accuracy: 0.5
+        )
+    }
+
+    @MainActor
+    func testCanonicalPresentationSurfaceInstallationLogsOnce() throws {
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+        let fixture = try FixedHeaderPresentationFixture()
+        defer { fixture.window.isHidden = true }
+
+        fixture.pager.reloadHeaderLayout(offsetAdjustment: .preserveVisualPosition)
+        fixture.layout()
+
+        XCTAssertEqual(
+            events.filter { $0.event == "layout.headerPresentationInstalled" }.count,
+            1
+        )
+    }
+
+    @MainActor
     func testNegativeContainerOffsetTranslatesViewportAndLayoutContextWithoutChangingRange() throws {
         var configuration = AnchorPagerConfiguration.default
         configuration.header.heightMode = .fixed(max: 120, min: 0)
@@ -1381,6 +1457,8 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         pager.reloadHeaderLayout(offsetAdjustment: .resetToExpanded)
         window.layoutIfNeeded()
         let headerHostView = try XCTUnwrap(headerView.superview)
+        let contentPresentationView = try XCTUnwrap(headerHostView.superview)
+        let viewportView = try XCTUnwrap(contentPresentationView.superview)
         let initialFrame = headerHostView.convert(headerHostView.bounds, to: pager.view)
         let initialContext = try XCTUnwrap(delegate.layoutContexts.last)
         let initialChildFrameInWindow = child.view.convert(child.view.bounds, to: window)
@@ -1397,6 +1475,8 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         let bouncedContext = try XCTUnwrap(delegate.layoutContexts.last)
 
         XCTAssertEqual(bouncedFrame.minY, initialFrame.minY + 24, accuracy: 0.5)
+        XCTAssertGreaterThan(viewportView.transform.ty, 0)
+        XCTAssertEqual(contentPresentationView.transform, .identity)
         XCTAssertEqual(bouncedContext.headerFrame.minY, bouncedFrame.minY, accuracy: 0.5)
         XCTAssertEqual(
             bouncedContext.barFrame.minY,
@@ -1420,6 +1500,8 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         let restoredChildFrameInWindow = child.view.convert(child.view.bounds, to: window)
 
         XCTAssertEqual(restoredFrame.minY, initialFrame.minY, accuracy: 0.5)
+        XCTAssertEqual(viewportView.transform, .identity)
+        XCTAssertEqual(contentPresentationView.transform, .identity)
         XCTAssertEqual(restoredContext, initialContext)
         XCTAssertEqual(restoredChildFrameInWindow, initialChildFrameInWindow)
         XCTAssertGreaterThanOrEqual(restoredChildFrameInWindow.maxY, window.bounds.maxY - 1)
@@ -1433,10 +1515,11 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         let pager = AnchorPagerViewController(configuration: configuration)
         let delegate = StubDelegate()
         let plainChild = UIViewController()
+        let headerView = FixedFittingView(height: 100)
         let dataSource = StubDataSource(
             count: 1,
             viewControllers: [plainChild],
-            headerContent: .view(FixedFittingView(height: 100))
+            headerContent: .view(headerView)
         )
         pager.delegate = delegate
         pager.dataSource = dataSource
@@ -1451,7 +1534,18 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         pager.verticalScrollView.contentOffset.y = 100
         pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
         window.layoutIfNeeded()
+        let headerHostView = try XCTUnwrap(headerView.superview)
+        let contentPresentationView = try XCTUnwrap(headerHostView.superview)
+        let viewportView = try XCTUnwrap(contentPresentationView.superview)
+        let adapter = try XCTUnwrap(installedAdapter(in: pager))
+        let pageViewController = try XCTUnwrap(
+            adapter.children.compactMap { $0 as? UIPageViewController }.first
+        )
         let collapsedContext = try XCTUnwrap(delegate.layoutContexts.last)
+        let collapsedHeaderFrame = headerHostView.convert(
+            headerHostView.bounds,
+            to: pager.view
+        )
         let collapsedPlainFrame = plainChild.view.convert(
             plainChild.view.bounds,
             to: pager.view
@@ -1471,6 +1565,14 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         )
         XCTAssertEqual(context.headerFrame, collapsedContext.headerFrame)
         XCTAssertEqual(context.barFrame, collapsedContext.barFrame)
+        XCTAssertEqual(
+            headerHostView.convert(headerHostView.bounds, to: pager.view),
+            collapsedHeaderFrame
+        )
+        XCTAssertEqual(viewportView.transform, .identity)
+        XCTAssertEqual(contentPresentationView.transform.ty, -100, accuracy: 0.5)
+        XCTAssertEqual(pageViewController.view.transform.ty, -24, accuracy: 0.5)
+        XCTAssertEqual(plainChild.view.transform, .identity)
         XCTAssertEqual(
             context.contentFrame.minY,
             collapsedContext.contentFrame.minY - 24,
@@ -1498,6 +1600,10 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         )
         XCTAssertEqual(restoredContext, collapsedContext)
         XCTAssertEqual(restoredPlainFrame, collapsedPlainFrame)
+        XCTAssertEqual(viewportView.transform, .identity)
+        XCTAssertEqual(contentPresentationView.transform.ty, -100, accuracy: 0.5)
+        XCTAssertEqual(pageViewController.view.transform, .identity)
+        XCTAssertEqual(plainChild.view.transform, .identity)
         XCTAssertEqual(pager.verticalScrollView.contentSize, initialContentSize)
     }
 
@@ -1595,7 +1701,7 @@ final class AnchorPagerViewControllerTests: XCTestCase {
     }
 
     @MainActor
-    func testHeaderScrollingMovesPagingHostWithoutChangingAdapterOrChildHeight() throws {
+    func testHeaderScrollingMovesPagingPresentationWithoutChangingCanonicalHostOrChildHeight() throws {
         var configuration = AnchorPagerConfiguration.default
         configuration.header.heightMode = .fixed(max: 120, min: 20)
         configuration.bar.height = 56
@@ -1618,13 +1724,21 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         let adapter = try XCTUnwrap(installedAdapter(in: pager))
         let expandedAdapterHeight = adapter.view.bounds.height
         let expandedChildHeight = child.view.bounds.height
-        let expandedMinY = pagingHost.view.frame.minY
+        let expandedCanonicalMinY = pagingHost.view.frame.minY
+        let expandedPresentedMinY = pagingHost.view.convert(
+            pagingHost.view.bounds,
+            to: pager.view
+        ).minY
 
         pager.verticalScrollView.contentOffset.y = 100
         pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
         window.layoutIfNeeded()
 
-        XCTAssertLessThan(pagingHost.view.frame.minY, expandedMinY)
+        XCTAssertEqual(pagingHost.view.frame.minY, expandedCanonicalMinY, accuracy: 0.5)
+        XCTAssertLessThan(
+            pagingHost.view.convert(pagingHost.view.bounds, to: pager.view).minY,
+            expandedPresentedMinY
+        )
         XCTAssertEqual(adapter.view.bounds.height, expandedAdapterHeight, accuracy: 0.5)
         XCTAssertEqual(child.view.bounds.height, expandedChildHeight, accuracy: 0.5)
     }
@@ -2619,6 +2733,91 @@ final class AnchorPagerViewControllerTests: XCTestCase {
 }
 
 @MainActor
+private final class FixedHeaderPresentationFixture {
+    struct Snapshot {
+        let headerHeight: CGFloat
+        let headerMinY: CGFloat
+        let pagingHeight: CGFloat
+        let plainPageFrame: CGRect
+        let viewportTransform: CGAffineTransform
+        let contentPresentationTransform: CGAffineTransform
+    }
+
+    let pager: AnchorPagerViewController
+    let dataSource: StubDataSource
+    let window: UIWindow
+    let headerHost: UIView
+    let contentPresentationView: UIView
+    let viewportView: UIView
+    let pagingHostView: UIView
+    let collapsibleDistance: CGFloat
+
+    private let page: UIViewController
+
+    init(
+        topBehavior: AnchorPagerHeaderTopBehavior = .insideSafeArea,
+        expandedHeaderHeight: CGFloat = 100,
+        collapsedHeaderHeight: CGFloat = 20,
+        usesPlainPage: Bool = false
+    ) throws {
+        var configuration = AnchorPagerConfiguration.default
+        configuration.header.heightMode = .fixed(
+            max: expandedHeaderHeight,
+            min: collapsedHeaderHeight
+        )
+        configuration.header.topBehavior = topBehavior
+        collapsibleDistance = max(0, expandedHeaderHeight - collapsedHeaderHeight)
+        let headerView = FixedFittingView(height: expandedHeaderHeight)
+        page = usesPlainPage ? UIViewController() : ScrollChildViewController()
+        pager = AnchorPagerViewController(configuration: configuration)
+        dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [page],
+            headerContent: .view(headerView)
+        )
+        pager.dataSource = dataSource
+        window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = pager
+        window.makeKeyAndVisible()
+        pager.reloadData()
+        window.layoutIfNeeded()
+        pager.reloadHeaderLayout(offsetAdjustment: .resetToExpanded)
+        window.layoutIfNeeded()
+
+        headerHost = try XCTUnwrap(headerView.superview)
+        contentPresentationView = try XCTUnwrap(headerHost.superview)
+        viewportView = try XCTUnwrap(contentPresentationView.superview)
+        let pagingHost = try XCTUnwrap(
+            pager.children.compactMap {
+                $0 as? AnchorPagerPagingHostViewController
+            }.first
+        )
+        pagingHostView = pagingHost.view
+    }
+
+    func setLogicalOffset(_ logicalOffset: CGFloat) {
+        pager.verticalScrollView.contentOffset.y = logicalOffset
+            - pager.verticalScrollView.contentInset.top
+    }
+
+    func layout() {
+        pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
+        window.layoutIfNeeded()
+    }
+
+    func capturePresentation() -> Snapshot {
+        Snapshot(
+            headerHeight: headerHost.bounds.height,
+            headerMinY: headerHost.convert(headerHost.bounds, to: pager.view).minY,
+            pagingHeight: pagingHostView.bounds.height,
+            plainPageFrame: page.view.convert(page.view.bounds, to: pager.view),
+            viewportTransform: viewportView.transform,
+            contentPresentationTransform: contentPresentationView.transform
+        )
+    }
+}
+
+@MainActor
 private final class PlainBottomPresentationFixture {
     let pager: AnchorPagerViewController
     let dataSource: StubDataSource
@@ -2673,6 +2872,7 @@ private final class TopOverscrollPresentationFixture {
     let host: AnchorPagerPagingHostViewController
 
     private let headerHostView: UIView
+    private let contentPresentationView: UIView
     private let viewportView: UIView
     private let canonicalHeaderFrame: CGRect
     private let overflowDistance: CGFloat = 24
@@ -2711,7 +2911,8 @@ private final class TopOverscrollPresentationFixture {
             _ = adapter.viewController(for: adapter, at: index)
         }
         headerHostView = try XCTUnwrap(headerView.superview)
-        viewportView = try XCTUnwrap(headerHostView.superview)
+        contentPresentationView = try XCTUnwrap(headerHostView.superview)
+        viewportView = try XCTUnwrap(contentPresentationView.superview)
         canonicalHeaderFrame = headerHostView.convert(headerHostView.bounds, to: pager.view)
     }
 
@@ -2742,6 +2943,12 @@ private final class TopOverscrollPresentationFixture {
             file: file,
             line: line
         )
+        XCTAssertEqual(
+            contentPresentationView.transform,
+            .identity,
+            file: file,
+            line: line
+        )
     }
 
     func assertCanonicalPresentationRestored(
@@ -2761,6 +2968,12 @@ private final class TopOverscrollPresentationFixture {
         XCTAssertEqual(viewportView.transform.d, 1, accuracy: 0.001, file: file, line: line)
         XCTAssertEqual(viewportView.transform.tx, 0, accuracy: 0.001, file: file, line: line)
         XCTAssertEqual(viewportView.transform.ty, 0, accuracy: 0.001, file: file, line: line)
+        XCTAssertEqual(
+            contentPresentationView.transform,
+            .identity,
+            file: file,
+            line: line
+        )
         XCTAssertEqual(
             currentHeaderFrame.minY,
             canonicalHeaderFrame.minY,
