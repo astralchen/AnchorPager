@@ -15,6 +15,8 @@ struct AnchorPagerExampleTests {
             containerPresentation: 1.25,
             maximumContainerTopPresentation: 12.5,
             maximumContainerBottomPresentation: 8,
+            barPresentation: -0.25,
+            maximumBarPresentation: 0.75,
             childTopOverflow: 2,
             maximumChildTopOverflow: 5,
             childBottomOverflow: 4,
@@ -23,7 +25,7 @@ struct AnchorPagerExampleTests {
 
         #expect(
             state.accessibilityValue
-                == "page=long;hasScrollTarget=1;mode=container;collapse=1.00;distance=42.00;containerCurrent=1.25;containerTopMax=12.50;containerBottomMax=8.00;childTopCurrent=2.00;childTopMax=5.00;childBottomCurrent=4.00;childBottomMax=7.00"
+                == "page=long;hasScrollTarget=1;mode=container;collapse=1.00;distance=42.00;containerCurrent=1.25;containerTopMax=12.50;containerBottomMax=8.00;barCurrent=-0.25;barMax=0.75;childTopCurrent=2.00;childTopMax=5.00;childBottomCurrent=4.00;childBottomMax=7.00"
         )
     }
 
@@ -37,6 +39,8 @@ struct AnchorPagerExampleTests {
             containerPresentation: 0,
             maximumContainerTopPresentation: 0,
             maximumContainerBottomPresentation: 0,
+            barPresentation: 0,
+            maximumBarPresentation: 0,
             childTopOverflow: 0,
             maximumChildTopOverflow: 0,
             childBottomOverflow: 0,
@@ -45,7 +49,7 @@ struct AnchorPagerExampleTests {
 
         #expect(
             state.accessibilityValue
-                == "page=plain;hasScrollTarget=0;mode=container;collapse=1.00;distance=0.00;containerCurrent=0.00;containerTopMax=0.00;containerBottomMax=0.00;childTopCurrent=0.00;childTopMax=0.00;childBottomCurrent=0.00;childBottomMax=0.00"
+                == "page=plain;hasScrollTarget=0;mode=container;collapse=1.00;distance=0.00;containerCurrent=0.00;containerTopMax=0.00;containerBottomMax=0.00;barCurrent=0.00;barMax=0.00;childTopCurrent=0.00;childTopMax=0.00;childBottomCurrent=0.00;childBottomMax=0.00"
         )
     }
 
@@ -59,6 +63,8 @@ struct AnchorPagerExampleTests {
             containerPresentation: 3,
             maximumContainerTopPresentation: 12,
             maximumContainerBottomPresentation: 8,
+            barPresentation: -2,
+            maximumBarPresentation: 4,
             childTopOverflow: 2,
             maximumChildTopOverflow: 5,
             childBottomOverflow: 4,
@@ -70,6 +76,8 @@ struct AnchorPagerExampleTests {
         #expect(state.containerPresentation == 0)
         #expect(state.maximumContainerTopPresentation == 0)
         #expect(state.maximumContainerBottomPresentation == 0)
+        #expect(state.barPresentation == 0)
+        #expect(state.maximumBarPresentation == 0)
         #expect(state.childTopOverflow == 0)
         #expect(state.maximumChildTopOverflow == 0)
         #expect(state.childBottomOverflow == 0)

@@ -460,7 +460,7 @@ git commit -m "修复页眉首次中立测量"
 - Adds Example-only fields: `barPresentation`、`maximumBarPresentation`。
 - Adds accessibility probe fields: `barCurrent`、`barMax`。
 
-- [ ] **Step 1：先更新 Example 单元/UI 期望并运行 RED**
+- [x] **Step 1：先更新 Example 单元/UI 期望并运行 RED**
 
 所有 `ExampleScrollCoordinationState` 构造增加 bar 两字段；序列化字符串在 `containerBottomMax` 后加入 `barCurrent`、`barMax`；reset 测试断言二者归零。UI parser 增加同名字段，并把 `hasZeroPresentationMetrics` 加入 `abs(barCurrent) < 0.5 && barMax < 0.5`。
 
@@ -481,7 +481,7 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExa
 
 预期：Example model 尚无 bar 字段，编译失败。
 
-- [ ] **Step 2：实现 page/bar 分层探针**
+- [x] **Step 2：实现 page/bar 分层探针**
 
 在 Example controller 增加 expanded/collapsed bar baseline 和 collapsed content baseline。stable 时按 collapse progress 更新 Header、bar、content baseline并把 current presentation 归零；top overflow 继续用 Header frame 计算 `containerPresentation`，同时用 expanded bar baseline 更新 bar current/max；bottom overflow 改用：
 
@@ -502,7 +502,7 @@ scrollCoordinationState.maximumBarPresentation = max(
 
 所有 baseline 必须来自 stable LayoutContext，不能读取或变换业务 view。`resetPresentationMetrics()` 清零 current/max 但保留 baseline。
 
-- [ ] **Step 3：运行 Example 单元与目标 UI GREEN**
+- [x] **Step 3：运行 Example 单元与目标 UI GREEN**
 
 ```bash
 xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' -parallel-testing-enabled NO -only-testing:AnchorPagerExampleTests/AnchorPagerExampleTests -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testPlainContainerBottomBounceIsVisible test
@@ -510,7 +510,7 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExa
 
 预期：Example 单元全部通过；真实拖拽采到 page bottom max `> 1 pt`、bar max `< 0.5 pt`，松手后 current 全部 `< 0.5 pt`，plain root settled 时到达物理屏幕底部。
 
-- [ ] **Step 4：运行边界 owner 相邻 UI 回归**
+- [x] **Step 4：运行边界 owner 相邻 UI 回归**
 
 ```bash
 xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' -parallel-testing-enabled NO -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testPlainContainerTopBounceIsVisible -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testRealChildContainerTopBounceIsVisible -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testRealChildBottomBounceUsesChild -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testSwitchingPagesRebindsVerticalOwnerWithoutJump test
@@ -519,7 +519,7 @@ git diff --check
 
 预期：container top、real child top/bottom 和切页 owner 全部通过；plain bottom 新探针没有影响 child owner 排他。
 
-- [ ] **Step 5：自审并提交 Task 4**
+- [x] **Step 5：自审并提交 Task 4**
 
 自审探针只读 LayoutContext、stable baseline 不被 overscroll 污染、UI reset 可靠、bar max 不继承前一段手势、无测试专用框架 Public API。
 
@@ -527,6 +527,8 @@ git diff --check
 git add Examples/AnchorPagerExample/AnchorPagerExample/ExampleScrollCoordinationState.swift Examples/AnchorPagerExample/AnchorPagerExample/ExamplePagerViewController.swift Examples/AnchorPagerExample/AnchorPagerExampleTests/AnchorPagerExampleTests.swift Examples/AnchorPagerExample/AnchorPagerExampleUITests/AnchorPagerExampleUITests.swift
 git commit -m "补强无滚动页回弹界面验收"
 ```
+
+**执行记录（2026-07-14）：** Example RED 因 model 缺少 `barPresentation`/`maximumBarPresentation` 两字段按预期编译失败。实现后 Example 单元测试、plain bottom 目标真实手势 UI、container top/real child top/real child bottom/切页 owner 四项相邻 UI 全部通过；real child bottom 另加 bar max `< 0.5 pt` 排他断言并单独复跑通过。探针只从 stable LayoutContext 更新 baseline：顶部继续读取 Header，plain bottom 读取 content，bar 独立读取 bar frame；reset 清空 current/max 但不污染 baseline。自审确认没有读取或变换业务 view，也没有增加框架测试专用 Public API。
 
 ---
 

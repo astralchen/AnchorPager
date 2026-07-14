@@ -126,7 +126,10 @@ final class AnchorPagerExampleUITests: XCTestCase {
         drag(in: app, from: 0.76, to: 0.24)
 
         let state = try XCTUnwrap(waitForScrollState(from: probe) {
-            $0.containerBottomMax > 1 && abs($0.containerCurrent) < 0.5
+            $0.containerBottomMax > 1
+                && $0.barMax < 0.5
+                && abs($0.containerCurrent) < 0.5
+                && abs($0.barCurrent) < 0.5
         })
         XCTAssertFalse(state.hasScrollTarget)
         XCTAssertGreaterThanOrEqual(root.frame.maxY, app.frame.maxY - 1)
@@ -201,6 +204,7 @@ final class AnchorPagerExampleUITests: XCTestCase {
                 && abs($0.containerCurrent) < 0.5
         })
         XCTAssertLessThan(state.containerBottomMax, 0.5)
+        XCTAssertLessThan(state.barMax, 0.5)
         XCTAssertGreaterThanOrEqual(state.collapse, 0.99)
     }
 
@@ -638,6 +642,8 @@ private struct ScrollCoordinationState {
     let containerCurrent: CGFloat
     let containerTopMax: CGFloat
     let containerBottomMax: CGFloat
+    let barCurrent: CGFloat
+    let barMax: CGFloat
     let childTopCurrent: CGFloat
     let childTopMax: CGFloat
     let childBottomCurrent: CGFloat
@@ -647,6 +653,8 @@ private struct ScrollCoordinationState {
         abs(containerCurrent) < 0.5
             && containerTopMax < 0.5
             && containerBottomMax < 0.5
+            && abs(barCurrent) < 0.5
+            && barMax < 0.5
             && abs(childTopCurrent) < 0.5
             && childTopMax < 0.5
             && abs(childBottomCurrent) < 0.5
@@ -676,6 +684,10 @@ private struct ScrollCoordinationState {
               let containerTopMax = Double(containerTopMaxValue),
               let containerBottomMaxValue = fields["containerBottomMax"],
               let containerBottomMax = Double(containerBottomMaxValue),
+              let barCurrentValue = fields["barCurrent"],
+              let barCurrent = Double(barCurrentValue),
+              let barMaxValue = fields["barMax"],
+              let barMax = Double(barMaxValue),
               let childTopCurrentValue = fields["childTopCurrent"],
               let childTopCurrent = Double(childTopCurrentValue),
               let childTopMaxValue = fields["childTopMax"],
@@ -694,6 +706,8 @@ private struct ScrollCoordinationState {
         self.containerCurrent = CGFloat(containerCurrent)
         self.containerTopMax = CGFloat(containerTopMax)
         self.containerBottomMax = CGFloat(containerBottomMax)
+        self.barCurrent = CGFloat(barCurrent)
+        self.barMax = CGFloat(barMax)
         self.childTopCurrent = CGFloat(childTopCurrent)
         self.childTopMax = CGFloat(childTopMax)
         self.childBottomCurrent = CGFloat(childBottomCurrent)

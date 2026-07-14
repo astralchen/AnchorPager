@@ -10,6 +10,8 @@ struct ExampleScrollCoordinationState: Equatable {
     var containerPresentation: CGFloat
     var maximumContainerTopPresentation: CGFloat
     var maximumContainerBottomPresentation: CGFloat
+    var barPresentation: CGFloat
+    var maximumBarPresentation: CGFloat
     var childTopOverflow: CGFloat
     var maximumChildTopOverflow: CGFloat
     var childBottomOverflow: CGFloat
@@ -25,6 +27,8 @@ struct ExampleScrollCoordinationState: Equatable {
             "containerCurrent=\(formatted(containerPresentation))",
             "containerTopMax=\(formatted(maximumContainerTopPresentation))",
             "containerBottomMax=\(formatted(maximumContainerBottomPresentation))",
+            "barCurrent=\(formatted(barPresentation))",
+            "barMax=\(formatted(maximumBarPresentation))",
             "childTopCurrent=\(formatted(childTopOverflow))",
             "childTopMax=\(formatted(maximumChildTopOverflow))",
             "childBottomCurrent=\(formatted(childBottomOverflow))",
@@ -36,6 +40,8 @@ struct ExampleScrollCoordinationState: Equatable {
         containerPresentation = 0
         maximumContainerTopPresentation = 0
         maximumContainerBottomPresentation = 0
+        barPresentation = 0
+        maximumBarPresentation = 0
         childTopOverflow = 0
         maximumChildTopOverflow = 0
         childBottomOverflow = 0

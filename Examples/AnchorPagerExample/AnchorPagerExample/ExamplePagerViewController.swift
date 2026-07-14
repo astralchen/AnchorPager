@@ -17,7 +17,9 @@ final class ExamplePagerViewController: UIViewController {
     private lazy var pages = makePages()
     private var didApplyInitialContainerState = false
     private var expandedHeaderBaselineY: CGFloat?
-    private var collapsedHeaderBaselineY: CGFloat?
+    private var expandedBarBaselineY: CGFloat?
+    private var collapsedBarBaselineY: CGFloat?
+    private var collapsedContentBaselineY: CGFloat?
     private weak var scrollCoordinationStateControl: UIButton?
     private var scrollCoordinationState = ExampleScrollCoordinationState(
         page: "short",
@@ -28,6 +30,8 @@ final class ExamplePagerViewController: UIViewController {
         containerPresentation: 0,
         maximumContainerTopPresentation: 0,
         maximumContainerBottomPresentation: 0,
+        barPresentation: 0,
+        maximumBarPresentation: 0,
         childTopOverflow: 0,
         maximumChildTopOverflow: 0,
         childBottomOverflow: 0,
@@ -319,25 +323,44 @@ final class ExamplePagerViewController: UIViewController {
 
         if isStable {
             scrollCoordinationState.containerPresentation = 0
+            scrollCoordinationState.barPresentation = 0
             if scrollCoordinationState.collapseProgress <= 0.01 {
                 expandedHeaderBaselineY = context.headerFrame.minY
+                expandedBarBaselineY = context.barFrame.minY
             }
             if scrollCoordinationState.collapseProgress >= 0.99 {
-                collapsedHeaderBaselineY = context.headerFrame.minY
+                collapsedBarBaselineY = context.barFrame.minY
+                collapsedContentBaselineY = context.contentFrame.minY
             }
-        } else if topOverflow > 0.5, let baseline = expandedHeaderBaselineY {
-            let presentation = context.headerFrame.minY - baseline
+        } else if topOverflow > 0.5,
+                  let headerBaseline = expandedHeaderBaselineY,
+                  let barBaseline = expandedBarBaselineY {
+            let presentation = context.headerFrame.minY - headerBaseline
+            let barPresentation = context.barFrame.minY - barBaseline
             scrollCoordinationState.containerPresentation = presentation
             scrollCoordinationState.maximumContainerTopPresentation = max(
                 scrollCoordinationState.maximumContainerTopPresentation,
                 presentation
             )
-        } else if bottomOverflow > 0.5, let baseline = collapsedHeaderBaselineY {
-            let presentation = context.headerFrame.minY - baseline
+            scrollCoordinationState.barPresentation = barPresentation
+            scrollCoordinationState.maximumBarPresentation = max(
+                scrollCoordinationState.maximumBarPresentation,
+                abs(barPresentation)
+            )
+        } else if bottomOverflow > 0.5,
+                  let contentBaseline = collapsedContentBaselineY,
+                  let barBaseline = collapsedBarBaselineY {
+            let presentation = context.contentFrame.minY - contentBaseline
+            let barPresentation = context.barFrame.minY - barBaseline
             scrollCoordinationState.containerPresentation = presentation
             scrollCoordinationState.maximumContainerBottomPresentation = max(
                 scrollCoordinationState.maximumContainerBottomPresentation,
                 -presentation
+            )
+            scrollCoordinationState.barPresentation = barPresentation
+            scrollCoordinationState.maximumBarPresentation = max(
+                scrollCoordinationState.maximumBarPresentation,
+                abs(barPresentation)
             )
         }
         updateScrollCoordinationStateControl()
