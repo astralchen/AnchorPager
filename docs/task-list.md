@@ -457,7 +457,8 @@
 - [x] 执行实现者自审与整分支 fresh-pass 复审；发现的 1 个 Important（deinit 未显式归零 page surface）已在 `c37e829` 修复并完成 RED/GREEN，终态 Critical 0、Important 0、Minor 0
 - [x] 恢复 v0.5 Ready：2026-07-14 专项实现、验收和复审门禁全部完成
 - [x] 主容器 top inset/固定高度 Header 关系梳理与设计确认：inside 使用真实 safe-area top inset，extends 为 0；raw/logical offset、scroll range、canonical presentation 与 bounce 分层统一收口
-- [ ] 编写并复核主容器 top inset/固定高度 Header 详细实施计划
+- [x] 编写并自审主容器 top inset/固定高度 Header 详细实施计划：拆为纯 geometry、LayoutEngine、ScrollCoordinator、canonical surface、真实 inset 迁移、Example/UI、全量验收和 fresh-pass 八个 RED→GREEN 任务
+- [ ] 用户复核详细实施计划并选择逐任务执行方式
 - [ ] 按 TDD 实现 container geometry、固定高度 canonical presentation、结构性 offset 迁移和日志
 - [ ] 完成 Framework、Example、真实 UI、generic build、运行时约束与静态禁止项全量验收
 - [ ] 完成实现者自审和独立 fresh-pass 复审，Critical/Important 清零后恢复 v0.5 Task 7 Ready

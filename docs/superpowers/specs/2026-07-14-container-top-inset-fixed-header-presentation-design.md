@@ -2,7 +2,7 @@
 
 **日期：** 2026-07-14
 
-**状态：** 用户已确认设计；实施计划、代码、完整验收和独立复审待完成
+**状态：** 用户已确认设计，详细实施计划已编写并完成计划自审；用户复核计划、代码、完整验收和独立复审待完成
 
 **适用范围：** `AnchorPagerHeaderTopBehavior`、主容器顶部 inset、Header 固定高度呈现、正常折叠、bar 吸顶、纵向 handoff、双边界 bounce、运行时顶部行为切换与安全区变化。
 
@@ -234,7 +234,7 @@ newRawOffset = migratedLogical - newInset
 
 ### Header 高度变化
 
-`reloadHeaderLayout(offsetAdjustment:)` 继续在纯内容 `E/C/D` 上应用四种公开策略。策略结果是新的逻辑 offset；最后一步才使用当前 `I` 转换成 raw offset。`preserveVisualPosition` 的“可见 Header”应基于固定高度 Header 与 viewport 相交后的可见量，而不是旧的缩高 host constraint。
+`reloadHeaderLayout(offsetAdjustment:)` 继续在纯内容 `E/C/D` 上应用四种公开策略。策略结果是新的逻辑 offset；最后一步才使用当前 `I` 转换成 raw offset。`preserveVisualPosition` 的“可见 Header”仍指顶部吸附基线到 bar 之间的逻辑可见纯内容量 `E - stableCollapseOffset`，不等于固定 Header 根视图的 `bounds.height`，也不按业务根视图与物理 viewport 的交集计算。这样可以在 Header 高度变化时保持 bar/paging 视觉位置，并让只切换 top behavior 且 `E/C/D` 不变时继续保留同一逻辑折叠量。
 
 ### reload、切页与 empty terminal
 
