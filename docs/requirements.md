@@ -22,7 +22,7 @@ AnchorPager 是一个全新的独立 UIKit 容器框架，用于实现可变 Hea
 
 ### 当前复审门禁
 
-v0.5/v0.6 初次独立复审的 3 个 Important 已在 `f81ca1e` 修复，第二次整分支复审的零稳定区间边界反向切换 Important 已在 `5b80893` 修复，第三次整分支复审的已呈现 `.top/.child` 回稳总量跳变 Important 已在 `128821f` 修复；第二、三次复审的文档 Minor 均已同步修正。第四次整分支独立复审覆盖 `be2d783...13b3d95`，两个 Minor 已在 `b9699b0` 修复。2026-07-14 plain page bottom/bar 安全区和 formal Header bootstrap 回归已修复到 `c37e829`；真实 Header 附着前 required zero-height 缺口随后在 `d6ece31` 修复。最新 Framework 296/296、Example 38/38（10 单元 + 28 UI）与 generic Simulator build 全部通过，运行时 UIKit 约束查询无冲突；fresh-pass 终态为 Critical 0、Important 0、Minor 0，v0.5 Task 7 与 v0.6 当前为 Ready。
+v0.5/v0.6 初次独立复审的 3 个 Important 已在 `f81ca1e` 修复，第二次整分支复审的零稳定区间边界反向切换 Important 已在 `5b80893` 修复，第三次整分支复审的已呈现 `.top/.child` 回稳总量跳变 Important 已在 `128821f` 修复；第二、三次复审的文档 Minor 均已同步修正。第四次整分支独立复审覆盖 `be2d783...13b3d95`，两个 Minor 已在 `b9699b0` 修复。2026-07-14 plain page bottom/bar 安全区和 formal Header bootstrap 回归已修复到 `c37e829`；真实 Header 附着前 required zero-height 缺口随后在 `d6ece31` 修复。该历史终态为 Framework 296/296、Example 38/38（10 单元 + 28 UI）与 generic Simulator build 全部通过。用户随后确认主容器真实 top inset 与固定高度 Header presentation 新契约；专项设计已确认但尚未实施、全量验收或独立复审，因此 v0.5 Task 7 与 v0.6 Ready 门禁当前重新关闭。
 
 ## 3. 参考项目
 
@@ -240,15 +240,16 @@ extension UIViewController {
 6. Header 是 UIView 时，默认使用 Auto Layout fitting size、当前 bounds 或 intrinsicContentSize 计算高度。
 7. Header 是 UIViewController 时，默认使用其 view 的 Auto Layout fitting size 或 preferredContentSize 作为测量来源。
 8. Header heightMode 必须支持 automatic、fixed、ranged 三种模式。
-9. insideSafeArea 模式下，Header 顶部从 navigation bar bottom 或 safeArea.top 开始，frame 高度为当前可见纯内容高度。
-10. extendsUnderTopSafeArea 模式下，Header 从容器 view 顶部开始绘制，frame 高度为本地顶部遮挡加当前可见纯内容高度。
+9. insideSafeArea 模式下，Header 展开态顶部从 navigation bar bottom 或 safeArea.top 开始，frame 保持完整 resolved expanded 纯内容高度；正常折叠通过内部 presentation 向上移动，不缩小业务 Header 根视图高度。
+10. extendsUnderTopSafeArea 模式下，Header 展开态从容器 view 顶部开始绘制，frame 保持“本地顶部遮挡 + resolved expanded 纯内容高度”；正常折叠同样只向上移动，不缩小业务 Header 根视图高度。
 11. 两种顶部行为只改变 Header 外框是否延伸到顶部系统区域，不改变分段栏吸顶基线和 child 内容安全区域。
 12. Header height mode 和可折叠距离只表示纯内容高度，本地顶部遮挡不得进入可折叠距离。
-13. automatic/ranged Header 必须在顶部遮挡下方的中立几何中测量，不能让最终 top behavior 或负 offset presentation 污染测量结果。
-14. Header 测量缓存只属于当前 UIView/UIViewController 内容身份；身份替换必须使旧缓存失效，首次无当前身份缓存时先取得不发布正式状态或日志的非负 bootstrap fitting seed，非空约束内容不得以 required `height == 0` 参与中立布局。
-15. Header frame 和 height 可以运行时变化。
-16. `reloadHeaderLayout` 必须支持重新测量、重新布局，并按 offsetAdjustment 保持视觉状态。
-17. Header 视觉迁移不能反复 add/remove header view controller。
+13. 正常折叠量只改变 Header/paging 内部 canonical presentation 的纵向位置；固定 viewport 负责裁剪，bar 在 `safe top + collapsed Header height` 处吸顶。
+14. automatic/ranged Header 必须在顶部遮挡下方的中立几何中测量，不能让最终 top behavior 或负 offset presentation 污染测量结果。
+15. Header 测量缓存只属于当前 UIView/UIViewController 内容身份；身份替换必须使旧缓存失效，首次无当前身份缓存时先取得不发布正式状态或日志的非负 bootstrap fitting seed，非空约束内容不得以 required `height == 0` 参与中立布局。
+16. Header frame 和 height 可以运行时变化。
+17. `reloadHeaderLayout` 必须支持重新测量、重新布局，并按 offsetAdjustment 保持视觉状态。
+18. Header 视觉迁移不能反复 add/remove header view controller。
 
 ## 8. 安全区域要求
 
@@ -256,7 +257,7 @@ extension UIViewController {
 2. 布局计算不能假设 AnchorPagerViewController 是 window root。
 3. 可见顶部和底部遮挡必须转换到 AnchorPagerViewController.view 本地坐标系后参与布局。
 4. 分段栏吸顶基线必须基于当前可见顶部遮挡计算，不固定使用 view.safeAreaInsets.top。
-5. Tabman adapter 的 top 跟随 Header bottom，高度固定为 Header 完全折叠时的最大可见高度；普通 Header 折叠滚动只移动 adapter，不改变 Pageboy child bounds。
+5. Tabman adapter 的呈现 top 跟随 Header 呈现 bottom，高度固定为 Header 完全折叠时的最大可见高度；普通 Header 折叠滚动只移动 AnchorPager 自有 canonical presentation surface，不改变 Pageboy child bounds。
 6. child managed contentInset.top 只表达 Tabman adapter 内实际覆盖 Pageboy child 的 bar obstruction，不包含 Header 高度或容器顶部遮挡。
 7. child managed scrollIndicatorInsets.top 避让实际 bar obstruction；contentInset.bottom 和 scrollIndicatorInsets.bottom 必须使用 child 局部底部遮挡，即 adapter 当前底端到 AnchorPager 安全可见底端的距离。Header 展开时该值包含尚未折叠距离，完全折叠时收敛为底部 safe area、tab bar、toolbar 或其他根容器可见遮挡。
 8. 框架必须区分自身 managed inset 和外部追加 inset，不覆盖调用方已有额外 contentInset。
@@ -264,6 +265,8 @@ extension UIViewController {
 10. child top offset 迁移使用相对顶部距离，bar 高度变化不能让当前 child 可见内容跳动。
 11. safe area、bar 显隐、横竖屏、Split View、Stage Manager 尺寸变化后必须重新计算布局，并尽量保持 selectedIndex、Header 折叠进度和当前 child 可见位置。
 12. container 折叠导致 child 局部 bottom 变化时，必须保持 child distance-from-top 和固定 Pageboy child bounds；滚动热路径不得逐帧输出 inset 日志。
+13. 主容器 `contentInsetAdjustmentBehavior` 固定为 `.never`；insideSafeArea 的主容器 `contentInset.top` 等于本地顶部安全区遮挡，extendsUnderTopSafeArea 为 `0`，不得与 child managed inset 合并。
+14. 主容器逻辑 offset 必须统一定义为 `contentOffset.y + contentInset.top`；展开/折叠逻辑边界为 `0...collapsibleDistance`，scroll range 必须扣除 container top inset，避免 inside 模式额外多滚一段安全区高度。
 
 ## 9. Child 生命周期与缓存要求
 
