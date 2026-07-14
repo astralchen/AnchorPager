@@ -143,6 +143,39 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
     }
 
     @MainActor
+    func testPagePresentationMovesPageboySurfaceWithoutMovingBarAndCanReset() throws {
+        let page = UIViewController()
+        let adapter = AnchorPagerPagingAdapter()
+        adapter.setBarHeight(44)
+        reload(
+            adapter,
+            titles: ["Plain"],
+            viewControllers: [page],
+            selectedIndex: 0
+        )
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = adapter
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        window.layoutIfNeeded()
+
+        let pageViewController = try XCTUnwrap(
+            adapter.children.compactMap { $0 as? UIPageViewController }.first
+        )
+        let barView = try XCTUnwrap(adapter.bars.first)
+        let barFrame = barView.frame
+        let barTransform = barView.transform
+
+        XCTAssertTrue(adapter.setPagePresentationTranslationY(-24))
+        XCTAssertEqual(pageViewController.view.transform.ty, -24, accuracy: 0.001)
+        XCTAssertEqual(barView.frame, barFrame)
+        XCTAssertEqual(barView.transform, barTransform)
+
+        XCTAssertTrue(adapter.setPagePresentationTranslationY(0))
+        XCTAssertEqual(pageViewController.view.transform, .identity)
+    }
+
+    @MainActor
     func testAdapterSuppliesTitlesAndViewControllersToTabmanAndPageboy() {
         let adapter = AnchorPagerPagingAdapter()
         let first = UIViewController()
@@ -353,6 +386,33 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
         XCTAssertNil(plainPage.parent)
         XCTAssertNil(plainPage.view.superview)
         XCTAssertEqual(delegate.events, [])
+    }
+
+    @MainActor
+    func testPrepareForRemovalResetsPagePresentationBeforeContainmentTeardown() throws {
+        let plainPage = UIViewController()
+        let adapter = AnchorPagerPagingAdapter()
+        reload(
+            adapter,
+            titles: ["Plain"],
+            viewControllers: [plainPage],
+            selectedIndex: 0
+        )
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = adapter
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        window.layoutIfNeeded()
+        let pageViewController = try XCTUnwrap(
+            adapter.children.compactMap { $0 as? UIPageViewController }.first
+        )
+
+        XCTAssertTrue(adapter.setPagePresentationTranslationY(-24))
+        XCTAssertEqual(pageViewController.view.transform.ty, -24, accuracy: 0.001)
+
+        XCTAssertTrue(adapter.prepareForRemoval())
+
+        XCTAssertEqual(pageViewController.view.transform, .identity)
     }
 
     @MainActor

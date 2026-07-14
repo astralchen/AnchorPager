@@ -698,6 +698,23 @@ final class AnchorPagerPagingHostViewControllerTests: XCTestCase {
         ))
     }
 
+    func testMissingPagePresentationSurfaceLogsOnceUntilStateRecovers() {
+        let host = AnchorPagerPagingHostViewController()
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+
+        XCTAssertFalse(host.setPagePresentationTranslationY(-12))
+        XCTAssertFalse(host.setPagePresentationTranslationY(-18))
+        XCTAssertTrue(host.setPagePresentationTranslationY(0))
+        XCTAssertFalse(host.setPagePresentationTranslationY(-12))
+
+        XCTAssertEqual(
+            events.filter { $0.event == "paging.pagePresentation.unavailable" }.count,
+            2
+        )
+    }
+
     private func makeHost() -> AnchorPagerPagingHostViewController {
         let host = AnchorPagerPagingHostViewController()
         host.pageProvider = RecordingHostPageProvider.shared

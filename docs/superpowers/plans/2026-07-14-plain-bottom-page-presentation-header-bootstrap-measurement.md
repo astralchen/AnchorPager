@@ -57,7 +57,7 @@
 - Produces: `AnchorPagerPagingHostViewController.setPagePresentationTranslationY(_:) -> Bool`。
 - Consumes: Tabman/Pageboy 已有标准 UIKit child containment；不把 `UIPageViewController` 暴露出 Paging internal 层。
 
-- [ ] **Step 1：先写 adapter surface/bar 排他的失败测试**
+- [x] **Step 1：先写 adapter surface/bar 排他的失败测试**
 
 在 `AnchorPagerPagingAdapterTests` 新增：
 
@@ -93,7 +93,7 @@ func testPagePresentationMovesPageboySurfaceWithoutMovingBarAndCanReset() throws
 
 新增 `testPrepareForRemovalResetsPagePresentationBeforeContainmentTeardown`：通过 `adapter.children.compactMap { $0 as? UIPageViewController }.first` 记录 page surface，设置 `-24`，调用 `prepareForRemoval()`，断言旧 surface 在 containment teardown 前已经恢复 `.identity`。bar 身份固定通过 public `adapter.bars.first as? UIView` 取得，不使用 subview 顺序。
 
-- [ ] **Step 2：写 PagingHost 不可用日志去重的失败测试**
+- [x] **Step 2：写 PagingHost 不可用日志去重的失败测试**
 
 在 `AnchorPagerPagingHostViewControllerTests` 新增 `testMissingPagePresentationSurfaceLogsOnceUntilStateRecovers`：
 
@@ -114,7 +114,7 @@ XCTAssertEqual(
 )
 ```
 
-- [ ] **Step 3：运行 RED，确认失败原因只是不具备新 internal 接口**
+- [x] **Step 3：运行 RED，确认失败原因只是不具备新 internal 接口**
 
 ```bash
 xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' -only-testing:AnchorPagerTests/AnchorPagerPagingAdapterTests/testPagePresentationMovesPageboySurfaceWithoutMovingBarAndCanReset -only-testing:AnchorPagerTests/AnchorPagerPagingAdapterTests/testPrepareForRemovalResetsPagePresentationBeforeContainmentTeardown -only-testing:AnchorPagerTests/AnchorPagerPagingHostViewControllerTests/testMissingPagePresentationSurfaceLogsOnceUntilStateRecovers test
@@ -122,7 +122,7 @@ xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 
 
 预期：编译失败，明确缺少 `setPagePresentationTranslationY(_:)`；不得出现不相关测试或依赖失败。
 
-- [ ] **Step 4：在 adapter 实现最小 surface 接缝**
+- [x] **Step 4：在 adapter 实现最小 surface 接缝**
 
 在 `AnchorPagerPagingAdapter` 增加：
 
@@ -145,7 +145,7 @@ func setPagePresentationTranslationY(_ translationY: CGFloat) -> Bool {
 
 在 `prepareForRemoval()` 的任何 Pageboy delete/teardown 之前调用 `setPagePresentationTranslationY(0)`；不遍历或变换业务 page root。
 
-- [ ] **Step 5：在 PagingHost 实现转发与状态变化日志**
+- [x] **Step 5：在 PagingHost 实现转发与状态变化日志**
 
 新增 `private var isPagePresentationSurfaceUnavailable = false`，并实现：
 
@@ -169,7 +169,7 @@ func setPagePresentationTranslationY(_ translationY: CGFloat) -> Bool {
 
 `installAdapter()` 建立新 adapter 前把 unavailable 状态归零；`removeActiveAdapterIfNeeded` 在 `prepareForRemoval()` 前显式请求 translation `0`，移除后再归零状态。不得因 surface 缺失退化为变换 Host、bar 或业务 page root。
 
-- [ ] **Step 6：运行 GREEN 与 Paging 相邻回归**
+- [x] **Step 6：运行 GREEN 与 Paging 相邻回归**
 
 ```bash
 xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' -only-testing:AnchorPagerTests/AnchorPagerPagingAdapterTests -only-testing:AnchorPagerTests/AnchorPagerPagingHostViewControllerTests test
@@ -178,7 +178,7 @@ git diff --check
 
 预期：两个测试类全部通过；新增日志测试为状态变化 2 次，而不是每次调用 3 次。
 
-- [ ] **Step 7：自审并提交 Task 1**
+- [x] **Step 7：自审并提交 Task 1**
 
 自审确认只操作 `UIPageViewController.view`、未依赖 child 顺序、未把 Pageboy/UIKit 类型泄漏到 Public、teardown 前 identity、日志不在成功热路径输出。
 
@@ -186,6 +186,8 @@ git diff --check
 git add Sources/AnchorPager/Paging/AnchorPagerPagingAdapter.swift Sources/AnchorPager/Paging/AnchorPagerPagingHostViewController.swift Tests/AnchorPagerTests/AnchorPagerPagingAdapterTests.swift Tests/AnchorPagerTests/AnchorPagerPagingHostViewControllerTests.swift
 git commit -m "增加分页内容层回弹接缝"
 ```
+
+**执行记录（2026-07-14）：** 目标 RED 因 adapter/host 缺少 presentation 接口按预期编译失败；最小实现后 3 项目标测试与 `AnchorPagerPagingAdapterTests`、`AnchorPagerPagingHostViewControllerTests` 两个完整测试类均通过。`git diff --check` 通过；自审确认只操作标准 `UIPageViewController.view`，bar/业务 page/containment/业务滚动配置不变，日志按不可用状态去重。基线首次全量构建显示两条既有 weak-variable 警告，增量 GREEN 未新增警告。
 
 ---
 
