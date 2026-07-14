@@ -46,7 +46,7 @@ final class AnchorPagerViewControllerTests: XCTestCase {
 
         pager.reloadData()
         window.layoutIfNeeded()
-        pager.verticalScrollView.contentOffset.y = 50
+        setContainerLogicalOffset(50, in: pager)
         child.scrollView.contentOffset.y = -child.scrollView.contentInset.top + 20
 
         XCTAssertEqual(
@@ -956,12 +956,12 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         pager.loadViewIfNeeded()
         pager.reloadData()
         pager.view.layoutIfNeeded()
-        pager.verticalScrollView.contentOffset = CGPoint(x: 0, y: 30)
+        setContainerLogicalOffset(30, in: pager)
 
         headerView.measuredHeight = 160
         pager.reloadHeaderLayout(offsetAdjustment: .preserveVisualPosition)
 
-        XCTAssertEqual(pager.verticalScrollView.contentOffset.y, 90, accuracy: 0.001)
+        XCTAssertEqual(containerLogicalOffset(in: pager), 90, accuracy: 0.001)
     }
 
     @MainActor
@@ -980,12 +980,12 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         pager.loadViewIfNeeded()
         pager.reloadData()
         pager.view.layoutIfNeeded()
-        pager.verticalScrollView.contentOffset = CGPoint(x: 0, y: 40)
+        setContainerLogicalOffset(40, in: pager)
 
         headerView.measuredHeight = 180
         pager.reloadHeaderLayout(offsetAdjustment: .preserveCollapseProgress)
 
-        XCTAssertEqual(pager.verticalScrollView.contentOffset.y, 80, accuracy: 0.001)
+        XCTAssertEqual(containerLogicalOffset(in: pager), 80, accuracy: 0.001)
     }
 
     @MainActor
@@ -1004,14 +1004,14 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         pager.loadViewIfNeeded()
         pager.reloadData()
         pager.view.layoutIfNeeded()
-        pager.verticalScrollView.contentOffset = CGPoint(x: 0, y: 40)
+        setContainerLogicalOffset(40, in: pager)
 
         pager.reloadHeaderLayout(offsetAdjustment: .resetToExpanded)
-        XCTAssertEqual(pager.verticalScrollView.contentOffset.y, 0, accuracy: 0.001)
+        XCTAssertEqual(containerLogicalOffset(in: pager), 0, accuracy: 0.001)
 
-        pager.verticalScrollView.contentOffset = CGPoint(x: 0, y: 40)
+        setContainerLogicalOffset(40, in: pager)
         pager.reloadHeaderLayout(offsetAdjustment: .resetToCollapsed)
-        XCTAssertEqual(pager.verticalScrollView.contentOffset.y, 80, accuracy: 0.001)
+        XCTAssertEqual(containerLogicalOffset(in: pager), 80, accuracy: 0.001)
     }
 
     @MainActor
@@ -1221,7 +1221,7 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         pager.reloadData()
         window.layoutIfNeeded()
         delegate.layoutContexts.removeAll()
-        pager.verticalScrollView.contentOffset = CGPoint(x: 0, y: 48)
+        setContainerLogicalOffset(48, in: pager)
         pager.reloadHeaderLayout(offsetAdjustment: .preserveVisualPosition)
         window.layoutIfNeeded()
 
@@ -1251,11 +1251,13 @@ final class AnchorPagerViewControllerTests: XCTestCase {
 
         pager.reloadData()
         window.layoutIfNeeded()
-        let expectedHeight = pager.verticalScrollView.bounds.height + 120
+        let expectedHeight = pager.verticalScrollView.bounds.height
+            + 120
+            - pager.verticalScrollView.contentInset.top
 
         XCTAssertEqual(pager.verticalScrollView.contentSize.height, expectedHeight, accuracy: 0.5)
 
-        pager.verticalScrollView.contentOffset = CGPoint(x: 0, y: 60)
+        setContainerLogicalOffset(60, in: pager)
         pager.reloadHeaderLayout(offsetAdjustment: .preserveVisualPosition)
         window.layoutIfNeeded()
 
@@ -1289,7 +1291,7 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         let headerHostView = try XCTUnwrap(headerView.superview)
         let initialFrame = headerHostView.convert(headerHostView.bounds, to: pager.view)
 
-        pager.verticalScrollView.contentOffset = CGPoint(x: 0, y: 60)
+        setContainerLogicalOffset(60, in: pager)
         pager.reloadHeaderLayout(offsetAdjustment: .preserveVisualPosition)
         pager.configuration.header.topBehavior = .extendsUnderTopSafeArea
         pager.reloadHeaderLayout(offsetAdjustment: .preserveVisualPosition)
@@ -1297,9 +1299,12 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         pager.reloadHeaderLayout(offsetAdjustment: .preserveVisualPosition)
         window.layoutIfNeeded()
 
-        pager.verticalScrollView.contentOffset = CGPoint(x: 0, y: -24)
+        pager.verticalScrollView.contentOffset.y = rawContainerOffset(
+            forLogicalOffset: 0,
+            in: pager
+        ) - 24
         pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
-        pager.verticalScrollView.contentOffset = .zero
+        setContainerLogicalOffset(0, in: pager)
         pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
         window.layoutIfNeeded()
 
@@ -1344,9 +1349,12 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         pager.configuration.header.topBehavior = .insideSafeArea
         pager.reloadHeaderLayout(offsetAdjustment: .preserveVisualPosition)
         window.layoutIfNeeded()
-        pager.verticalScrollView.contentOffset = CGPoint(x: 0, y: -24)
+        pager.verticalScrollView.contentOffset.y = rawContainerOffset(
+            forLogicalOffset: 0,
+            in: pager
+        ) - 24
         pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
-        pager.verticalScrollView.contentOffset = .zero
+        setContainerLogicalOffset(0, in: pager)
         pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
         pager.reloadHeaderLayout(offsetAdjustment: .preserveVisualPosition)
         window.layoutIfNeeded()
@@ -1375,6 +1383,14 @@ final class AnchorPagerViewControllerTests: XCTestCase {
 
         XCTAssertEqual(
             [expanded.headerHeight, partial.headerHeight, collapsed.headerHeight],
+            [100, 100, 100]
+        )
+        XCTAssertEqual(
+            [
+                expanded.headerRootHeight,
+                partial.headerRootHeight,
+                collapsed.headerRootHeight
+            ],
             [100, 100, 100]
         )
         XCTAssertEqual(partial.headerMinY, expanded.headerMinY - 30, accuracy: 0.5)
@@ -1433,6 +1449,252 @@ final class AnchorPagerViewControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testInsideSafeAreaOwnsRealContainerTopInsetAndRawBoundaries() throws {
+        let fixture = try FixedHeaderPresentationFixture(
+            topBehavior: .insideSafeArea
+        )
+        defer { fixture.window.isHidden = true }
+        let inset = fixture.pager.verticalScrollView.contentInset.top
+
+        XCTAssertGreaterThan(inset, 0)
+        XCTAssertEqual(inset, fixture.topObstructionHeight, accuracy: 0.5)
+        XCTAssertEqual(
+            fixture.pager.verticalScrollView.adjustedContentInset.top,
+            inset,
+            accuracy: 0.5
+        )
+        XCTAssertEqual(fixture.pager.verticalScrollView.contentInset.left, 0)
+        XCTAssertEqual(fixture.pager.verticalScrollView.contentInset.bottom, 0)
+        XCTAssertEqual(fixture.pager.verticalScrollView.contentInset.right, 0)
+        XCTAssertEqual(fixture.expandedRawOffset, -inset, accuracy: 0.5)
+        XCTAssertEqual(
+            fixture.collapsedRawOffset,
+            fixture.collapsibleDistance - inset,
+            accuracy: 0.5
+        )
+    }
+
+    @MainActor
+    func testExtendsUnderTopSafeAreaOwnsZeroContainerTopInset() throws {
+        let fixture = try FixedHeaderPresentationFixture(
+            topBehavior: .extendsUnderTopSafeArea
+        )
+        defer { fixture.window.isHidden = true }
+
+        XCTAssertEqual(
+            fixture.pager.verticalScrollView.contentInset.top,
+            0,
+            accuracy: 0.001
+        )
+    }
+
+    @MainActor
+    func testContainerRangeIsViewportPlusCollapseMinusTopInset() throws {
+        let fixture = try FixedHeaderPresentationFixture(
+            topBehavior: .insideSafeArea
+        )
+        defer { fixture.window.isHidden = true }
+        let expected = max(
+            0,
+            fixture.pager.verticalScrollView.bounds.height
+                + fixture.collapsibleDistance
+                - fixture.pager.verticalScrollView.contentInset.top
+        )
+
+        XCTAssertEqual(
+            fixture.pager.verticalScrollView.contentSize.height,
+            expected,
+            accuracy: 0.5
+        )
+    }
+
+    @MainActor
+    func testSwitchingTopBehaviorPreservesLogicalOffsetAndBarPresentation() throws {
+        let fixture = try FixedHeaderPresentationFixture(
+            topBehavior: .insideSafeArea
+        )
+        defer { fixture.window.isHidden = true }
+        fixture.setLogicalOffset(40)
+        fixture.layout()
+        let before = fixture.capturePresentation()
+
+        fixture.setHeaderTopBehavior(.extendsUnderTopSafeArea)
+        fixture.layout()
+        let after = fixture.capturePresentation()
+
+        XCTAssertEqual(after.logicalContainerOffset, 40, accuracy: 0.5)
+        XCTAssertEqual(after.rawContainerOffset, 40, accuracy: 0.5)
+        XCTAssertEqual(after.barMinY, before.barMinY, accuracy: 0.5)
+    }
+
+    @MainActor
+    func testZeroCollapseDistanceHasSingleInsetAwareRawBoundary() throws {
+        let fixture = try FixedHeaderPresentationFixture(
+            topBehavior: .insideSafeArea,
+            expandedHeaderHeight: 20,
+            collapsedHeaderHeight: 20
+        )
+        defer { fixture.window.isHidden = true }
+        let inset = fixture.pager.verticalScrollView.contentInset.top
+
+        XCTAssertGreaterThan(inset, 0)
+        XCTAssertEqual(fixture.collapsibleDistance, 0, accuracy: 0.001)
+        XCTAssertEqual(fixture.expandedRawOffset, -inset, accuracy: 0.5)
+        XCTAssertEqual(fixture.collapsedRawOffset, -inset, accuracy: 0.5)
+        XCTAssertEqual(
+            fixture.pager.verticalScrollView.contentSize.height,
+            fixture.pager.verticalScrollView.bounds.height - inset,
+            accuracy: 0.5
+        )
+    }
+
+    @MainActor
+    func testAdditionalSafeAreaChangePreservesLogicalOffsetAndCollapseProgress() throws {
+        let fixture = try FixedHeaderPresentationFixture(
+            topBehavior: .insideSafeArea
+        )
+        defer { fixture.window.isHidden = true }
+        fixture.setLogicalOffset(40)
+        fixture.layout()
+
+        fixture.pager.additionalSafeAreaInsets.top = 24
+        fixture.layout()
+        let first = fixture.capturePresentation()
+
+        fixture.pager.additionalSafeAreaInsets.top = 40
+        fixture.layout()
+        let second = fixture.capturePresentation()
+
+        XCTAssertEqual(first.logicalContainerOffset, 40, accuracy: 0.5)
+        XCTAssertEqual(second.logicalContainerOffset, 40, accuracy: 0.5)
+        XCTAssertEqual(first.contentPresentationTransform.ty, -40, accuracy: 0.5)
+        XCTAssertEqual(second.contentPresentationTransform.ty, -40, accuracy: 0.5)
+        XCTAssertEqual(
+            second.rawContainerOffset,
+            40 - fixture.pager.verticalScrollView.contentInset.top,
+            accuracy: 0.5
+        )
+    }
+
+    @MainActor
+    func testBoundsDrivenHeaderDistanceChangePreservesCollapseProgress() throws {
+        var configuration = AnchorPagerConfiguration.default
+        configuration.header.heightMode = .automatic(min: 0, max: nil)
+        let pager = AnchorPagerViewController(configuration: configuration)
+        let headerView = WidthSensitiveFittingView(
+            compactHeight: 100,
+            regularHeight: 140
+        )
+        let dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [ScrollChildViewController()],
+            headerContent: .view(headerView)
+        )
+        pager.dataSource = dataSource
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = pager
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        pager.reloadData()
+        window.layoutIfNeeded()
+        pager.verticalScrollView.contentOffset.y = 50
+            - pager.verticalScrollView.contentInset.top
+        pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
+
+        window.frame = CGRect(x: 0, y: 0, width: 844, height: 390)
+        pager.view.setNeedsLayout()
+        window.layoutIfNeeded()
+
+        XCTAssertEqual(
+            pager.verticalScrollView.contentOffset.y
+                + pager.verticalScrollView.contentInset.top,
+            70,
+            accuracy: 0.5
+        )
+    }
+
+    @MainActor
+    func testReloadHeaderLayoutStrategiesUseLogicalOffsetsWithContainerInset() throws {
+        let cases: [(AnchorPagerHeaderOffsetAdjustment, CGFloat)] = [
+            (.preserveVisualPosition, 80),
+            (.preserveCollapseProgress, 60),
+            (.resetToExpanded, 0),
+            (.resetToCollapsed, 120)
+        ]
+
+        for (strategy, expectedLogicalOffset) in cases {
+            var configuration = AnchorPagerConfiguration.default
+            configuration.header.heightMode = .automatic(min: 20, max: nil)
+            let pager = AnchorPagerViewController(configuration: configuration)
+            let headerView = DynamicFittingView(height: 100)
+            let dataSource = StubDataSource(
+                count: 1,
+                viewControllers: [ScrollChildViewController()],
+                headerContent: .view(headerView)
+            )
+            pager.dataSource = dataSource
+            let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+            window.rootViewController = pager
+            window.makeKeyAndVisible()
+            pager.reloadData()
+            window.layoutIfNeeded()
+            XCTAssertGreaterThan(pager.verticalScrollView.contentInset.top, 0)
+            pager.verticalScrollView.contentOffset.y = 40
+                - pager.verticalScrollView.contentInset.top
+            pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
+
+            headerView.measuredHeight = 140
+            pager.reloadHeaderLayout(offsetAdjustment: strategy)
+            window.layoutIfNeeded()
+
+            XCTAssertEqual(
+                pager.verticalScrollView.contentOffset.y
+                    + pager.verticalScrollView.contentInset.top,
+                expectedLogicalOffset,
+                accuracy: 0.5,
+                "strategy: \(strategy)"
+            )
+            window.isHidden = true
+        }
+    }
+
+    @MainActor
+    func testContainerTopInsetLogOnlyChangesWithResolvedInset() throws {
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+        let fixture = try FixedHeaderPresentationFixture(
+            topBehavior: .insideSafeArea
+        )
+        defer { fixture.window.isHidden = true }
+        let initialCount = events.filter {
+            $0.event == "inset.containerTopChanged"
+        }.count
+        XCTAssertGreaterThan(initialCount, 0)
+
+        fixture.pager.reloadHeaderLayout(offsetAdjustment: .preserveVisualPosition)
+        fixture.layout()
+        XCTAssertEqual(
+            events.filter { $0.event == "inset.containerTopChanged" }.count,
+            initialCount
+        )
+
+        fixture.setHeaderTopBehavior(.extendsUnderTopSafeArea)
+        fixture.layout()
+        XCTAssertEqual(
+            events.filter { $0.event == "inset.containerTopChanged" }.count,
+            initialCount + 1
+        )
+
+        fixture.pager.configuration.topOverscrollHandlingMode = .child
+        fixture.layout()
+        XCTAssertEqual(
+            events.filter { $0.event == "inset.containerTopChanged" }.count,
+            initialCount + 1
+        )
+    }
+
+    @MainActor
     func testNegativeContainerOffsetTranslatesViewportAndLayoutContextWithoutChangingRange() throws {
         var configuration = AnchorPagerConfiguration.default
         configuration.header.heightMode = .fixed(max: 120, min: 0)
@@ -1468,7 +1730,10 @@ final class AnchorPagerViewControllerTests: XCTestCase {
             adapter.children.compactMap { $0 as? UIPageViewController }.first
         )
 
-        pager.verticalScrollView.contentOffset = CGPoint(x: 0, y: -24)
+        pager.verticalScrollView.contentOffset.y = rawContainerOffset(
+            forLogicalOffset: 0,
+            in: pager
+        ) - 24
         pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
         window.layoutIfNeeded()
         let bouncedFrame = headerHostView.convert(headerHostView.bounds, to: pager.view)
@@ -1492,7 +1757,7 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         XCTAssertEqual(pager.verticalScrollView.contentSize, initialContentSize)
         XCTAssertTrue(delegate.collapseProgresses.isEmpty)
 
-        pager.verticalScrollView.contentOffset = .zero
+        setContainerLogicalOffset(0, in: pager)
         pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
         window.layoutIfNeeded()
         let restoredFrame = headerHostView.convert(headerHostView.bounds, to: pager.view)
@@ -1531,7 +1796,7 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         pager.reloadData()
         window.layoutIfNeeded()
         let initialContentSize = pager.verticalScrollView.contentSize
-        pager.verticalScrollView.contentOffset.y = 100
+        setContainerLogicalOffset(100, in: pager)
         pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
         window.layoutIfNeeded()
         let headerHostView = try XCTUnwrap(headerView.superview)
@@ -1554,7 +1819,10 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         AnchorPagerLogger.sink = { events.append($0) }
         defer { AnchorPagerLogger.sink = nil }
 
-        pager.verticalScrollView.contentOffset.y = 124
+        pager.verticalScrollView.contentOffset.y = rawContainerOffset(
+            forLogicalOffset: 124,
+            in: pager
+        )
         pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
         window.layoutIfNeeded()
 
@@ -1589,7 +1857,7 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         XCTAssertEqual(pager.verticalScrollView.contentSize, initialContentSize)
         XCTAssertEqual(try XCTUnwrap(delegate.collapseProgresses.last), 1, accuracy: 0.001)
 
-        pager.verticalScrollView.contentOffset.y = 100
+        setContainerLogicalOffset(100, in: pager)
         pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
         window.layoutIfNeeded()
 
@@ -1686,7 +1954,7 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         AnchorPagerLogger.sink = { events.append($0) }
         defer { AnchorPagerLogger.sink = nil }
 
-        pager.verticalScrollView.contentOffset = CGPoint(x: 0, y: 60)
+        setContainerLogicalOffset(60, in: pager)
         pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
         pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
         pager.view.layoutIfNeeded()
@@ -1730,7 +1998,7 @@ final class AnchorPagerViewControllerTests: XCTestCase {
             to: pager.view
         ).minY
 
-        pager.verticalScrollView.contentOffset.y = 100
+        setContainerLogicalOffset(100, in: pager)
         pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
         window.layoutIfNeeded()
 
@@ -1859,7 +2127,7 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         AnchorPagerLogger.sink = { events.append($0) }
         defer { AnchorPagerLogger.sink = nil }
 
-        pager.verticalScrollView.contentOffset.y = 50
+        setContainerLogicalOffset(50, in: pager)
         pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
         window.layoutIfNeeded()
 
@@ -1878,7 +2146,7 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         XCTAssertEqual(child.view.bounds.height, fixedChildHeight, accuracy: 0.5)
         XCTAssertFalse(events.contains { $0.event == "inset.ownership.update" })
 
-        pager.verticalScrollView.contentOffset.y = 100
+        setContainerLogicalOffset(100, in: pager)
         pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
         window.layoutIfNeeded()
 
@@ -2071,9 +2339,9 @@ final class AnchorPagerViewControllerTests: XCTestCase {
             shouldRecognizeSimultaneouslyWith: unrelatedPan
         ))
 
-        pager.verticalScrollView.contentOffset.y = 60
+        setContainerLogicalOffset(60, in: pager)
         pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
-        XCTAssertEqual(pager.verticalScrollView.contentOffset.y, 60, accuracy: 0.5)
+        XCTAssertEqual(containerLogicalOffset(in: pager), 60, accuracy: 0.5)
     }
 
     @MainActor
@@ -2559,13 +2827,16 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         window.makeKeyAndVisible()
         pager.reloadData()
         window.layoutIfNeeded()
-        pager.verticalScrollView.contentOffset.y = -20
+        pager.verticalScrollView.contentOffset.y = rawContainerOffset(
+            forLogicalOffset: 0,
+            in: pager
+        ) - 20
         pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
 
         pager.configuration.topOverscrollHandlingMode = .child
         window.layoutIfNeeded()
 
-        XCTAssertEqual(pager.verticalScrollView.contentOffset.y, 0, accuracy: 0.5)
+        XCTAssertEqual(containerLogicalOffset(in: pager), 0, accuracy: 0.5)
         XCTAssertFalse(child.scrollView.bounces)
         XCTAssertTrue(child.scrollView.alwaysBounceVertical)
     }
@@ -2720,6 +2991,33 @@ final class AnchorPagerViewControllerTests: XCTestCase {
     }
 
     @MainActor
+    private func rawContainerOffset(
+        forLogicalOffset logicalOffset: CGFloat,
+        in pager: AnchorPagerViewController
+    ) -> CGFloat {
+        logicalOffset - pager.verticalScrollView.contentInset.top
+    }
+
+    @MainActor
+    private func containerLogicalOffset(
+        in pager: AnchorPagerViewController
+    ) -> CGFloat {
+        pager.verticalScrollView.contentOffset.y
+            + pager.verticalScrollView.contentInset.top
+    }
+
+    @MainActor
+    private func setContainerLogicalOffset(
+        _ logicalOffset: CGFloat,
+        in pager: AnchorPagerViewController
+    ) {
+        pager.verticalScrollView.contentOffset.y = rawContainerOffset(
+            forLogicalOffset: logicalOffset,
+            in: pager
+        )
+    }
+
+    @MainActor
     private func installedAdapter(in pager: AnchorPagerViewController) -> AnchorPagerPagingAdapter? {
         installedPagingHost(in: pager)?.activeAdapter
     }
@@ -2741,16 +3039,37 @@ private final class FixedHeaderPresentationFixture {
         let plainPageFrame: CGRect
         let viewportTransform: CGAffineTransform
         let contentPresentationTransform: CGAffineTransform
+        let rawContainerOffset: CGFloat
+        let logicalContainerOffset: CGFloat
+        let barMinY: CGFloat
+        let headerRootHeight: CGFloat
     }
 
     let pager: AnchorPagerViewController
     let dataSource: StubDataSource
     let window: UIWindow
+    let headerView: FixedFittingView
     let headerHost: UIView
     let contentPresentationView: UIView
     let viewportView: UIView
     let pagingHostView: UIView
     let collapsibleDistance: CGFloat
+
+    var topObstructionHeight: CGFloat {
+        max(
+            pager.view.safeAreaLayoutGuide.layoutFrame.minY - pager.view.bounds.minY,
+            pager.view.safeAreaInsets.top,
+            pager.additionalSafeAreaInsets.top
+        )
+    }
+
+    var expandedRawOffset: CGFloat {
+        -pager.verticalScrollView.contentInset.top
+    }
+
+    var collapsedRawOffset: CGFloat {
+        collapsibleDistance - pager.verticalScrollView.contentInset.top
+    }
 
     private let page: UIViewController
 
@@ -2767,7 +3086,7 @@ private final class FixedHeaderPresentationFixture {
         )
         configuration.header.topBehavior = topBehavior
         collapsibleDistance = max(0, expandedHeaderHeight - collapsedHeaderHeight)
-        let headerView = FixedFittingView(height: expandedHeaderHeight)
+        headerView = FixedFittingView(height: expandedHeaderHeight)
         page = usesPlainPage ? UIViewController() : ScrollChildViewController()
         pager = AnchorPagerViewController(configuration: configuration)
         dataSource = StubDataSource(
@@ -2800,6 +3119,10 @@ private final class FixedHeaderPresentationFixture {
             - pager.verticalScrollView.contentInset.top
     }
 
+    func setHeaderTopBehavior(_ behavior: AnchorPagerHeaderTopBehavior) {
+        pager.configuration.header.topBehavior = behavior
+    }
+
     func layout() {
         pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
         window.layoutIfNeeded()
@@ -2812,7 +3135,12 @@ private final class FixedHeaderPresentationFixture {
             pagingHeight: pagingHostView.bounds.height,
             plainPageFrame: page.view.convert(page.view.bounds, to: pager.view),
             viewportTransform: viewportView.transform,
-            contentPresentationTransform: contentPresentationView.transform
+            contentPresentationTransform: contentPresentationView.transform,
+            rawContainerOffset: pager.verticalScrollView.contentOffset.y,
+            logicalContainerOffset: pager.verticalScrollView.contentOffset.y
+                + pager.verticalScrollView.contentInset.top,
+            barMinY: pagingHostView.convert(pagingHostView.bounds, to: pager.view).minY,
+            headerRootHeight: headerView.bounds.height
         )
     }
 }
@@ -2848,10 +3176,11 @@ private final class PlainBottomPresentationFixture {
     }
 
     func presentBottomOverflow() throws -> UIView {
-        pager.verticalScrollView.contentOffset.y = 100
+        let topInset = pager.verticalScrollView.contentInset.top
+        pager.verticalScrollView.contentOffset.y = 100 - topInset
         pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
         window.layoutIfNeeded()
-        pager.verticalScrollView.contentOffset.y = 124
+        pager.verticalScrollView.contentOffset.y = 124 - topInset
         pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
         window.layoutIfNeeded()
         let adapter = try XCTUnwrap(host.activeAdapter)
@@ -2920,7 +3249,7 @@ private final class TopOverscrollPresentationFixture {
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
-        pager.verticalScrollView.contentOffset = CGPoint(x: 0, y: -overflowDistance)
+        pager.verticalScrollView.contentOffset.y = expandedRawOffset - overflowDistance
         pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
         assertContainerPresentationIsActive(file: file, line: line)
     }
@@ -2931,7 +3260,7 @@ private final class TopOverscrollPresentationFixture {
     ) {
         XCTAssertEqual(
             pager.verticalScrollView.contentOffset.y,
-            -overflowDistance,
+            expandedRawOffset - overflowDistance,
             accuracy: 0.5,
             file: file,
             line: line
@@ -2957,7 +3286,7 @@ private final class TopOverscrollPresentationFixture {
     ) {
         XCTAssertEqual(
             pager.verticalScrollView.contentOffset.y,
-            0,
+            expandedRawOffset,
             accuracy: 0.5,
             file: file,
             line: line
@@ -3016,7 +3345,7 @@ private final class TopOverscrollPresentationFixture {
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
-        pager.verticalScrollView.contentOffset.y = 0
+        pager.verticalScrollView.contentOffset.y = expandedRawOffset
         let expectedTop = -expected.contentInset.top
         expected.contentOffset.y = expectedTop + 20
         XCTAssertEqual(
@@ -3041,6 +3370,10 @@ private final class TopOverscrollPresentationFixture {
 
     private var currentHeaderFrame: CGRect {
         headerHostView.convert(headerHostView.bounds, to: pager.view)
+    }
+
+    private var expandedRawOffset: CGFloat {
+        -pager.verticalScrollView.contentInset.top
     }
 }
 
@@ -3295,6 +3628,32 @@ private final class DynamicFittingView: UIView {
         verticalFittingPriority: UILayoutPriority
     ) -> CGSize {
         CGSize(width: targetSize.width, height: measuredHeight)
+    }
+}
+
+private final class WidthSensitiveFittingView: UIView {
+    private let compactHeight: CGFloat
+    private let regularHeight: CGFloat
+
+    init(compactHeight: CGFloat, regularHeight: CGFloat) {
+        self.compactHeight = compactHeight
+        self.regularHeight = regularHeight
+        super.init(frame: .zero)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) 未实现")
+    }
+
+    override func systemLayoutSizeFitting(
+        _ targetSize: CGSize,
+        withHorizontalFittingPriority horizontalFittingPriority: UILayoutPriority,
+        verticalFittingPriority: UILayoutPriority
+    ) -> CGSize {
+        CGSize(
+            width: targetSize.width,
+            height: targetSize.width >= 500 ? regularHeight : compactHeight
+        )
     }
 }
 

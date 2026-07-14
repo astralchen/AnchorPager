@@ -772,7 +772,7 @@ git commit -m "增加固定 Header 内容呈现层"
 - Produces: `verticalScrollView.contentInset.top`、raw/logical migration、`LayoutContext.headerFrame` 的最终可见坐标。
 - Preserves: `AnchorPagerHeaderTopBehavior` public enum cases；不新增 public symbol。
 
-- [ ] **Step 1：先写真实 inset、range 和迁移失败测试**
+- [x] **Step 1：先写真实 inset、range 和迁移失败测试**
 
 在测试 fixture 增加统一 helper，替换所有把 raw `0...D` 当作稳定区间的命名用例：
 
@@ -847,7 +847,7 @@ func testSwitchingTopBehaviorPreservesLogicalOffsetAndBarPresentation() {
 
 把以下既有回归明确纳入本任务的完整 ViewController suite，不删除或放宽断言：`testReloadDataProvidesPlainChildDirectlyToPagingAdapter`、`testPlainPageRootReachesPagerAndWindowBottomWithoutFrameworkInsets`、`testCommittedPlainPageBindsNoChildPanAndContainerStillCollapses`、两个 automatic bootstrap 测试、Header UIViewController containment 测试、managed inset 幂等测试、selection/reload/size transition presentation cancel 测试。它们共同证明无滚动页仍为 nil scroll target、没有 wrapper，Header/Pageboy containment、bootstrap measurement、child inset 与 terminal 清理没有被新 container inset 侵入。
 
-- [ ] **Step 2：运行 RED，确认旧实现 top inset 始终为零**
+- [x] **Step 2：运行 RED，确认旧实现 top inset 始终为零**
 
 ```bash
 xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testInsideSafeAreaOwnsRealContainerTopInsetAndRawBoundaries -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testExtendsUnderTopSafeAreaOwnsZeroContainerTopInset -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testContainerRangeIsViewportPlusCollapseMinusTopInset -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testSwitchingTopBehaviorPreservesLogicalOffsetAndBarPresentation test
@@ -855,7 +855,7 @@ xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=
 
 预期：inside inset/range/raw boundary 失败；extends 的零 inset 保持通过。
 
-- [ ] **Step 3：建立 ViewController geometry 状态和解析入口**
+- [x] **Step 3：建立 ViewController geometry 状态和解析入口**
 
 新增：
 
@@ -888,7 +888,7 @@ private func resolvedContainerGeometry(
 
 `makeLayoutOutput` 改为显式接收 `logicalContentOffsetY`，不得从 `verticalScrollView.contentOffset.y` 隐式读取 raw 值。
 
-- [ ] **Step 4：在一次 layout transaction 中迁移 geometry 与逻辑位置**
+- [x] **Step 4：在一次 layout transaction 中迁移 geometry 与逻辑位置**
 
 `updateVisibleLayout` 的固定顺序为：
 
@@ -923,7 +923,7 @@ private func applyContainerGeometry(
 
 如 coordinator 尚未创建，fallback 也只用 `geometry.rawOffset(forLogicalOffset:)` 写一次 raw。仅当 top inset 真正变化时记录 `inset.containerTopChanged`，日志 payload 不包含业务数据。
 
-- [ ] **Step 5：把所有 ViewController 边界与 range 消费迁到 geometry**
+- [x] **Step 5：把所有 ViewController 边界与 range 消费迁到 geometry**
 
 `applyLayoutOutput` 使用：
 
@@ -940,7 +940,7 @@ scrollRangeHeightConstraint.constant = rangeHeight - environment.bounds.height
 
 更新 `AnchorPagerHeaderTopBehavior`、`verticalScrollView` 与 `AnchorPagerLayoutContext.headerFrame` DocC：inside/extends 分别拥有真实 top inset/零 inset；调用方不得写 container inset；child managed inset ownership 不变；LayoutContext frame 是 pager 本地最终 presentation 坐标且 Header 高度在正常折叠中固定。
 
-- [ ] **Step 6：更新 overscroll fixture 的 inset-aware 边界**
+- [x] **Step 6：更新 overscroll fixture 的 inset-aware 边界**
 
 顶部 fixture 以：
 
@@ -951,7 +951,7 @@ pager.verticalScrollView.contentOffset.y = expandedRawOffset - overflow
 
 表示顶部回弹；canonical stable offset 恢复到 `expandedRawOffset`。plain bottom fixture 以 `rawContainerOffset(forLogicalOffset: D)` 和 `D + overflow` 表示稳定/回弹，不再硬编码 raw `100/124`。层级查找改为 Header host 的 `superview?.superview` 是 viewport，且严格区分 canonical surface。
 
-- [ ] **Step 7：运行 ViewController 完整 GREEN 与禁止项扫描**
+- [x] **Step 7：运行 ViewController 完整 GREEN 与禁止项扫描**
 
 ```bash
 xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests -only-testing:AnchorPagerTests/AnchorPagerHeaderViewHostTests -only-testing:AnchorPagerTests/AnchorPagerPagingHostViewControllerTests test
@@ -962,7 +962,9 @@ git diff --check
 
 预期：ViewController 集成测试全过；静态扫描没有业务 child 禁止写入；raw offset 不再直接与逻辑稳定边界比较。
 
-- [ ] **Step 8：自审并提交 Task 5**
+- [x] **Step 8：自审并提交 Task 5**
+
+自审确认 safe-area、bounds、Header 配置和显式 reload strategy 均通过同一同步 geometry transaction 迁移；`insideSafeArea`/`extendsUnderTopSafeArea` 分别持有 obstruction/0 的真实 container inset，range 使用 `H + D - I`。LayoutContext 继续报告 pager 本地最终可见坐标，Header 测量缓存、业务 child managed inset、selection/reload terminal、Pageboy/Header containment 均未改变；新增 inset 日志只在解析值变化时记录。禁止项扫描仅命中框架自有 `verticalScrollView.delegate` 与 `alwaysBounceVertical` 设置，raw/逻辑边界混用扫描无命中。
 
 重点复核 safe-area/bounds/config/reload 结构性迁移、LayoutContext 最终可见 frame、Header measurement cache、child inset ownership、selection/reload/deinit 终态和日志去重。
 
