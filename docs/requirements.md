@@ -22,7 +22,7 @@ AnchorPager 是一个全新的独立 UIKit 容器框架，用于实现可变 Hea
 
 ### 当前复审门禁
 
-v0.5/v0.6 初次独立复审的 3 个 Important 已在 `f81ca1e` 修复，第二次整分支复审的零稳定区间边界反向切换 Important 已在 `5b80893` 修复，第三次整分支复审的已呈现 `.top/.child` 回稳总量跳变 Important 已在 `128821f` 修复；第二、三次复审的文档 Minor 均已同步修正。第四次整分支独立复审覆盖 `be2d783...13b3d95`，结论为 Critical 0、Important 0、Minor 2；两个 Minor 已在 `b9699b0` 修复。2026-07-14 plain page bottom/bar 安全区和 automatic Header bootstrap 回归已修复到生产代码 HEAD `c37e829`；Framework 293/293、Example 37/37（10 单元 + 27 UI）与 generic iOS Simulator build 全部通过，0 fail、0 skip、0 error/warning/analyzer warning。整分支 fresh-pass 复审发现的 deinit page surface 清理 Important 已修复并完成 RED/GREEN，终态为 Critical 0、Important 0、Minor 0；v0.5 Task 7 与 v0.6 当前为 Ready。
+v0.5/v0.6 初次独立复审的 3 个 Important 已在 `f81ca1e` 修复，第二次整分支复审的零稳定区间边界反向切换 Important 已在 `5b80893` 修复，第三次整分支复审的已呈现 `.top/.child` 回稳总量跳变 Important 已在 `128821f` 修复；第二、三次复审的文档 Minor 均已同步修正。第四次整分支独立复审覆盖 `be2d783...13b3d95`，两个 Minor 已在 `b9699b0` 修复。2026-07-14 plain page bottom/bar 安全区和 formal Header bootstrap 回归已修复到 `c37e829` 并完成当时全量验收；后续真实启动日志又证明真实 Header 在 bootstrap 前附着时仍会与旧 host required `height == 0` 冲突。安装前 seed 规格与计划已确认，RED/GREEN、全量验收和 fresh-pass 复审完成前，v0.5 Task 7 与 v0.6 Ready 暂时关闭。
 
 ## 3. 参考项目
 

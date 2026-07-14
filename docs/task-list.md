@@ -389,7 +389,7 @@
 
 ## v0.5：纵向嵌套滚动协调版
 
-设计见 `docs/superpowers/specs/2026-07-13-v0-5-scroll-coordination-design.md`，direct page 修订见 `docs/superpowers/specs/2026-07-13-plain-page-direct-containment-design.md`，边界 owner 历史契约见 `docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md`，2026-07-14 修复设计见 `docs/superpowers/specs/2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement-design.md`，实施计划见 `docs/superpowers/plans/2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement.md`。2026-07-14 plain bottom 页面/chrome 分层、Header bootstrap 与析构清理已实现到生产代码 HEAD `c37e829`，全量验收和整分支 fresh-pass 复审均完成，v0.5 Task 7 当前为 Ready。
+设计见 `docs/superpowers/specs/2026-07-13-v0-5-scroll-coordination-design.md`，direct page 修订见 `docs/superpowers/specs/2026-07-13-plain-page-direct-containment-design.md`，边界 owner 历史契约见 `docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md`，2026-07-14 修复设计见 `docs/superpowers/specs/2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement-design.md`，实施计划见 `docs/superpowers/plans/2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement.md`。plain bottom 页面/chrome 分层与析构清理在 `c37e829` 完成了当时验收；后续真实启动发现 Header 内容附着前仍有 zero-height 时序缺口，当前转由安装前 seed 专项修复，v0.5 Task 7 Ready 暂时关闭。
 
 - [x] 删除无滚动页 synthetic scroll wrapper 及其额外 containment
 - [x] 无滚动 original page 直接交给 Pageboy，Store 保存 page 非 nil、scroll target 为 nil
@@ -461,7 +461,7 @@
 
 依赖门禁：OverscrollCoordinator 只消费 v0.5 已绑定的 committed current/empty owner；pending provider page 不能成为 overscroll owner。
 
-设计与计划：`docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md`、`docs/superpowers/plans/2026-07-13-boundary-bounce-ownership.md`；plain bottom 当前修订见 `docs/superpowers/specs/2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement-design.md`。mode、owner、cancel 和日志历史实现保持；plain bottom 可见 presentation 回归已完成全量重新验收与整分支 fresh-pass 复审，v0.6 当前为 Ready。
+设计与计划：`docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md`、`docs/superpowers/plans/2026-07-13-boundary-bounce-ownership.md`；plain bottom 当前修订见 `docs/superpowers/specs/2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement-design.md`。mode、owner、cancel 和日志历史实现保持；plain bottom 可见 presentation 已完成此前验收，但 Header 安装前 seed 专项重新关闭整体门禁，v0.6 Ready 暂时关闭。
 
 - [x] 创建 `Sources/AnchorPager/Overscroll/AnchorPagerOverscrollCoordinator.swift`
 - [x] 实现 `.none`
@@ -500,7 +500,8 @@
 - [x] Example 统一设置菜单 RED/GREEN：单元 RED 精确失败 3 条；真实菜单 UI RED 精确失败于“示例设置”入口缺失；最小实现后单元与 4 条目标 UI GREEN，提交 `7b1b6f7`
 - [x] Example 统一设置菜单最终验收：Framework 相邻 mode 回归通过；Example 38/38（10 单元 + 28 UI）、0 fail、0 skip；generic build 成功；两份 xcresult 均为 0 error、0 warning、0 analyzer warning；fresh-pass 复审 Critical 0、Important 0、Minor 0
 - [x] Header 安装前 bootstrap seed 修复设计确认：真实内容附着前先写 host seed，保留 UIViewController containment、正式测量和 Public API 边界
-- [ ] Header 安装前 bootstrap seed 书面规格复核、实施计划、RED/GREEN、完整回归、自审与 fresh-pass 复审待完成
+- [x] Header 安装前 bootstrap seed 书面规格复核与实施计划：结构性附着探针、Host 安装顺序、完整 UI、运行时约束日志和 fresh-pass 门禁已明确
+- [ ] Header 安装前 bootstrap seed RED/GREEN、完整回归、自审与 fresh-pass 复审待完成
 
 ## v0.7：手势与交互状态机版
 

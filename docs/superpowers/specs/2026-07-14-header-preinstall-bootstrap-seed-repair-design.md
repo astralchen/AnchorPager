@@ -2,9 +2,11 @@
 
 **日期：** 2026-07-14
 
-**状态：** 对话设计已确认，书面规格待用户复核
+**状态：** 书面规格已确认，实施计划已建立；RED/GREEN、全量验收和复审待完成
 
 **适用范围：** automatic Header 首次真实内容安装、Header identity replacement、bootstrap fitting、Header UIViewController containment、启动期 Auto Layout 约束告警及相关测试。
+
+**实施计划：** `docs/superpowers/plans/2026-07-14-header-preinstall-bootstrap-seed-repair.md`
 
 ## 背景与复现证据
 
