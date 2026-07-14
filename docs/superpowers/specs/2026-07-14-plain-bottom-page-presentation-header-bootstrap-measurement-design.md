@@ -2,7 +2,7 @@
 
 **日期：** 2026-07-14
 
-**状态：** 已完成；生产代码 HEAD `c37e829`，完整验收与整分支 fresh-pass 复审通过，v0.5/v0.6 已恢复 Ready
+**状态：** plain bottom/page surface 已完成；Header 正式测量前 bootstrap 已实现，但后续真实启动发现安装前仍存在 zero-height 时序缺口，转由 `2026-07-14-header-preinstall-bootstrap-seed-repair-design.md` 继续修复，v0.5/v0.6 Ready 再次关闭
 
 **适用范围：** 无 `UIScrollView` 页面底部 container 回弹、Paging adapter presentation 分层、`AnchorPagerLayoutContext` 可见坐标、automatic Header 首次中立测量及示例约束告警。
 

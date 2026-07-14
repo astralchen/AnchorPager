@@ -499,6 +499,8 @@
 - [x] Example 统一设置菜单实施计划：测试先要求齿轮/二级菜单形成 RED，再做最小菜单实现，最后运行真实菜单 UI、完整回归、自审和 fresh-pass 复审
 - [x] Example 统一设置菜单 RED/GREEN：单元 RED 精确失败 3 条；真实菜单 UI RED 精确失败于“示例设置”入口缺失；最小实现后单元与 4 条目标 UI GREEN，提交 `7b1b6f7`
 - [x] Example 统一设置菜单最终验收：Framework 相邻 mode 回归通过；Example 38/38（10 单元 + 28 UI）、0 fail、0 skip；generic build 成功；两份 xcresult 均为 0 error、0 warning、0 analyzer warning；fresh-pass 复审 Critical 0、Important 0、Minor 0
+- [x] Header 安装前 bootstrap seed 修复设计确认：真实内容附着前先写 host seed，保留 UIViewController containment、正式测量和 Public API 边界
+- [ ] Header 安装前 bootstrap seed 书面规格复核、实施计划、RED/GREEN、完整回归、自审与 fresh-pass 复审待完成
 
 ## v0.7：手势与交互状态机版
 
