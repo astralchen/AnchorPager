@@ -1331,6 +1331,10 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         let initialContext = try XCTUnwrap(delegate.layoutContexts.last)
         let initialChildFrameInWindow = child.view.convert(child.view.bounds, to: window)
         let initialContentSize = pager.verticalScrollView.contentSize
+        let adapter = try XCTUnwrap(installedAdapter(in: pager))
+        let pageViewController = try XCTUnwrap(
+            adapter.children.compactMap { $0 as? UIPageViewController }.first
+        )
 
         pager.verticalScrollView.contentOffset = CGPoint(x: 0, y: -24)
         pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
@@ -1340,6 +1344,17 @@ final class AnchorPagerViewControllerTests: XCTestCase {
 
         XCTAssertEqual(bouncedFrame.minY, initialFrame.minY + 24, accuracy: 0.5)
         XCTAssertEqual(bouncedContext.headerFrame.minY, bouncedFrame.minY, accuracy: 0.5)
+        XCTAssertEqual(
+            bouncedContext.barFrame.minY,
+            initialContext.barFrame.minY + 24,
+            accuracy: 0.5
+        )
+        XCTAssertEqual(
+            bouncedContext.contentFrame.minY,
+            initialContext.contentFrame.minY + 24,
+            accuracy: 0.5
+        )
+        XCTAssertEqual(pageViewController.view.transform, .identity)
         XCTAssertEqual(pager.verticalScrollView.contentSize, initialContentSize)
         XCTAssertTrue(delegate.collapseProgresses.isEmpty)
 
@@ -1358,18 +1373,19 @@ final class AnchorPagerViewControllerTests: XCTestCase {
     }
 
     @MainActor
-    func testPlainBottomOverflowTranslatesViewportUpWithoutChangingCanonicalRange() throws {
+    func testPlainBottomOverflowMovesOnlyPageSurfaceAndRestoresCanonicalChrome() throws {
         var configuration = AnchorPagerConfiguration.default
         configuration.header.heightMode = .fixed(max: 100, min: 0)
         let pager = AnchorPagerViewController(configuration: configuration)
         let delegate = StubDelegate()
         let plainChild = UIViewController()
-        pager.delegate = delegate
-        pager.dataSource = StubDataSource(
+        let dataSource = StubDataSource(
             count: 1,
             viewControllers: [plainChild],
             headerContent: .view(FixedFittingView(height: 100))
         )
+        pager.delegate = delegate
+        pager.dataSource = dataSource
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
         window.rootViewController = pager
         window.makeKeyAndVisible()
@@ -1382,17 +1398,38 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
         window.layoutIfNeeded()
         let collapsedContext = try XCTUnwrap(delegate.layoutContexts.last)
+        let collapsedPlainFrame = plainChild.view.convert(
+            plainChild.view.bounds,
+            to: pager.view
+        )
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
 
         pager.verticalScrollView.contentOffset.y = 124
         pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
         window.layoutIfNeeded()
 
         let context = try XCTUnwrap(delegate.layoutContexts.last)
+        let presentedPlainFrame = plainChild.view.convert(
+            plainChild.view.bounds,
+            to: pager.view
+        )
+        XCTAssertEqual(context.headerFrame, collapsedContext.headerFrame)
+        XCTAssertEqual(context.barFrame, collapsedContext.barFrame)
         XCTAssertEqual(
-            context.headerFrame.minY,
-            collapsedContext.headerFrame.minY - 24,
+            context.contentFrame.minY,
+            collapsedContext.contentFrame.minY - 24,
             accuracy: 0.5
         )
+        XCTAssertEqual(
+            presentedPlainFrame.minY,
+            collapsedPlainFrame.minY - 24,
+            accuracy: 0.5
+        )
+        XCTAssertFalse(events.contains {
+            $0.event == "paging.pagePresentation.unavailable"
+        })
         XCTAssertEqual(pager.verticalScrollView.contentSize, initialContentSize)
         XCTAssertEqual(try XCTUnwrap(delegate.collapseProgresses.last), 1, accuracy: 0.001)
 
@@ -1401,8 +1438,68 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         window.layoutIfNeeded()
 
         let restoredContext = try XCTUnwrap(delegate.layoutContexts.last)
+        let restoredPlainFrame = plainChild.view.convert(
+            plainChild.view.bounds,
+            to: pager.view
+        )
         XCTAssertEqual(restoredContext, collapsedContext)
+        XCTAssertEqual(restoredPlainFrame, collapsedPlainFrame)
         XCTAssertEqual(pager.verticalScrollView.contentSize, initialContentSize)
+    }
+
+    @MainActor
+    func testPlainBottomPresentationResetsBeforeSelection() throws {
+        let fixture = try PlainBottomPresentationFixture(pageCount: 2)
+        defer { fixture.window.isHidden = true }
+        let surface = try fixture.presentBottomOverflow()
+        XCTAssertEqual(surface.transform.ty, -24, accuracy: 0.5)
+
+        fixture.pager.setSelectedIndex(1, animated: false)
+
+        XCTAssertEqual(surface.transform, .identity)
+    }
+
+    @MainActor
+    func testPlainBottomPresentationResetsBeforeReloadHeaderLayout() throws {
+        let fixture = try PlainBottomPresentationFixture()
+        defer { fixture.window.isHidden = true }
+        let surface = try fixture.presentBottomOverflow()
+        XCTAssertEqual(surface.transform.ty, -24, accuracy: 0.5)
+
+        fixture.pager.reloadHeaderLayout(offsetAdjustment: .preserveVisualPosition)
+
+        XCTAssertEqual(surface.transform, .identity)
+    }
+
+    @MainActor
+    func testPlainBottomPresentationResetsBeforeSizeTransition() throws {
+        let fixture = try PlainBottomPresentationFixture()
+        defer { fixture.window.isHidden = true }
+        let surface = try fixture.presentBottomOverflow()
+        XCTAssertEqual(surface.transform.ty, -24, accuracy: 0.5)
+
+        fixture.pager.viewWillTransition(
+            to: CGSize(width: 844, height: 390),
+            with: ImmediateTransitionCoordinator()
+        )
+
+        XCTAssertEqual(surface.transform, .identity)
+    }
+
+    @MainActor
+    func testPlainBottomPresentationResetsBeforeEmptyReload() throws {
+        let fixture = try PlainBottomPresentationFixture()
+        defer { fixture.window.isHidden = true }
+        let surface = try fixture.presentBottomOverflow()
+        XCTAssertEqual(surface.transform.ty, -24, accuracy: 0.5)
+
+        fixture.dataSource.count = 0
+        fixture.dataSource.titles = []
+        fixture.dataSource.viewControllers = []
+        fixture.pager.reloadData()
+
+        XCTAssertEqual(surface.transform, .identity)
+        XCTAssertNil(fixture.host.activeAdapter)
     }
 
     @MainActor
@@ -2432,6 +2529,51 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         in pager: AnchorPagerViewController
     ) -> AnchorPagerPagingHostViewController? {
         pager.children.compactMap { $0 as? AnchorPagerPagingHostViewController }.first
+    }
+}
+
+@MainActor
+private final class PlainBottomPresentationFixture {
+    let pager: AnchorPagerViewController
+    let dataSource: StubDataSource
+    let window: UIWindow
+    let host: AnchorPagerPagingHostViewController
+
+    init(pageCount: Int = 1) throws {
+        var configuration = AnchorPagerConfiguration.default
+        configuration.header.heightMode = .fixed(max: 100, min: 0)
+        pager = AnchorPagerViewController(configuration: configuration)
+        let pages = (0..<pageCount).map { _ in UIViewController() }
+        dataSource = StubDataSource(
+            count: pageCount,
+            viewControllers: pages,
+            headerContent: .view(FixedFittingView(height: 100))
+        )
+        pager.dataSource = dataSource
+        window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = pager
+        window.makeKeyAndVisible()
+        pager.reloadData()
+        window.layoutIfNeeded()
+        host = try XCTUnwrap(
+            pager.children.compactMap {
+                $0 as? AnchorPagerPagingHostViewController
+            }.first
+        )
+    }
+
+    func presentBottomOverflow() throws -> UIView {
+        pager.verticalScrollView.contentOffset.y = 100
+        pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
+        window.layoutIfNeeded()
+        pager.verticalScrollView.contentOffset.y = 124
+        pager.verticalScrollView.delegate?.scrollViewDidScroll?(pager.verticalScrollView)
+        window.layoutIfNeeded()
+        let adapter = try XCTUnwrap(host.activeAdapter)
+        let pageViewController = try XCTUnwrap(
+            adapter.children.compactMap { $0 as? UIPageViewController }.first
+        )
+        return pageViewController.view
     }
 }
 

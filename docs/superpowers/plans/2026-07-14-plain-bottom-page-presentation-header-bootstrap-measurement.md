@@ -201,7 +201,7 @@ git commit -m "增加分页内容层回弹接缝"
 - Consumes: `pageStateStore.committedCurrentPageViewController` 与 `committedCurrentScrollView`。
 - Produces: private `ContainerPresentation`；Public `AnchorPagerLayoutContext` 类型不变。
 
-- [ ] **Step 1：把旧 plain bottom 测试改成新契约并先运行 RED**
+- [x] **Step 1：把旧 plain bottom 测试改成新契约并先运行 RED**
 
 将 `testPlainBottomOverflowTranslatesViewportUpWithoutChangingCanonicalRange` 重命名为 `testPlainBottomOverflowMovesOnlyPageSurfaceAndRestoresCanonicalChrome`。在 collapsed offset `100` 保存 Header/bar/content context 和 plain page 在 pager 坐标中的 frame；把 offset 改为 `124` 后断言：
 
@@ -230,7 +230,7 @@ xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 
 
 预期：旧实现因 Header/bar 同时上移 `24 pt` 失败。
 
-- [ ] **Step 2：先补 cancel/reload/header layout 的失败测试**
+- [x] **Step 2：先补 cancel/reload/header layout 的失败测试**
 
 新增 `testPlainBottomPresentationResetsForSelectionReloadAndHeaderLayoutCancellation`，使用两个 plain controller 和固定 Header：
 
@@ -241,7 +241,7 @@ xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 
 
 把现有 `testNegativeContainerOffsetTranslatesViewportAndLayoutContextWithoutChangingRange` 增强为 top bounce 时 Header/bar/content 同量 `+24` 且 adapter page surface 自身 transform 为 identity；保留真实 child bottom、plain direct containment、nil scroll target、物理底边测试不变。
 
-- [ ] **Step 3：在 ViewController 引入分层 presentation 值对象**
+- [x] **Step 3：在 ViewController 引入分层 presentation 值对象**
 
 删除 `containerOverscrollTranslationY(for:)`，新增：
 
@@ -275,7 +275,7 @@ private func containerPresentation(
 
 门禁必须同时要求 committed page 非 nil 和 committed scroll nil；empty/pending provider 不得成为 plain owner。
 
-- [ ] **Step 4：按实际 surface 应用结果更新 transform 与 LayoutContext**
+- [x] **Step 4：按实际 surface 应用结果更新 transform 与 LayoutContext**
 
 `applyLayoutOutput` 的顺序调整为：
 
@@ -298,7 +298,7 @@ let appliedPresentation = ContainerPresentation(
 
 把 `layoutContext(for:translationY:)` 改为：Header/bar 只加 `chromeTranslationY`，content 加 `contentTranslationY`。surface 不可用时 context 不得报告未发生的 page 位移。
 
-- [ ] **Step 5：统一边界取消与 presentation 清理**
+- [x] **Step 5：统一边界取消与 presentation 清理**
 
 新增 private helper：
 
@@ -312,7 +312,7 @@ private func cancelBoundaryPresentation() {
 
 用它替换 `viewWillTransition`、`reloadData`、`reloadHeaderLayout`、matching `willPerformReloadRequest`、`willSelect` 中现有五处直接 `cancelBoundaryHandling()`。`deinit` 的 `MainActor.assumeIsolated` 块也在释放 Store 前请求 page translation `0`。stable layout 每轮仍显式设置 page translation `0`，所以 didSelect、didCancel、committed rebind 和普通 settle 不依赖动画 completion 清理。
 
-- [ ] **Step 6：运行目标 GREEN 与边界相邻回归**
+- [x] **Step 6：运行目标 GREEN 与边界相邻回归**
 
 ```bash
 xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testPlainBottomOverflowMovesOnlyPageSurfaceAndRestoresCanonicalChrome -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testPlainBottomPresentationResetsForSelectionReloadAndHeaderLayoutCancellation -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testNegativeContainerOffsetTranslatesViewportAndLayoutContextWithoutChangingRange -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testPlainPageRootReachesPagerAndWindowBottomWithoutFrameworkInsets -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testCommittedPlainPageBindsNoChildPanAndContainerStillCollapses test
@@ -321,7 +321,7 @@ git diff --check
 
 预期：目标和相邻回归全部通过；Header/bar 在 plain bottom 中 `0 pt` 位移，content/plain page 为 `-24 pt`，stable 后全部归零。
 
-- [ ] **Step 7：自审并提交 Task 2**
+- [x] **Step 7：自审并提交 Task 2**
 
 自审 committed/pending/empty 门禁、LayoutContext 实际坐标、top/child 相邻路径、五个 cancel 入口、deinit、无二次 offset writer、无业务 root transform。
 
@@ -329,6 +329,8 @@ git diff --check
 git add Sources/AnchorPager/Public/AnchorPagerViewController.swift Tests/AnchorPagerTests/AnchorPagerViewControllerTests.swift
 git commit -m "分离无滚动页底部内容回弹"
 ```
+
+**执行记录（2026-07-14）：** 新契约 RED 精确暴露旧实现会把 Header/bar 与 plain page 一起上移；同时发现原测试把临时 data source 赋给 weak 属性，实际走了空数据路径，已改为强持有以恢复真实 Pageboy containment。最小实现按 committed page 非 nil 且 committed scroll nil 拆分 chrome/page surface，surface 应用失败时 LayoutContext 不报告虚假位移。selection、reloadHeaderLayout、尺寸切换、空数据 reload 四个同步清理测试在既有 `cancelBoundaryHandling()` 稳定化路径和 Task 1 adapter teardown 归零下均已通过，因此没有额外引入重复清理 helper 或不稳定的同步 deinit 测试；释放路径由 adapter teardown-before-containment 测试覆盖。目标、顶部回弹、plain direct/nil scroll 等 8 项定向测试通过；自审确认 Public API、offset writer、业务 child scroll/pan/delegate/bounce 配置和 containment 均未改变。
 
 ---
 

@@ -12,6 +12,15 @@ open class AnchorPagerViewController: UIViewController {
         var providerGenerationIsActive: Bool
     }
 
+    private struct ContainerPresentation {
+        let chromeTranslationY: CGFloat
+        let pageSurfaceTranslationY: CGFloat
+
+        var contentTranslationY: CGFloat {
+            chromeTranslationY + pageSurfaceTranslationY
+        }
+    }
+
     /// 提供页面、标题和 Header 内容的数据源。
     public weak var dataSource: AnchorPagerViewControllerDataSource?
 
@@ -471,8 +480,20 @@ open class AnchorPagerViewController: UIViewController {
         logsChanges: Bool,
         updatesScrollRange: Bool
     ) {
-        let translationY = containerOverscrollTranslationY(for: output)
-        viewportView.transform = CGAffineTransform(translationX: 0, y: translationY)
+        let requestedPresentation = containerPresentation(for: output)
+        viewportView.transform = CGAffineTransform(
+            translationX: 0,
+            y: requestedPresentation.chromeTranslationY
+        )
+        let didApplyPagePresentation = pagingHost.setPagePresentationTranslationY(
+            requestedPresentation.pageSurfaceTranslationY
+        )
+        let appliedPresentation = ContainerPresentation(
+            chromeTranslationY: requestedPresentation.chromeTranslationY,
+            pageSurfaceTranslationY: didApplyPagePresentation
+                ? requestedPresentation.pageSurfaceTranslationY
+                : 0
+        )
 
         if updatesScrollRange {
             scrollRangeHeightConstraint?.constant = output.resolvedHeaderHeight.collapsibleDistance
@@ -502,7 +523,7 @@ open class AnchorPagerViewController: UIViewController {
             )
         }
 
-        let context = layoutContext(for: output, translationY: translationY)
+        let context = layoutContext(for: output, presentation: appliedPresentation)
         if forceNotify || context != lastLayoutContext {
             lastLayoutContext = context
             delegate?.pagerViewController(self, didUpdateLayout: context)
@@ -524,25 +545,40 @@ open class AnchorPagerViewController: UIViewController {
         )
     }
 
-    private func containerOverscrollTranslationY(
+    private func containerPresentation(
         for output: AnchorPagerLayoutEngine.Output
-    ) -> CGFloat {
+    ) -> ContainerPresentation {
         let offset = verticalScrollView.contentOffset.y
         let collapsed = output.resolvedHeaderHeight.collapsibleDistance
         let topOverflow = Swift.max(0, -offset)
         let bottomOverflow = Swift.max(0, offset - collapsed)
-        return topOverflow - bottomOverflow
+        let hasCommittedPlainPage =
+            pageStateStore.committedCurrentPageViewController != nil &&
+            pageStateStore.committedCurrentScrollView == nil
+        return ContainerPresentation(
+            chromeTranslationY: topOverflow,
+            pageSurfaceTranslationY: hasCommittedPlainPage ? -bottomOverflow : 0
+        )
     }
 
     private func layoutContext(
         for output: AnchorPagerLayoutEngine.Output,
-        translationY: CGFloat
+        presentation: ContainerPresentation
     ) -> AnchorPagerLayoutContext {
         AnchorPagerLayoutContext(
             selectedIndex: effectiveSelectedIndex,
-            headerFrame: output.headerFrame.offsetBy(dx: 0, dy: translationY),
-            barFrame: output.barFrame.offsetBy(dx: 0, dy: translationY),
-            contentFrame: output.contentFrame.offsetBy(dx: 0, dy: translationY)
+            headerFrame: output.headerFrame.offsetBy(
+                dx: 0,
+                dy: presentation.chromeTranslationY
+            ),
+            barFrame: output.barFrame.offsetBy(
+                dx: 0,
+                dy: presentation.chromeTranslationY
+            ),
+            contentFrame: output.contentFrame.offsetBy(
+                dx: 0,
+                dy: presentation.contentTranslationY
+            )
         )
     }
 
