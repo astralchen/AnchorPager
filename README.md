@@ -4,6 +4,8 @@ AnchorPager 是一个 UIKit 容器框架，用于组合可变 Header、吸顶分
 
 2026-07-13 使用 Apple Swift 6.3.3、iPhone 17 Pro / iOS 26.5 完成最终验收：生产代码 HEAD `128821f` 对应的最近 Framework 结果包 `/private/tmp/AnchorPagerPresentedTopFrameworkFull-20260713-2258.xcresult` 为 283/283；本次补强 owner 排他断言后的 Example 为 37/37（10 项单元测试 + 27 项 UI 测试），均为 0 failure、0 skip；Example generic iOS Simulator build 成功。三份最终结果的 error、warning 与 analyzer warning 均为 0。第四次整分支独立复审覆盖 `be2d783...13b3d95`，结论为 Critical 0、Important 0、Minor 2；README 旧验收摘要和 `.container` 顶部真实 UI 缺少 `childTopMax < 0.5` 严格断言两个 Minor 已在本提交修复，v0.5 Task 7 与 v0.6 均达到 Ready。
 
+2026-07-14 后续用户验收发现：无滚动页底部由 container 原生回弹时，当前共享 viewport presentation 会把 bar 推过顶部安全区；首次 automatic Header 中立测量还会让非空内容以 required `height == 0` 参与布局并触发约束冲突。修复设计已确认，实施、全量验收和独立复审尚未完成，因此上一段 Ready 仅作为历史验收记录，当前 v0.5 Task 7 与 v0.6 暂不标记 Ready。
+
 ## 安装
 
 构建 AnchorPager 需要 Swift 6.2 或更高版本工具链；Package 使用 Swift 6 language mode，运行时最低支持 iOS 14。
@@ -233,7 +235,7 @@ log stream --predicate 'subsystem == "com.anchorpager.AnchorPager"'
 
 ## 当前限制
 
-v0.5 连续纵向 handoff、无滚动页直接承载、stable/native boundary 分离、两类底部回弹路径和 v0.6 三种顶部模式已完成实现、最终验收与第四次整分支独立复审，当前均为 Ready。尚未实现的后续能力包括跨滚动区域的减速速度合成、完整交互状态、状态栏点击顶滚和尺寸变化后的滚动位置恢复；refresh control 或业务刷新任务也不属于 AnchorPager。Tabman/Pageboy 仅出现在 internal adapter 层，Public API 不暴露第三方类型。
+v0.5 连续纵向 handoff、无滚动页直接承载、stable/native boundary 分离、两类底部回弹路径和 v0.6 三种顶部模式已有完整实现与历史验收，但 plain bottom 页面 presentation/bar 安全区和 Header 首次 bootstrap 测量修复正在重新验收，当前不标记 Ready。尚未实现的后续能力包括跨滚动区域的减速速度合成、完整交互状态、状态栏点击顶滚和尺寸变化后的滚动位置恢复；refresh control 或业务刷新任务也不属于 AnchorPager。Tabman/Pageboy 仅出现在 internal adapter 层，Public API 不暴露第三方类型。
 
 在 Xcode 26.3 / Swift 6.2.4 的 x86_64 iPhone 17 Simulator 验证中，把控制器同步析构改为
 `isolated deinit` 会在生命周期析构后稳定触发 allocator `pointer being freed was not allocated` 崩溃。

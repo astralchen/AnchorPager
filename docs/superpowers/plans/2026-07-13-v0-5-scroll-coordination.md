@@ -8,7 +8,7 @@
 
 **Tech Stack:** Swift 6.2+、Swift 6 language mode、UIKit、iOS 14+、Swift Package Manager、XCTest、XCUITest、Tabman 4.0.1、Pageboy 5.0.2。
 
-**当前状态：** Ready；Task 1–7、plain direct page 和 boundary owner 修订均已实现，前三轮复审问题均已修复；第四次整分支独立复审 Critical 0、Important 0，两个 Minor 已在最终状态提交中修复。
+**当前状态：** 2026-07-13 历史计划完成；2026-07-14 plain bottom 分层 page presentation 与 Header bootstrap measurement 修订待实施、全量验收和独立复审，当前不标记 Ready。
 
 ## Global Constraints
 

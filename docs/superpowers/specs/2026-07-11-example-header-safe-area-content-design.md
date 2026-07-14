@@ -121,3 +121,7 @@ hugging、固定 Header 高度或修改框架布局掩盖问题。
 - 最终验收继续复用 Booted iPhone 17：框架测试 83/83、示例测试 13/13、generic iOS Simulator build 和 `git diff --check` 全部通过。
 - 最终自审确认没有 Public API、第三方 adapter、containment/lifecycle、并发、scroll/inset、gesture/overscroll、日志或资源边界变化。
 - 2026-07-12 最终验收发现同进程测试通过 `makeKeyAndVisible()` 创建并立即销毁第二个 tab 根窗口，会与测试宿主 key window 的 appearance transition 交错。测试夹具现使用非 key 可见窗口保留真实 safe area，等待初始 Pageboy selection terminal，并在成功或抛错后结构化异步隐藏、让出 MainActor、解除 root；不修改生产 containment 或 appearance forwarding。
+
+## 2026-07-14 首次零高度布局修订
+
+真实启动日志显示示例标题栈约束本身符合本设计，但框架首次中立测量先把 Header host required height 设为 `0`，再执行 layout，造成 `top == safeArea.top + 20`、`bottom <= safeArea.bottom - 20` 与零高度冲突。不得通过降低示例内容约束优先级、删除底部安全间距或示例专用分支消除告警。修复必须位于框架 bootstrap measurement：先取得 fitting seed，再执行中立正式测量。详细设计见 `2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement-design.md`。

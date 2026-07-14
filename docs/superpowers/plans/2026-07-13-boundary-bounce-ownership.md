@@ -4,11 +4,13 @@
 
 **目标：** 在不修改业务 child 回弹配置、不接管业务 delegate 的前提下，修复 container/child 原生边界回弹，启用 `.none/.container/.child` 顶部路由，并用实际可见 presentation 完成 v0.5/v0.6 验收。
 
-**架构：** `AnchorPagerScrollCoordinator` 继续是唯一 offset 写入者，只协调稳定区间并约束非 owner；新增 `AnchorPagerOverscrollCoordinator` 只管理顶部 mode、边界 owner 和 begin/finish/cancel 状态，不直接写 UIKit。原生 owner 越界时停止 canonical clamp，container 越界通过对称 viewport translation 呈现，child 越界按业务 scroll view 自身的 `bounces`/`alwaysBounceVertical` 配置呈现。
+**架构：** `AnchorPagerScrollCoordinator` 继续是唯一 offset 写入者，只协调稳定区间并约束非 owner；`AnchorPagerOverscrollCoordinator` 只管理顶部 mode、边界 owner 和 begin/finish/cancel 状态，不直接写 UIKit。原生 owner 越界时停止 canonical clamp；container top 通过共享 viewport 呈现，plain bottom 保留 container 物理但只移动 Pageboy 页面 surface，child 越界按业务 scroll view 自身配置呈现。
 
 **技术栈：** Swift 6.2、Swift 6 language mode、UIKit、iOS 14+、Swift Package Manager、Tabman 4.0.1、Pageboy 5.0.2、XCTest/XCUITest、Xcode 26.3。
 
-**当前状态：** Ready；Tasks 1–7 已实现，前三轮复审问题均已修复；第四次整分支独立复审 Critical 0、Important 0，两个 Minor 已在最终状态提交中修复，v0.5/v0.6 发布门禁完成。
+**当前状态：** 2026-07-13 历史 Tasks 1–7 与复审完成；2026-07-14 plain bottom 页面/chrome presentation 修订待实施和重新验收，当前不标记 v0.5/v0.6 Ready。
+
+> 2026-07-14 修订：本文后续 `topOverflow - bottomOverflow`、对称 viewport transform 和“整个 viewport 上移”代码/步骤只保留为历史实施记录，不得再次执行；最新 page/chrome 分层契约以同日专项设计和后续新计划为准。
 
 ## Global Constraints
 
@@ -33,7 +35,7 @@
 - `Sources/AnchorPager/Core/AnchorPagerScrollPositionResolver.swift`：修改；增加有限值校验后的未夹紧 canonical total 计算，稳定位置输出语义不变。
 - `Sources/AnchorPager/Children/AnchorPagerChildScrollBinding.swift`：修改；删除 bounce 租约，只保留 observation 与 pan target。
 - `Sources/AnchorPager/Public/AnchorPagerConfiguration.swift`：修改；默认顶部模式改为 `.container`，DocC 明确 child 原生配置所有权。
-- `Sources/AnchorPager/Public/AnchorPagerViewController.swift`：修改；装配 mode、取消路径和对称 container presentation。
+- `Sources/AnchorPager/Public/AnchorPagerViewController.swift`：历史修改；装配 mode、取消路径和当时的 container presentation，当前分层修订由 2026-07-14 新计划接管。
 - `Tests/AnchorPagerTests/AnchorPagerOverscrollCoordinatorTests.swift`：新增；纯 owner 矩阵、阈值、日志与 cancel 测试。
 - `Tests/AnchorPagerTests/AnchorPagerScrollCoordinatorTests.swift`：修改；native pass-through、非 owner clamp、零范围方向和配置保持测试。
 - `Tests/AnchorPagerTests/AnchorPagerChildScrollBindingTests.swift`：修改；业务 bounce 配置不变与静态禁止项测试。
@@ -1719,7 +1721,7 @@ git commit -m "完成纵向边界回弹验收"
 4. ScrollCoordinator 是 active handoff/boundary 的 offset writer；OverscrollCoordinator 只持有纯 owner 状态。managed inset、snapshot 和显式 Header layout adjustment 仅在各自结构性事务写 offset。
 5. framework 未设置业务 child scroll/pan delegate、`isScrollEnabled`、`bounces` 或 `alwaysBounceVertical`。
 6. active native owner 在 container delegate、child KVO、pan target 和 geometry refresh 中均不被反向 clamp；对应 framework 回归通过。
-7. container presentation 使用 `topOverflow - bottomOverflow` 对称位移，不进入 canonical output、range、managed inset 或 snapshot。
+7. 历史 container presentation 使用 `topOverflow - bottomOverflow`；2026-07-14 修订为 top 移动 chrome/page、plain bottom 只移动 page，且两者均不进入 canonical output、range、managed inset 或 snapshot。
 8. mode switch、selection、reload、Header layout reload、rotation/rebind/deinit 的 cancel/cleanup 路径幂等且有测试。
 9. overscroll 与 guard 日志只在状态变化时输出；重复热路径测试没有逐帧噪声。
 10. Example 六类真实 drag 使用 current/max presentation distance；plain root 物理底边和 container-only pan 证据在本轮 36 项全量中通过。

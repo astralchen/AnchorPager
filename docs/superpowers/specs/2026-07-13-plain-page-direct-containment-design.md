@@ -1,10 +1,11 @@
 # 无滚动页面直接 Containment 设计
 
-> 2026-07-13 修订：本文关于无滚动页“折叠后继续上推不产生额外纵向距离”的验收已被 `2026-07-13-boundary-bounce-ownership-design.md` 取代。页面仍没有 child scroll target，但外层 container 将在底部边界提供原生可见 bounce。
+> 2026-07-13 修订：本文关于无滚动页“折叠后继续上推不产生额外纵向距离”的验收已被 `2026-07-13-boundary-bounce-ownership-design.md` 取代。页面仍没有 child scroll target，外层 container 在底部边界提供原生物理。
+> 2026-07-14 修订：plain bottom 可见 presentation 只移动 Pageboy 页面 surface，不移动 Header/bar；最新契约见 `2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement-design.md`。
 
 **日期：** 2026-07-13
 
-**状态：** Ready；已实施并完成专项验收，边界 bounce 复审问题均已修复，第四次整分支独立复审 Critical 0、Important 0，两个最终 Minor 已修复
+**状态：** direct containment 专项保持完成；plain bottom 分层 presentation 修订实施与重新验收待完成，关联 v0.5/v0.6 当前不标记 Ready
 
 ## 背景
 
@@ -142,4 +143,6 @@ UIKit 的祖先 `verticalScrollView.panGestureRecognizer` 可以从普通 descen
 
 ## 边界集成复验（2026-07-13）
 
-最终边界实现、`f81ca1e`、`5b80893` 与 `128821f` 复审修复均未改变 direct containment、committed page 非 nil / scroll target nil、无 managed inset/snapshot/child observation 和物理底边契约。plain page 顶部 `.container` 与底部边界均由外层 container 呈现；`.child` 顶部不可用且不回退。第四次整分支独立复审为 Critical 0、Important 0、Minor 2，两个 Minor 已在最终状态提交中修复。生产代码 HEAD `128821f` 对应 Framework 283/283 结果包 `/private/tmp/AnchorPagerPresentedTopFrameworkFull-20260713-2258.xcresult`；最终 Example 37/37 全量包含 plain root 物理底边、container-only pan、顶部与底部实际 presentation distance 用例，均为 0 fail、0 skip，generic Simulator build 成功。本规格随 v0.5/v0.6 标记 Ready。
+最终边界实现、`f81ca1e`、`5b80893` 与 `128821f` 复审修复均未改变 direct containment、committed page 非 nil / scroll target nil、无 managed inset/snapshot/child observation 和物理底边契约。plain page 顶部 `.container` 与底部边界的原生物理均由外层 container 提供；`.child` 顶部不可用且不回退。2026-07-13 历史验收为 Framework 283/283、Example 37/37 与 generic Simulator build 全部通过。
+
+2026-07-14 用户确认 plain bottom 继续由 `verticalScrollView` 处理原生回弹，但仅页面内容区域上移；Header/bar 必须保持安全区吸顶。该修订只改变 adapter 内页面 presentation surface，不改变 original Pageboy containment、nil scroll target、root 物理底边或 container-only pan。实施、全量验收和独立复审待完成，因此关联 v0.5/v0.6 当前不标记 Ready。

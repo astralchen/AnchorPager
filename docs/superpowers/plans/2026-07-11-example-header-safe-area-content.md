@@ -8,6 +8,8 @@
 
 **Tech Stack:** Swift 6、iOS 14+、UIKit、Swift Package Manager、Tabman `4.0.1`、Pageboy `5.0.2`、Swift Testing、XCTest、XCUITest。
 
+**2026-07-14 修订状态：** 示例内容约束保持正确；启动告警来自框架首次 required zero-height 中立布局。不得修改本计划的 safe-area 约束掩盖问题，框架 bootstrap measurement 修复待按 2026-07-14 专项设计实施和验收。
+
 ## Global Constraints
 
 - Package name、Library product、Module name 均为 `AnchorPager`。

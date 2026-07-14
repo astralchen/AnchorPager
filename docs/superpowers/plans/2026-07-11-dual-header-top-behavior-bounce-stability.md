@@ -8,6 +8,8 @@
 
 **Tech Stack:** Swift 6、iOS 14+、UIKit、Swift Package Manager、Tabman `4.0.1`、Pageboy `5.0.2`、XCTest、XCUITest。
 
+**2026-07-14 修订状态：** 历史计划完成；首次无缓存时的 required zero-height 中立布局规则已被 bootstrap fitting seed 设计取代，修复计划待按 `2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement-design.md` 另行实施和验收。
+
 ## Global Constraints
 
 - Package name、Library product、Module name 均为 `AnchorPager`。

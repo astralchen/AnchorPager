@@ -8,7 +8,7 @@
 
 **Tech Stack:** Swift 6.2、Swift 6 language mode、UIKit、iOS 14+、Swift Package Manager、Tabman 4.0.1、Pageboy 5.0.2、XCTest/XCUITest、XcodeBuildMCP。
 
-**当前状态：** Ready；专项修复已完成，boundary owner 复审问题均已修复并完成最终验收；第四次整分支独立复审 Critical 0、Important 0，两个最终 Minor 已修复。
+**当前状态：** direct containment 专项保持完成；2026-07-14 plain bottom 分层 page presentation 修订待实施和重新验收，关联 v0.5/v0.6 当前不标记 Ready。
 
 ## Global Constraints
 

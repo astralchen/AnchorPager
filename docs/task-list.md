@@ -389,7 +389,7 @@
 
 ## v0.5：纵向嵌套滚动协调版
 
-设计见 `docs/superpowers/specs/2026-07-13-v0-5-scroll-coordination-design.md`，direct page 修订见 `docs/superpowers/specs/2026-07-13-plain-page-direct-containment-design.md`，最终边界 owner 契约见 `docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md`。Task 1–6、direct containment 和边界实现均已完成；前三轮复审问题均已修复，第四次整分支独立复审为 Critical 0、Important 0、Minor 2，两个 Minor 已在最终状态提交中修复。v0.5 Task 7 已完成并达到 Ready。
+设计见 `docs/superpowers/specs/2026-07-13-v0-5-scroll-coordination-design.md`，direct page 修订见 `docs/superpowers/specs/2026-07-13-plain-page-direct-containment-design.md`，边界 owner 历史契约见 `docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md`，2026-07-14 修复设计见 `docs/superpowers/specs/2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement-design.md`。2026-07-13 第四次复审与历史验收已完成；后续用户验收发现 plain bottom 页面/chrome presentation 未分层和 Header 首次 zero-height 测量回归，当前重新打开 Task 7，暂不标记 Ready。
 
 - [x] 删除无滚动页 synthetic scroll wrapper 及其额外 containment
 - [x] 无滚动 original page 直接交给 Pageboy，Store 保存 page 非 nil、scroll target 为 nil
@@ -447,13 +447,20 @@
 - [x] Task 7 第四次整分支独立复审：覆盖 `be2d783...13b3d95` 并重点比较 `b00d204...128821f`、尤其 `5b80893...128821f`；结论为 Critical 0、Important 0、Minor 2
 - [x] Task 7 最终 Minor 修复：README 验收摘要更新到生产代码 HEAD `128821f` / Framework 283；`testRealChildContainerTopBounceIsVisible` 增加严格 `childTopMax < 0.5`，证明 `.container` 顶部 owner 排他
 - [x] Task 7 最终验收：Framework 283/283 对应 `/private/tmp/AnchorPagerPresentedTopFrameworkFull-20260713-2258.xcresult` 和生产代码 HEAD `128821f`；Example 37/37（10 单元 + 27 UI），0 fail、0 skip；generic Simulator build 成功；全部结果 0 error/warning/analyzer warning
-- [x] v0.5 Ready：Task 7 实现、四轮复审、两个最终 Minor 修复与验收门禁全部完成
+- [x] v0.5 历史 Ready：截至 `b9699b0`，Task 7 实现、四轮复审、两个最终 Minor 修复与当时验收门禁全部完成
+- [x] 2026-07-14 后续回归关系梳理：plain page bottom 由 `verticalScrollView` 提供原生物理，但共享 `viewportView` transform 同时上移 Header/bar/page；真实 child bottom 由 child owner 处理所以不受影响；首次 automatic Header required `height == 0` 中立布局会触发非空内容约束冲突
+- [x] 2026-07-14 专项设计确认：container top 仍整体移动，plain bottom 只移动 Paging adapter 内 Pageboy 页面 surface；Header 首次先取 bootstrap fitting seed，再执行中立正式测量；Public API、Pageboy containment、child scroll ownership 不变
+- [ ] 为 plain bottom bar 安全区、页面 presentation、回稳清理与 Header 非零首次布局编写并运行 RED
+- [ ] 实施 Paging adapter 页面 presentation surface 与 Header bootstrap measurement 最小修复
+- [ ] 运行聚焦 GREEN、完整 Framework/Example/UI、generic build、静态门禁和 `git diff --check`
+- [ ] 执行代码自审与独立复审，Critical/Important 清零
+- [ ] 恢复 v0.5 Ready：仅在上述修复、验收和复审全部完成后勾选
 
 ## v0.6：顶部 Overscroll 事件处理版
 
 依赖门禁：OverscrollCoordinator 只消费 v0.5 已绑定的 committed current/empty owner；pending provider page 不能成为 overscroll owner。
 
-设计与计划：`docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md`、`docs/superpowers/plans/2026-07-13-boundary-bounce-ownership.md`。mode、owner、cancel、日志与六类真实 UI 已完成实现、四轮复审与最终验收；第四次复审的两个 Minor 已修复，v0.6 达到 Ready。
+设计与计划：`docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md`、`docs/superpowers/plans/2026-07-13-boundary-bounce-ownership.md`；plain bottom 当前修订见 `docs/superpowers/specs/2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement-design.md`。mode、owner、cancel 和日志历史实现保持；由于 plain bottom 可见 presentation 回归尚未修复/重新验收，v0.6 当前不标记 Ready。
 
 - [x] 创建 `Sources/AnchorPager/Overscroll/AnchorPagerOverscrollCoordinator.swift`
 - [x] 实现 `.none`
@@ -485,7 +492,8 @@
 - [x] 六类真实 UI：plain top/bottom、real child container top、real child child top、none top、real child bottom 全部通过
 - [x] v0.6 最新修复验收复用本轮 Framework 283 / Example 37 / generic build，0 fail、0 skip、0 xcresult warning
 - [x] v0.6 实现提交为 `10f1799`、`a4f7c3f`、`47abcd6`，验收记录随 `同步纵向边界回弹验收记录` 提交
-- [x] v0.6 第四次独立复审与 Ready：Critical 0、Important 0；两个 Minor 已修复，Framework 283/283、Example 37/37 与 generic build 门禁通过
+- [x] v0.6 历史第四次独立复审与 Ready：Critical 0、Important 0；两个 Minor 已修复，Framework 283/283、Example 37/37 与 generic build 门禁通过
+- [ ] v0.6 当前 Ready：等待 2026-07-14 plain bottom 页面/chrome presentation 修复、完整 UI 复验和独立复审
 
 ## v0.7：手势与交互状态机版
 
