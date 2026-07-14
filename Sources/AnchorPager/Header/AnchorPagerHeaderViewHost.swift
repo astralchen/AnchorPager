@@ -13,16 +13,17 @@ final class AnchorPagerHeaderViewHost {
         view.translatesAutoresizingMaskIntoConstraints = false
     }
 
+    @discardableResult
     func install(
         _ content: AnchorPagerHeaderContent,
         in parentViewController: UIViewController,
         hostParentView: UIView? = nil
-    ) {
+    ) -> Bool {
         self.parentViewController = parentViewController
         installHostViewIfNeeded(in: hostParentView ?? parentViewController.view)
         guard !isDisplaying(content) else {
             AnchorPagerLogger.log(.debug, category: .header, event: "header.install.noop")
-            return
+            return false
         }
         removeContent(keepHostView: true)
 
@@ -38,6 +39,7 @@ final class AnchorPagerHeaderViewHost {
             AnchorPagerLogger.log(.info, category: .header, event: "header.controller.add")
             AnchorPagerLogger.log(.info, category: .lifecycle, event: "header.controller.didMove")
         }
+        return true
     }
 
     func remove() {
@@ -59,6 +61,12 @@ final class AnchorPagerHeaderViewHost {
         let height = max(0, measuredHeight)
         AnchorPagerLogger.log(.debug, category: .layout, event: "header.measure")
         return height
+    }
+
+    func bootstrapMeasurement(in size: CGSize) -> CGFloat {
+        let measuredHeight = measuredContentHeight(in: size)
+        guard !isInvalidMeasuredHeight(measuredHeight) else { return 0 }
+        return max(0, measuredHeight)
     }
 
     private func installHostViewIfNeeded(in parentView: UIView) {

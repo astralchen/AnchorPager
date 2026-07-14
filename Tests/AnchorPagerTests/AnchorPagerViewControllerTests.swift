@@ -887,6 +887,35 @@ final class AnchorPagerViewControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testAutomaticHeaderBootstrapNeverLaysOutConstrainedContentAtRequiredZeroHeight() throws {
+        var configuration = AnchorPagerConfiguration.default
+        configuration.header.heightMode = .automatic(min: 0, max: nil)
+        let pager = AnchorPagerViewController(configuration: configuration)
+        let header = ConstrainedLayoutRecordingHeaderView()
+        let delegate = StubDelegate()
+        let dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [UIViewController()],
+            headerContent: .view(header)
+        )
+        pager.dataSource = dataSource
+        pager.delegate = delegate
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = pager
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+
+        pager.reloadData()
+        window.layoutIfNeeded()
+
+        XCTAssertFalse(header.didLayoutAtRequiredZeroHeight)
+        XCTAssertGreaterThan(
+            try XCTUnwrap(delegate.layoutContexts.last).headerFrame.height,
+            0
+        )
+    }
+
+    @MainActor
     func testReloadHeaderLayoutPreservesVisualPositionWhenHeaderHeightChanges() {
         var configuration = AnchorPagerConfiguration.default
         configuration.header.heightMode = .automatic(min: 0, max: nil)
@@ -2996,6 +3025,38 @@ private final class DynamicFittingView: UIView {
         verticalFittingPriority: UILayoutPriority
     ) -> CGSize {
         CGSize(width: targetSize.width, height: measuredHeight)
+    }
+}
+
+private final class ConstrainedLayoutRecordingHeaderView: UIView {
+    private(set) var didLayoutAtRequiredZeroHeight = false
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        let contentView = UIView()
+        contentView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(contentView)
+        NSLayoutConstraint.activate([
+            contentView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            contentView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            contentView.topAnchor.constraint(equalTo: safeAreaLayoutGuide.topAnchor, constant: 20),
+            contentView.bottomAnchor.constraint(
+                lessThanOrEqualTo: safeAreaLayoutGuide.bottomAnchor,
+                constant: -20
+            ),
+            contentView.heightAnchor.constraint(equalToConstant: 44)
+        ])
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) 未实现")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        if window != nil, bounds.width > 1, bounds.height <= 0.5 {
+            didLayoutAtRequiredZeroHeight = true
+        }
     }
 }
 

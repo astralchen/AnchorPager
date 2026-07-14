@@ -344,13 +344,14 @@ git commit -m "分离无滚动页底部内容回弹"
 
 **Interfaces:**
 - Produces: `AnchorPagerHeaderViewHost.bootstrapMeasurement(in:) -> CGFloat`，仅 internal。
+- Produces: `AnchorPagerHeaderViewHost.install(...) -> Bool`，仅报告 Header 内容身份是否发生替换，供 measurement cache 失效使用。
 - Keeps: `measure(in:)` 的 invalid assertion、`header.measure.invalid` 与正式 `header.measure` 日志语义。
 
-- [ ] **Step 1：写 bootstrap 不发布正式日志的失败测试**
+- [x] **Step 1：写 bootstrap 不发布正式日志的失败测试**
 
 在 `AnchorPagerHeaderViewHostTests` 新增 `testBootstrapMeasurementReturnsFittingHeightWithoutPublishingFormalMeasurementLog`：安装 `FixedFittingView(height: 64)`，调用 `bootstrapMeasurement(in:)`，断言返回 `64`，并断言 sink 中没有 `header.measure` 与 `header.measure.invalid`。
 
-- [ ] **Step 2：写首次非零布局的 UIKit RED**
+- [x] **Step 2：写首次非零布局的 UIKit RED**
 
 在 `AnchorPagerViewControllerTests` 增加 `ConstrainedLayoutRecordingHeaderView`：内部 content view 高 `44`，top 等于 safeArea top `+20`，bottom 小于等于 safeArea bottom `-20`；`layoutSubviews()` 仅在 `window != nil && bounds.width > 1 && bounds.height <= 0.5` 时把 `didLayoutAtRequiredZeroHeight` 置为 true。
 
@@ -380,7 +381,7 @@ XCTAssertFalse(header.didLayoutAtRequiredZeroHeight)
 XCTAssertGreaterThan(try XCTUnwrap(delegate.layoutContexts.last).headerFrame.height, 0)
 ```
 
-- [ ] **Step 3：运行 RED**
+- [x] **Step 3：运行 RED**
 
 ```bash
 xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' -only-testing:AnchorPagerTests/AnchorPagerHeaderViewHostTests/testBootstrapMeasurementReturnsFittingHeightWithoutPublishingFormalMeasurementLog -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testAutomaticHeaderBootstrapNeverLaysOutConstrainedContentAtRequiredZeroHeight test
@@ -388,7 +389,7 @@ xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 
 
 预期：先因缺少 `bootstrapMeasurement` 编译失败；接口补齐但 ViewController 未采用 seed 时，UIKit 测试应因记录到 zero-height layout 失败。
 
-- [ ] **Step 4：实现无副作用 bootstrap fitting**
+- [x] **Step 4：实现无副作用 bootstrap fitting**
 
 在 HeaderHost 新增：
 
@@ -402,9 +403,9 @@ func bootstrapMeasurement(in size: CGSize) -> CGFloat {
 
 不在该方法中写 assertion、正式 measurement 日志或外部状态；`measure(in:)` 保持既有正式校验与日志。
 
-- [ ] **Step 5：让首次中立布局使用 seed 并先清理两层 presentation**
+- [x] **Step 5：让首次中立布局使用 seed 并先清理两层 presentation**
 
-把 `measureHeaderHeight(in:)` 改为：
+`installHeaderHost()` 必须先根据 `headerViewHost.install(...)` 的返回值使 `lastMeasuredHeaderHeight` 失效，避免窗口启动时空占位 Header 的合法 `0` 跨身份成为真实 Header seed。随后把 `measureHeaderHeight(in:)` 改为：
 
 ```swift
 private func measureHeaderHeight(in environment: LayoutEnvironment) -> CGFloat {
@@ -425,7 +426,7 @@ private func measureHeaderHeight(in environment: LayoutEnvironment) -> CGFloat {
 
 仅正式返回值由既有 caller 更新 `lastMeasuredHeaderHeight`；bootstrap 不更新 context/progress/range/frame 日志缓存。
 
-- [ ] **Step 6：运行 GREEN 与 automatic Header 相邻回归**
+- [x] **Step 6：运行 GREEN 与 automatic Header 相邻回归**
 
 ```bash
 xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' -only-testing:AnchorPagerTests/AnchorPagerHeaderViewHostTests -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testAutomaticHeaderBootstrapNeverLaysOutConstrainedContentAtRequiredZeroHeight -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testReloadHeaderLayoutPreservesVisualPositionWhenHeaderHeightChanges -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testReloadHeaderLayoutPreservesCollapseProgressWhenHeaderHeightChanges -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testRuntimeHeaderFrameChangeUpdatesLayoutContext test
@@ -434,7 +435,7 @@ git diff --check
 
 预期：全部通过；bootstrap 测得 `64` 但没有正式日志，正式测量仍保留 `header.measure`。
 
-- [ ] **Step 7：自审并提交 Task 3**
+- [x] **Step 7：自审并提交 Task 3**
 
 自审 UIView/UIViewController Header、`preferredContentSize` 优先级、safe area 中立位置、无缓存/有缓存、invalid 降级、presentation 清理和日志边界。
 
@@ -442,6 +443,8 @@ git diff --check
 git add Sources/AnchorPager/Header/AnchorPagerHeaderViewHost.swift Sources/AnchorPager/Public/AnchorPagerViewController.swift Tests/AnchorPagerTests/AnchorPagerHeaderViewHostTests.swift Tests/AnchorPagerTests/AnchorPagerViewControllerTests.swift
 git commit -m "修复页眉首次中立测量"
 ```
+
+**执行记录（2026-07-14）：** 第一阶段 RED 因缺少 `bootstrapMeasurement(in:)` 按预期编译失败；补接口后 HeaderHost 测试转绿，而 UIKit fixture 继续因 required zero-height layout 失败。调用栈和 fitting 诊断进一步证明 compressed fitting 两次都得到 `84 pt`，真正原因是窗口启动时空占位 Header 的合法 `0` 缓存跨内容身份复用。已先修订专项设计和计划，再让 `install(...)` 以 internal Bool 报告身份替换并使旧 measurement cache 失效；同一内容 no-op 保留缓存。最终 HeaderHost 全类和 5 项 automatic Header 相邻回归通过。自审确认 bootstrap 不发布正式测量日志、不改变 UIView/UIViewController containment 或 preferredContentSize 优先级，结构测量会先清理 viewport/page 两层 presentation，Public API 不变。
 
 ---
 

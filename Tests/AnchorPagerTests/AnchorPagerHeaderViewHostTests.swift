@@ -42,9 +42,11 @@ final class AnchorPagerHeaderViewHostTests: XCTestCase {
         let headerView = CountingHeaderView()
         let host = AnchorPagerHeaderViewHost()
 
-        host.install(.view(headerView), in: parent)
-        host.install(.view(headerView), in: parent)
+        let didInstall = host.install(.view(headerView), in: parent)
+        let didReinstall = host.install(.view(headerView), in: parent)
 
+        XCTAssertTrue(didInstall)
+        XCTAssertFalse(didReinstall)
         XCTAssertTrue(headerView.superview === host.view)
         XCTAssertEqual(headerView.removeFromSuperviewCallCount, 0)
         XCTAssertEqual(host.view.subviews.filter { $0 === headerView }.count, 1)
@@ -82,6 +84,24 @@ final class AnchorPagerHeaderViewHostTests: XCTestCase {
         let height = host.measure(in: CGSize(width: 320, height: 0))
 
         XCTAssertEqual(height, 64)
+    }
+
+    @MainActor
+    func testBootstrapMeasurementReturnsFittingHeightWithoutPublishingFormalMeasurementLog() {
+        let parent = UIViewController()
+        parent.loadViewIfNeeded()
+        let headerView = FixedFittingView(height: 64)
+        let host = AnchorPagerHeaderViewHost()
+        host.install(.view(headerView), in: parent)
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+
+        let height = host.bootstrapMeasurement(in: CGSize(width: 320, height: 0))
+
+        XCTAssertEqual(height, 64)
+        XCTAssertFalse(events.contains { $0.event == "header.measure" })
+        XCTAssertFalse(events.contains { $0.event == "header.measure.invalid" })
     }
 
     @MainActor

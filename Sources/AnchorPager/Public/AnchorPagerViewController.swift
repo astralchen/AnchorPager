@@ -357,7 +357,14 @@ open class AnchorPagerViewController: UIViewController {
 
     private func installHeaderHost() {
         let headerContent = currentHeaderContent ?? .view(UIView())
-        headerViewHost.install(headerContent, in: self, hostParentView: viewportView)
+        let didReplaceHeader = headerViewHost.install(
+            headerContent,
+            in: self,
+            hostParentView: viewportView
+        )
+        if didReplaceHeader {
+            lastMeasuredHeaderHeight = nil
+        }
 
         if headerHeightConstraint == nil {
             let headerHeightConstraint = headerViewHost.view.heightAnchor.constraint(equalToConstant: 0)
@@ -533,16 +540,18 @@ open class AnchorPagerViewController: UIViewController {
 
     private func measureHeaderHeight(in environment: LayoutEnvironment) -> CGFloat {
         viewportView.transform = .identity
+        _ = pagingHost.setPagePresentationTranslationY(0)
         headerViewHost.setTopOffset(environment.bounds.minY + environment.obstruction.top)
-        headerHeightConstraint?.constant = lastMeasuredHeaderHeight ?? 0
+        let fittingSize = CGSize(
+            width: environment.bounds.width,
+            height: UIView.layoutFittingCompressedSize.height
+        )
+        let neutralHeight = lastMeasuredHeaderHeight
+            ?? headerViewHost.bootstrapMeasurement(in: fittingSize)
+        headerHeightConstraint?.constant = neutralHeight
         view.layoutIfNeeded()
 
-        return headerViewHost.measure(
-            in: CGSize(
-                width: environment.bounds.width,
-                height: UIView.layoutFittingCompressedSize.height
-            )
-        )
+        return headerViewHost.measure(in: fittingSize)
     }
 
     private func containerPresentation(

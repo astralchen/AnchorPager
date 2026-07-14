@@ -102,13 +102,15 @@ Example 显示帧探针必须分别记录 chrome 与 page presentation。plain b
 流程：
 
 1. 清除 viewport/page presentation transform，把 Header host 放到 `bounds.minY + topObstruction`。
-2. 若存在最近一次有效纯内容高度，继续使用该高度建立中立几何。
-3. 若没有缓存，先对当前 Header 内容执行一次不发布状态的 compressed fitting，得到 finite、nonnegative bootstrap seed。
+2. Header measurement cache 只属于当前正在显示的 Header 身份；`UIView`/`UIViewController` 内容身份变化时必须先使旧缓存失效，空占位 Header 的 `0` 不得成为真实 Header 的 seed。
+3. 若当前 Header 身份存在最近一次有效纯内容高度，继续使用该高度建立中立几何；否则先对当前 Header 内容执行一次不发布状态的 compressed fitting，得到 finite、nonnegative bootstrap seed。
 4. 把 seed 写入 host required height 后同步 layout，使 Header 自身顶部 safe area 在中立位置归零。
 5. 再执行现有正式 fitting measurement，正式结果才更新 `lastMeasuredHeaderHeight`、canonical output 和既有 `header.measure` 日志。
 6. bootstrap 为 `0` 只允许表示 Header 确实没有可测内容；带 required 内部内容约束的非空 Header 不得经历 zero-height layout。
 
 bootstrap 阶段不更新 layout context、collapse progress、scroll range、managed inset、frame 日志缓存或 page presentation。Header UIViewController containment 与 `preferredContentSize.height` 优先级保持不变。
+
+`AnchorPagerHeaderViewHost.install` 需要向 ViewController 返回内容是否发生身份替换；该结果仅用于使 `lastMeasuredHeaderHeight` 失效，不改变安装日志、containment 或 Public API。同一内容重复安装继续保持 no-op，并保留当前身份的 measurement cache。
 
 ## 生命周期与清理
 
