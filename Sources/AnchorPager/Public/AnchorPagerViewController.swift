@@ -110,6 +110,8 @@ open class AnchorPagerViewController: UIViewController {
 
     deinit {
         MainActor.assumeIsolated {
+            viewportView.transform = .identity
+            _ = pagingHost.setPagePresentationTranslationY(0)
             scrollCoordinator?.invalidate()
             pageStateStore.releaseAll()
             managedInsetCoordinator.releaseAll()

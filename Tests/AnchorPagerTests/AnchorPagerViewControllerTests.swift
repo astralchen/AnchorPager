@@ -2225,6 +2225,38 @@ final class AnchorPagerViewControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testDeinitResetsPagePresentationSurface() throws {
+        let dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [UIViewController()]
+        )
+        weak var weakPager: AnchorPagerViewController?
+        var pageSurface: UIView?
+
+        try autoreleasepool {
+            let pager = AnchorPagerViewController()
+            weakPager = pager
+            pager.dataSource = dataSource
+            pager.view.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
+            pager.loadViewIfNeeded()
+            pager.reloadData()
+            pager.view.layoutIfNeeded()
+            let pagingHost = try XCTUnwrap(installedPagingHost(in: pager))
+            let adapter = try XCTUnwrap(pagingHost.activeAdapter)
+            let pageViewController = try XCTUnwrap(
+                adapter.children.compactMap { $0 as? UIPageViewController }.first
+            )
+            pageSurface = pageViewController.view
+
+            XCTAssertTrue(pagingHost.setPagePresentationTranslationY(-24))
+            XCTAssertEqual(try XCTUnwrap(pageSurface).transform.ty, -24, accuracy: 0.5)
+        }
+
+        XCTAssertNil(weakPager)
+        XCTAssertEqual(try XCTUnwrap(pageSurface).transform, .identity)
+    }
+
+    @MainActor
     func testSharedExplicitScrollTargetUsesOriginalLaterPageWithNilBindingAndWritesLog() throws {
         let sharedScrollView = UIScrollView()
         let first = ExplicitScrollChildViewController(scrollView: sharedScrollView)
