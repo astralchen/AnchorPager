@@ -11,6 +11,10 @@ struct AnchorPagerExampleTests {
             hasScrollTarget: true,
             mode: "container",
             collapseProgress: 1,
+            containerTopInset: 59,
+            headerHeight: 100,
+            maximumHeaderHeightDelta: 0.25,
+            headerCollapseTranslation: 80,
             childDistance: 42,
             containerPresentation: 1.25,
             maximumContainerTopPresentation: 12.5,
@@ -25,7 +29,7 @@ struct AnchorPagerExampleTests {
 
         #expect(
             state.accessibilityValue
-                == "page=long;hasScrollTarget=1;mode=container;collapse=1.00;distance=42.00;containerCurrent=1.25;containerTopMax=12.50;containerBottomMax=8.00;barCurrent=-0.25;barMax=0.75;childTopCurrent=2.00;childTopMax=5.00;childBottomCurrent=4.00;childBottomMax=7.00"
+                == "page=long;hasScrollTarget=1;mode=container;collapse=1.00;containerTopInset=59.00;headerHeight=100.00;headerHeightDeltaMax=0.25;headerCollapse=80.00;distance=42.00;containerCurrent=1.25;containerTopMax=12.50;containerBottomMax=8.00;barCurrent=-0.25;barMax=0.75;childTopCurrent=2.00;childTopMax=5.00;childBottomCurrent=4.00;childBottomMax=7.00"
         )
     }
 
@@ -35,6 +39,10 @@ struct AnchorPagerExampleTests {
             hasScrollTarget: false,
             mode: "container",
             collapseProgress: 1,
+            containerTopInset: 0,
+            headerHeight: 100,
+            maximumHeaderHeightDelta: 0,
+            headerCollapseTranslation: 80,
             childDistance: 0,
             containerPresentation: 0,
             maximumContainerTopPresentation: 0,
@@ -49,7 +57,7 @@ struct AnchorPagerExampleTests {
 
         #expect(
             state.accessibilityValue
-                == "page=plain;hasScrollTarget=0;mode=container;collapse=1.00;distance=0.00;containerCurrent=0.00;containerTopMax=0.00;containerBottomMax=0.00;barCurrent=0.00;barMax=0.00;childTopCurrent=0.00;childTopMax=0.00;childBottomCurrent=0.00;childBottomMax=0.00"
+                == "page=plain;hasScrollTarget=0;mode=container;collapse=1.00;containerTopInset=0.00;headerHeight=100.00;headerHeightDeltaMax=0.00;headerCollapse=80.00;distance=0.00;containerCurrent=0.00;containerTopMax=0.00;containerBottomMax=0.00;barCurrent=0.00;barMax=0.00;childTopCurrent=0.00;childTopMax=0.00;childBottomCurrent=0.00;childBottomMax=0.00"
         )
     }
 
@@ -59,6 +67,10 @@ struct AnchorPagerExampleTests {
             hasScrollTarget: true,
             mode: "container",
             collapseProgress: 0,
+            containerTopInset: 59,
+            headerHeight: 100,
+            maximumHeaderHeightDelta: 3,
+            headerCollapseTranslation: 40,
             childDistance: 0,
             containerPresentation: 3,
             maximumContainerTopPresentation: 12,
@@ -76,12 +88,56 @@ struct AnchorPagerExampleTests {
         #expect(state.containerPresentation == 0)
         #expect(state.maximumContainerTopPresentation == 0)
         #expect(state.maximumContainerBottomPresentation == 0)
+        #expect(state.containerTopInset == 59)
+        #expect(state.headerHeight == 100)
+        #expect(state.maximumHeaderHeightDelta == 0)
+        #expect(state.headerCollapseTranslation == 0)
         #expect(state.barPresentation == 0)
         #expect(state.maximumBarPresentation == 0)
         #expect(state.childTopOverflow == 0)
         #expect(state.maximumChildTopOverflow == 0)
         #expect(state.childBottomOverflow == 0)
         #expect(state.maximumChildBottomOverflow == 0)
+    }
+
+    @Test func scrollCoordinationStateRecordsStableHeaderGeometry() {
+        var state = ExampleScrollCoordinationState(
+            page: "short",
+            hasScrollTarget: true,
+            mode: "container",
+            collapseProgress: 0.5,
+            containerTopInset: 59,
+            headerHeight: 100,
+            maximumHeaderHeightDelta: 0,
+            headerCollapseTranslation: 0,
+            childDistance: 0,
+            containerPresentation: 0,
+            maximumContainerTopPresentation: 0,
+            maximumContainerBottomPresentation: 0,
+            barPresentation: 0,
+            maximumBarPresentation: 0,
+            childTopOverflow: 0,
+            maximumChildTopOverflow: 0,
+            childBottomOverflow: 0,
+            maximumChildBottomOverflow: 0
+        )
+
+        state.recordHeaderGeometry(
+            currentHeight: 99.8,
+            baselineHeight: 100,
+            currentMinY: 29,
+            baselineMinY: 59
+        )
+        state.recordHeaderGeometry(
+            currentHeight: 100.3,
+            baselineHeight: 100,
+            currentMinY: 19,
+            baselineMinY: 59
+        )
+
+        #expect(abs(state.headerHeight - 100.3) < 0.001)
+        #expect(abs(state.maximumHeaderHeightDelta - 0.3) < 0.001)
+        #expect(abs(state.headerCollapseTranslation - 40) < 0.001)
     }
 
     @Test func rootControllerInstallsAnchorPager() {
@@ -212,7 +268,8 @@ struct AnchorPagerExampleTests {
             try await waitForInitialSelection(in: pagerViewController)
             let layoutProbe = LayoutProbe()
             pagerViewController.delegate = layoutProbe
-            pagerViewController.verticalScrollView.contentOffset = CGPoint(x: 0, y: 80)
+            let insideTopInset = pagerViewController.verticalScrollView.contentInset.top
+            pagerViewController.verticalScrollView.contentOffset.y = 80 - insideTopInset
             pagerViewController.reloadHeaderLayout(offsetAdjustment: .preserveVisualPosition)
             window.layoutIfNeeded()
             let collapsedContext = try #require(layoutProbe.layoutContexts.last)
@@ -243,14 +300,20 @@ struct AnchorPagerExampleTests {
                 }
             )
             let expectedHeaderHeight = collapsedContext.headerFrame.height
-                + collapsedContext.headerFrame.minY
+                + insideTopInset
 
             #expect(
                 refreshedHeaderMenu.children.compactMap { $0 as? UIAction }.map(\.state)
                     == [.off, .on]
             )
+            #expect(abs(pagerViewController.verticalScrollView.contentInset.top) < 0.5)
             #expect(abs(pagerViewController.verticalScrollView.contentOffset.y - 80) < 0.5)
-            #expect(abs(switchedContext.headerFrame.minY) < 0.5)
+            #expect(
+                abs(
+                    switchedContext.headerFrame.minY
+                        - (collapsedContext.headerFrame.minY - insideTopInset)
+                ) < 0.5
+            )
             #expect(abs(switchedContext.headerFrame.height - expectedHeaderHeight) < 0.5)
             #expect(abs(switchedContext.barFrame.minY - switchedContext.headerFrame.maxY) < 0.5)
             #expect(abs(switchedContext.barFrame.minY - collapsedContext.barFrame.minY) < 0.5)

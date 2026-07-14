@@ -16,6 +16,7 @@ final class ExamplePagerViewController: UIViewController {
     private lazy var pages = makePages()
     private var didApplyInitialContainerState = false
     private var expandedHeaderBaselineY: CGFloat?
+    private var expandedHeaderBaselineHeight: CGFloat?
     private var expandedBarBaselineY: CGFloat?
     private var collapsedBarBaselineY: CGFloat?
     private var collapsedContentBaselineY: CGFloat?
@@ -25,6 +26,10 @@ final class ExamplePagerViewController: UIViewController {
         hasScrollTarget: true,
         mode: "container",
         collapseProgress: 0,
+        containerTopInset: 0,
+        headerHeight: 0,
+        maximumHeaderHeightDelta: 0,
+        headerCollapseTranslation: 0,
         childDistance: 0,
         containerPresentation: 0,
         maximumContainerTopPresentation: 0,
@@ -89,6 +94,7 @@ final class ExamplePagerViewController: UIViewController {
 
     @objc private func reloadPages() {
         scrollCoordinationState.resetPresentationMetrics()
+        resetHeaderGeometryBaseline()
         updateScrollCoordinationStateControl()
         pageGeneration += 1
         pages = makePages()
@@ -201,9 +207,12 @@ final class ExamplePagerViewController: UIViewController {
     private func setHeaderTopBehavior(_ behavior: AnchorPagerHeaderTopBehavior) {
         guard pagerViewController.configuration.header.topBehavior != behavior else { return }
 
+        scrollCoordinationState.resetPresentationMetrics()
+        resetHeaderGeometryBaseline()
         pagerViewController.configuration.header.topBehavior = behavior
         pagerViewController.reloadHeaderLayout(offsetAdjustment: .preserveVisualPosition)
         updateSettingsMenu()
+        updateScrollCoordinationStateControl()
     }
 
     private func title(for behavior: AnchorPagerHeaderTopBehavior) -> String {
@@ -299,25 +308,47 @@ final class ExamplePagerViewController: UIViewController {
 
     private func recordContainerPresentation(_ context: AnchorPagerLayoutContext) {
         let scrollView = pagerViewController.verticalScrollView
-        let maximumOffset = max(0, scrollView.contentSize.height - scrollView.bounds.height)
-        let topOverflow = max(0, -scrollView.contentOffset.y)
-        let bottomOverflow = max(0, scrollView.contentOffset.y - maximumOffset)
+        let expandedRawOffset = -scrollView.contentInset.top
+        let maximumRawOffset = max(
+            expandedRawOffset,
+            scrollView.contentSize.height
+                - scrollView.bounds.height
+                + scrollView.contentInset.bottom
+        )
+        let topOverflow = max(0, expandedRawOffset - scrollView.contentOffset.y)
+        let bottomOverflow = max(0, scrollView.contentOffset.y - maximumRawOffset)
         let isStable = topOverflow <= 0.5 && bottomOverflow <= 0.5
+        scrollCoordinationState.containerTopInset = scrollView.contentInset.top
 
         if isStable {
             scrollCoordinationState.containerPresentation = 0
             scrollCoordinationState.barPresentation = 0
             if scrollCoordinationState.collapseProgress <= 0.01 {
                 expandedHeaderBaselineY = context.headerFrame.minY
+                expandedHeaderBaselineHeight = context.headerFrame.height
                 expandedBarBaselineY = context.barFrame.minY
             }
             if scrollCoordinationState.collapseProgress >= 0.99 {
                 collapsedBarBaselineY = context.barFrame.minY
                 collapsedContentBaselineY = context.contentFrame.minY
             }
-        } else if topOverflow > 0.5,
-                  let headerBaseline = expandedHeaderBaselineY,
-                  let barBaseline = expandedBarBaselineY {
+        }
+
+        if let headerBaselineY = expandedHeaderBaselineY,
+           let headerBaselineHeight = expandedHeaderBaselineHeight {
+            scrollCoordinationState.recordHeaderGeometry(
+                currentHeight: context.headerFrame.height,
+                baselineHeight: headerBaselineHeight,
+                currentMinY: context.headerFrame.minY,
+                baselineMinY: headerBaselineY
+            )
+        } else {
+            scrollCoordinationState.headerHeight = context.headerFrame.height
+        }
+
+        if topOverflow > 0.5,
+           let headerBaseline = expandedHeaderBaselineY,
+           let barBaseline = expandedBarBaselineY {
             let presentation = context.headerFrame.minY - headerBaseline
             let barPresentation = context.barFrame.minY - barBaseline
             scrollCoordinationState.containerPresentation = presentation
@@ -347,6 +378,14 @@ final class ExamplePagerViewController: UIViewController {
             )
         }
         updateScrollCoordinationStateControl()
+    }
+
+    private func resetHeaderGeometryBaseline() {
+        expandedHeaderBaselineY = nil
+        expandedHeaderBaselineHeight = nil
+        expandedBarBaselineY = nil
+        collapsedBarBaselineY = nil
+        collapsedContentBaselineY = nil
     }
 
     private func updateScrollCoordinationStateControl() {

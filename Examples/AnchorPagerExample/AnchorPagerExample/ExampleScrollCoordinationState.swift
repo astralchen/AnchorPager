@@ -6,6 +6,10 @@ struct ExampleScrollCoordinationState: Equatable {
     var hasScrollTarget: Bool
     var mode: String
     var collapseProgress: CGFloat
+    var containerTopInset: CGFloat
+    var headerHeight: CGFloat
+    var maximumHeaderHeightDelta: CGFloat
+    var headerCollapseTranslation: CGFloat
     var childDistance: CGFloat
     var containerPresentation: CGFloat
     var maximumContainerTopPresentation: CGFloat
@@ -23,6 +27,10 @@ struct ExampleScrollCoordinationState: Equatable {
             "hasScrollTarget=\(hasScrollTarget ? 1 : 0)",
             "mode=\(mode)",
             "collapse=\(formatted(collapseProgress))",
+            "containerTopInset=\(formatted(containerTopInset))",
+            "headerHeight=\(formatted(headerHeight))",
+            "headerHeightDeltaMax=\(formatted(maximumHeaderHeightDelta))",
+            "headerCollapse=\(formatted(headerCollapseTranslation))",
             "distance=\(formatted(childDistance))",
             "containerCurrent=\(formatted(containerPresentation))",
             "containerTopMax=\(formatted(maximumContainerTopPresentation))",
@@ -37,6 +45,8 @@ struct ExampleScrollCoordinationState: Equatable {
     }
 
     mutating func resetPresentationMetrics() {
+        maximumHeaderHeightDelta = 0
+        headerCollapseTranslation = 0
         containerPresentation = 0
         maximumContainerTopPresentation = 0
         maximumContainerBottomPresentation = 0
@@ -46,6 +56,20 @@ struct ExampleScrollCoordinationState: Equatable {
         maximumChildTopOverflow = 0
         childBottomOverflow = 0
         maximumChildBottomOverflow = 0
+    }
+
+    mutating func recordHeaderGeometry(
+        currentHeight: CGFloat,
+        baselineHeight: CGFloat,
+        currentMinY: CGFloat,
+        baselineMinY: CGFloat
+    ) {
+        headerHeight = currentHeight
+        maximumHeaderHeightDelta = max(
+            maximumHeaderHeightDelta,
+            abs(currentHeight - baselineHeight)
+        )
+        headerCollapseTranslation = max(0, baselineMinY - currentMinY)
     }
 
     private func formatted(_ value: CGFloat) -> String {

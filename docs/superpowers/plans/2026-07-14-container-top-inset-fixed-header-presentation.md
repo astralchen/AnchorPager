@@ -988,7 +988,7 @@ git commit -m "接入主容器安全区 inset"
 - Replaces Example raw-top assumption with inset-aware expanded/maximum raw boundaries。
 - Preserves: 统一齿轮菜单、Header top behavior 菜单和 top overscroll mode 菜单。
 
-- [ ] **Step 1：先扩展 probe 序列化 RED**
+- [x] **Step 1：先扩展 probe 序列化 RED**
 
 在 `ExampleScrollCoordinationState` 增加：
 
@@ -1010,7 +1010,7 @@ headerCollapse
 
 先更新 `AnchorPagerExampleTests` 的完整 probe 字符串、record/reset 测试，使其因生产字段不存在而失败。reset 必须把本次 interaction 的最大高度差和 collapse translation 清零，不清除当前菜单选择。
 
-- [ ] **Step 2：运行 Example unit RED**
+- [x] **Step 2：运行 Example unit RED**
 
 ```bash
 xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' -only-testing:AnchorPagerExampleTests test
@@ -1018,7 +1018,7 @@ xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorP
 
 预期：新字段/记录接口缺失导致编译或断言失败。
 
-- [ ] **Step 3：实现 inset-aware boundary 与 Header 几何采样**
+- [x] **Step 3：实现 inset-aware boundary 与 Header 几何采样**
 
 Example container boundary 统一改为：
 
@@ -1036,7 +1036,7 @@ let bottomOverflow = max(0, scrollView.contentOffset.y - maximumRawOffset)
 
 每次低频探针采样写入 `containerTopInset`。在 expanded stable 状态记录 Header baseline height/minY；正常折叠期间记录当前 `headerHeight`、`maximumHeaderHeightDelta = max(old, abs(currentHeight - baselineHeight))`、`headerCollapseTranslation = max(0, baselineMinY - currentMinY)`。顶部行为切换、reload 与页面 generation reset 时重建 baseline，避免跨结构比较。
 
-- [ ] **Step 4：增加真实菜单与手势 UI RED/GREEN**
+- [x] **Step 4：增加真实菜单与手势 UI RED/GREEN**
 
 UI parser 增加四个字段，并新增：
 
@@ -1055,7 +1055,7 @@ XCTAssertLessThan(state.maximumHeaderHeightDelta, 0.5)
 
 通过齿轮菜单切换 extends 后断言 `containerTopInset < 0.5`，同一逻辑折叠位置的 bar current/presentation 差小于 `1`。随后完整运行既有 `.none/.container/.child` 顶部、plain bottom、真实 child bottom、切页/reload/cancel 菜单 UI，确认 owner 排他和业务 bounce 配置不变。
 
-- [ ] **Step 5：运行 Example unit、聚焦 UI 与完整 UI**
+- [x] **Step 5：运行 Example unit、聚焦 UI 与完整 UI**
 
 ```bash
 xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' -only-testing:AnchorPagerExampleTests test
@@ -1066,7 +1066,9 @@ git diff --check
 
 预期：Header height delta 上限小于 `0.5pt`；inside/extends inset 与菜单选中态一致；全部既有真实 pan UI 通过。
 
-- [ ] **Step 6：自审并提交 Task 6**
+- [x] **Step 6：自审并提交 Task 6**
+
+自审确认新增 probe key、Header baseline 与边界采样全部局限在 Example/测试，不进入 Framework public API；采样使用真实 container inset 与最大 raw boundary，不写 os.Logger。菜单继续只调用现有 `configuration.header.topBehavior` 和 `reloadHeaderLayout`，没有测试专用生产分支；完整 Example unit 与顺序 UI 套件均通过。
 
 自审确认 probe 只用于 Example/测试、不进入 Framework public API；采样不逐帧写 os.Logger；菜单切换调用现有 public API，未加入测试专用生产分支。
 

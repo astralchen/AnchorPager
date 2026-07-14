@@ -263,6 +263,53 @@ final class AnchorPagerExampleUITests: XCTestCase {
     }
 
     @MainActor
+    func testInsideSafeAreaUsesTopInsetAndKeepsHeaderHeightDuringCollapse() throws {
+        let app = XCUIApplication()
+        app.launch()
+        let probe = scrollCoordinationStateProbe(in: app)
+        XCTAssertNotNil(waitForScrollState(from: probe) {
+            $0.containerTopInset > 1 && $0.headerHeight > 1
+        })
+        probe.tap()
+
+        drag(in: app, from: 0.62, to: 0.50)
+
+        let state = try XCTUnwrap(waitForScrollState(from: probe) {
+            $0.containerTopInset > 1
+                && $0.headerCollapse > 1
+                && $0.headerHeightDeltaMax < 0.5
+        })
+        XCTAssertGreaterThan(state.headerHeight, 1)
+        XCTAssertLessThan(state.headerHeightDeltaMax, 0.5)
+    }
+
+    @MainActor
+    func testExtendsUnderTopSafeAreaUsesZeroTopInsetAndPreservesBarPosition() throws {
+        let app = XCUIApplication()
+        app.launch()
+        let probe = scrollCoordinationStateProbe(in: app)
+        let barItem = app.descendants(matching: .any)["短页"]
+        XCTAssertTrue(barItem.waitForExistence(timeout: 3))
+        drag(in: app, from: 0.62, to: 0.50)
+        XCTAssertNotNil(waitForScrollState(from: probe) {
+            $0.containerTopInset > 1 && $0.headerCollapse > 1
+        })
+        let beforeBarMinY = barItem.frame.minY
+
+        openSettingsSubmenu(named: "Header 顶部行为", in: app)
+        let extendsAction = app.buttons["延伸到顶部"]
+        XCTAssertTrue(extendsAction.waitForExistence(timeout: 3))
+        extendsAction.tap()
+
+        let state = try XCTUnwrap(waitForScrollState(from: probe) {
+            $0.containerTopInset < 0.5
+                && abs($0.barCurrent) < 0.5
+        })
+        XCTAssertEqual(barItem.frame.minY, beforeBarMinY, accuracy: 1)
+        XCTAssertLessThan(state.headerHeightDeltaMax, 0.5)
+    }
+
+    @MainActor
     func testUnifiedSettingsMenuSwitchesTopOverscrollMode() throws {
         let app = XCUIApplication()
         app.launch()
@@ -666,6 +713,10 @@ private struct ScrollCoordinationState {
     let hasScrollTarget: Bool
     let mode: String
     let collapse: CGFloat
+    let containerTopInset: CGFloat
+    let headerHeight: CGFloat
+    let headerHeightDeltaMax: CGFloat
+    let headerCollapse: CGFloat
     let distance: CGFloat
     let containerCurrent: CGFloat
     let containerTopMax: CGFloat
@@ -704,6 +755,14 @@ private struct ScrollCoordinationState {
               let mode = fields["mode"],
               let collapseValue = fields["collapse"],
               let collapse = Double(collapseValue),
+              let containerTopInsetValue = fields["containerTopInset"],
+              let containerTopInset = Double(containerTopInsetValue),
+              let headerHeightValue = fields["headerHeight"],
+              let headerHeight = Double(headerHeightValue),
+              let headerHeightDeltaMaxValue = fields["headerHeightDeltaMax"],
+              let headerHeightDeltaMax = Double(headerHeightDeltaMaxValue),
+              let headerCollapseValue = fields["headerCollapse"],
+              let headerCollapse = Double(headerCollapseValue),
               let distanceValue = fields["distance"],
               let distance = Double(distanceValue),
               let containerCurrentValue = fields["containerCurrent"],
@@ -730,6 +789,10 @@ private struct ScrollCoordinationState {
         self.hasScrollTarget = hasScrollTargetValue == "1"
         self.mode = mode
         self.collapse = CGFloat(collapse)
+        self.containerTopInset = CGFloat(containerTopInset)
+        self.headerHeight = CGFloat(headerHeight)
+        self.headerHeightDeltaMax = CGFloat(headerHeightDeltaMax)
+        self.headerCollapse = CGFloat(headerCollapse)
         self.distance = CGFloat(distance)
         self.containerCurrent = CGFloat(containerCurrent)
         self.containerTopMax = CGFloat(containerTopMax)
