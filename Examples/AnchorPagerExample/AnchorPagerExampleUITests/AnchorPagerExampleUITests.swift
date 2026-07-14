@@ -248,17 +248,37 @@ final class AnchorPagerExampleUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
 
-        let behaviorButton = app.navigationBars["AnchorPager"].buttons["Header 顶部行为"]
-        XCTAssertTrue(behaviorButton.waitForExistence(timeout: 3))
-        XCTAssertEqual(behaviorButton.value as? String, "安全区内")
-
-        behaviorButton.tap()
-
+        openSettingsSubmenu(named: "Header 顶部行为", in: app)
+        let safeAreaAction = app.buttons["安全区内"]
         let extendedAction = app.buttons["延伸到顶部"]
+        XCTAssertTrue(safeAreaAction.waitForExistence(timeout: 3))
         XCTAssertTrue(extendedAction.waitForExistence(timeout: 3))
+        XCTAssertTrue(safeAreaAction.isSelected)
         extendedAction.tap()
 
-        XCTAssertEqual(behaviorButton.value as? String, "延伸到顶部")
+        openSettingsSubmenu(named: "Header 顶部行为", in: app)
+        let refreshedExtendedAction = app.buttons["延伸到顶部"]
+        XCTAssertTrue(refreshedExtendedAction.waitForExistence(timeout: 3))
+        XCTAssertTrue(refreshedExtendedAction.isSelected)
+    }
+
+    @MainActor
+    func testUnifiedSettingsMenuSwitchesTopOverscrollMode() throws {
+        let app = XCUIApplication()
+        app.launch()
+        let probe = scrollCoordinationStateProbe(in: app)
+        XCTAssertNotNil(waitForScrollState(from: probe) {
+            $0.mode == "container" && $0.hasZeroPresentationMetrics
+        })
+
+        openSettingsSubmenu(named: "顶部回弹模式", in: app)
+        let childAction = app.buttons["子页面"]
+        XCTAssertTrue(childAction.waitForExistence(timeout: 3))
+        childAction.tap()
+
+        XCTAssertNotNil(waitForScrollState(from: probe) {
+            $0.mode == "child" && $0.hasZeroPresentationMetrics
+        })
     }
 
     @MainActor
@@ -269,16 +289,14 @@ final class AnchorPagerExampleUITests: XCTestCase {
         let navigationBar = app.navigationBars["AnchorPager"]
         let title = app.staticTexts["AnchorPager Example"]
         let subtitle = app.staticTexts["Header UIView、显式 scroll view、无 scroll view child"]
-        let behaviorButton = navigationBar.buttons["Header 顶部行为"]
         XCTAssertTrue(navigationBar.waitForExistence(timeout: 3))
         XCTAssertTrue(title.waitForExistence(timeout: 3))
         XCTAssertTrue(subtitle.waitForExistence(timeout: 3))
-        XCTAssertTrue(behaviorButton.waitForExistence(timeout: 3))
         XCTAssertEqual(title.frame.minY, navigationBar.frame.maxY + 20, accuracy: 1)
         XCTAssertEqual(subtitle.frame.minY - title.frame.maxY, 8, accuracy: 1)
         XCTAssertLessThanOrEqual(title.frame.height, 44)
 
-        behaviorButton.tap()
+        openSettingsSubmenu(named: "Header 顶部行为", in: app)
         let extendedAction = app.buttons["延伸到顶部"]
         XCTAssertTrue(extendedAction.waitForExistence(timeout: 3))
         extendedAction.tap()
@@ -296,12 +314,11 @@ final class AnchorPagerExampleUITests: XCTestCase {
         let tabItem = app.descendants(matching: .any)["短页"]
         XCTAssertTrue(tabItem.waitForExistence(timeout: 3))
         let initialMinY = tabItem.frame.minY
-        let behaviorButton = app.navigationBars["AnchorPager"].buttons["Header 顶部行为"]
 
-        behaviorButton.tap()
+        openSettingsSubmenu(named: "Header 顶部行为", in: app)
         XCTAssertTrue(app.buttons["延伸到顶部"].waitForExistence(timeout: 3))
         app.buttons["延伸到顶部"].tap()
-        behaviorButton.tap()
+        openSettingsSubmenu(named: "Header 顶部行为", in: app)
         XCTAssertTrue(app.buttons["安全区内"].waitForExistence(timeout: 3))
         app.buttons["安全区内"].tap()
 
@@ -567,6 +584,17 @@ final class AnchorPagerExampleUITests: XCTestCase {
         app.navigationBars["AnchorPager"].buttons["打开 AnchorPager"].tap()
         XCTAssertTrue(app.navigationBars["AnchorPager"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.staticTexts["AnchorPager Example"].waitForExistence(timeout: 3))
+    }
+
+    @MainActor
+    private func openSettingsSubmenu(named title: String, in app: XCUIApplication) {
+        let settingsButton = app.navigationBars["AnchorPager"].buttons["示例设置"]
+        XCTAssertTrue(settingsButton.waitForExistence(timeout: 3))
+        settingsButton.tap()
+
+        let submenu = app.buttons[title]
+        XCTAssertTrue(submenu.waitForExistence(timeout: 3))
+        submenu.tap()
     }
 
     @MainActor

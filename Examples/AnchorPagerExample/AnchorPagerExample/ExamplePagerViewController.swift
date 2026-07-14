@@ -11,8 +11,7 @@ final class ExamplePagerViewController: UIViewController {
         }
         return ExampleAppearanceRecorder()
     }()
-    private var headerTopBehaviorItem: UIBarButtonItem?
-    private var topOverscrollHandlingItem: UIBarButtonItem?
+    private var settingsItem: UIBarButtonItem?
     private var pageGeneration = 1
     private lazy var pages = makePages()
     private var didApplyInitialContainerState = false
@@ -72,10 +71,8 @@ final class ExamplePagerViewController: UIViewController {
         )
         pushItem.accessibilityLabel = "打开 AnchorPager"
 
-        let headerTopBehaviorItem = makeHeaderTopBehaviorItem()
-        self.headerTopBehaviorItem = headerTopBehaviorItem
-        let topOverscrollHandlingItem = makeTopOverscrollHandlingItem()
-        self.topOverscrollHandlingItem = topOverscrollHandlingItem
+        let settingsItem = makeSettingsItem()
+        self.settingsItem = settingsItem
         let reloadItem = UIBarButtonItem(
             image: UIImage(systemName: "arrow.clockwise"),
             style: .plain,
@@ -85,8 +82,7 @@ final class ExamplePagerViewController: UIViewController {
         reloadItem.accessibilityLabel = "重新加载页面"
         navigationItem.rightBarButtonItems = [
             pushItem,
-            topOverscrollHandlingItem,
-            headerTopBehaviorItem,
+            settingsItem,
             reloadItem
         ]
     }
@@ -109,36 +105,37 @@ final class ExamplePagerViewController: UIViewController {
         navigationController?.pushViewController(viewController, animated: true)
     }
 
-    private func makeHeaderTopBehaviorItem() -> UIBarButtonItem {
+    private func makeSettingsItem() -> UIBarButtonItem {
+        let image = UIImage(systemName: "gearshape")
         let item = UIBarButtonItem(
-            title: title(for: pagerViewController.configuration.header.topBehavior),
-            image: nil,
+            title: image == nil ? "设置" : nil,
+            image: image,
             primaryAction: nil,
-            menu: makeHeaderTopBehaviorMenu()
+            menu: makeSettingsMenu()
         )
-        item.accessibilityLabel = "Header 顶部行为"
-        item.accessibilityValue = title(for: pagerViewController.configuration.header.topBehavior)
+        item.accessibilityLabel = "示例设置"
         return item
     }
 
-    private func makeTopOverscrollHandlingItem() -> UIBarButtonItem {
-        let mode = pagerViewController.configuration.topOverscrollHandlingMode
-        let item = UIBarButtonItem(
-            title: title(for: mode),
-            image: nil,
-            primaryAction: nil,
-            menu: makeTopOverscrollHandlingMenu()
+    private func makeSettingsMenu() -> UIMenu {
+        UIMenu(
+            title: "示例设置",
+            children: [
+                makeHeaderTopBehaviorMenu(),
+                makeTopOverscrollHandlingMenu()
+            ]
         )
-        item.accessibilityLabel = "顶部回弹"
-        item.accessibilityValue = title(for: mode)
-        return item
+    }
+
+    private func updateSettingsMenu() {
+        settingsItem?.menu = makeSettingsMenu()
     }
 
     private func makeTopOverscrollHandlingMenu() -> UIMenu {
         let current = pagerViewController.configuration.topOverscrollHandlingMode
         let modes: [AnchorPagerTopOverscrollHandlingMode] = [.none, .container, .child]
         return UIMenu(
-            title: "顶部回弹",
+            title: "顶部回弹模式",
             children: modes.map { mode in
                 UIAction(
                     title: title(for: mode),
@@ -154,15 +151,8 @@ final class ExamplePagerViewController: UIViewController {
         pagerViewController.configuration.topOverscrollHandlingMode = mode
         scrollCoordinationState.mode = identifier(for: mode)
         scrollCoordinationState.resetPresentationMetrics()
-        updateTopOverscrollHandlingItem()
+        updateSettingsMenu()
         updateScrollCoordinationStateControl()
-    }
-
-    private func updateTopOverscrollHandlingItem() {
-        let mode = pagerViewController.configuration.topOverscrollHandlingMode
-        topOverscrollHandlingItem?.title = title(for: mode)
-        topOverscrollHandlingItem?.accessibilityValue = title(for: mode)
-        topOverscrollHandlingItem?.menu = makeTopOverscrollHandlingMenu()
     }
 
     private func title(for mode: AnchorPagerTopOverscrollHandlingMode) -> String {
@@ -213,14 +203,7 @@ final class ExamplePagerViewController: UIViewController {
 
         pagerViewController.configuration.header.topBehavior = behavior
         pagerViewController.reloadHeaderLayout(offsetAdjustment: .preserveVisualPosition)
-        updateHeaderTopBehaviorItem()
-    }
-
-    private func updateHeaderTopBehaviorItem() {
-        let currentTitle = title(for: pagerViewController.configuration.header.topBehavior)
-        headerTopBehaviorItem?.title = currentTitle
-        headerTopBehaviorItem?.accessibilityValue = currentTitle
-        headerTopBehaviorItem?.menu = makeHeaderTopBehaviorMenu()
+        updateSettingsMenu()
     }
 
     private func title(for behavior: AnchorPagerHeaderTopBehavior) -> String {

@@ -98,34 +98,79 @@ struct AnchorPagerExampleTests {
         #expect(viewController?.title == "AnchorPager")
     }
 
-    @Test func pagerNavigationShowsHeaderTopBehaviorMenuWithCurrentConfiguration() {
+    @Test func pagerNavigationShowsUnifiedSettingsMenuWithCurrentConfiguration() throws {
         let viewController = ExamplePagerViewController()
-
         viewController.loadViewIfNeeded()
 
         let items = viewController.navigationItem.rightBarButtonItems ?? []
-        let behaviorItem = items.first { $0.accessibilityLabel == "Header 顶部行为" }
-        let actions = behaviorItem?.menu?.children.compactMap { $0 as? UIAction } ?? []
+        let settingsItem = try #require(items.first {
+            $0.accessibilityLabel == "示例设置"
+        })
+        let submenus = settingsItem.menu?.children.compactMap { $0 as? UIMenu } ?? []
+        let headerMenu = try #require(submenus.first { $0.title == "Header 顶部行为" })
+        let overscrollMenu = try #require(submenus.first { $0.title == "顶部回弹模式" })
+        let headerActions = headerMenu.children.compactMap { $0 as? UIAction }
+        let overscrollActions = overscrollMenu.children.compactMap { $0 as? UIAction }
 
+        #expect(items.count == 3)
         #expect(items.contains { $0.accessibilityLabel == "打开 AnchorPager" })
-        #expect(behaviorItem?.title == "安全区内")
-        #expect(actions.map(\.title) == ["安全区内", "延伸到顶部"])
-        #expect(actions.map(\.state) == [.on, .off])
+        #expect(items.contains { $0.accessibilityLabel == "重新加载页面" })
+        #expect(!items.contains { $0.accessibilityLabel == "Header 顶部行为" })
+        #expect(!items.contains { $0.accessibilityLabel == "顶部回弹" })
+        #expect(settingsItem.image != nil || settingsItem.title == "设置")
+        #expect(submenus.map(\.title) == ["Header 顶部行为", "顶部回弹模式"])
+        #expect(headerActions.map(\.title) == ["安全区内", "延伸到顶部"])
+        #expect(headerActions.map(\.state) == [.on, .off])
+        #expect(overscrollActions.map(\.title) == ["关闭", "容器", "子页面"])
+        #expect(overscrollActions.map(\.state) == [.off, .on, .off])
     }
 
-    @Test func pagerNavigationShowsTopOverscrollMenuWithContainerSelected() {
+    @Test func unifiedSettingsMenuSwitchesTopOverscrollModesAndRefreshesSelection() throws {
+        guard #available(iOS 16.0, *) else { return }
         let viewController = ExamplePagerViewController()
-
         viewController.loadViewIfNeeded()
+        let pager = try #require(
+            viewController.children.compactMap { $0 as? AnchorPagerViewController }.first
+        )
+        let stateProbe = try #require(
+            firstSubview(in: viewController.view, as: UIButton.self) {
+                $0.accessibilityIdentifier == "scroll-coordination-state"
+            }
+        )
 
-        let item = viewController.navigationItem.rightBarButtonItems?.first {
-            $0.accessibilityLabel == "顶部回弹"
+        for (title, expectedMode, expectedIdentifier) in [
+            ("关闭", AnchorPagerTopOverscrollHandlingMode.none, "none"),
+            ("子页面", .child, "child"),
+            ("容器", .container, "container")
+        ] {
+            let settingsItem = try #require(
+                viewController.navigationItem.rightBarButtonItems?.first {
+                    $0.accessibilityLabel == "示例设置"
+                }
+            )
+            let menu = try #require(
+                settingsItem.menu?.children.compactMap { $0 as? UIMenu }.first {
+                    $0.title == "顶部回弹模式"
+                }
+            )
+            let action = try #require(
+                menu.children.compactMap { $0 as? UIAction }.first { $0.title == title }
+            )
+
+            action.performWithSender(nil, target: nil)
+
+            #expect(pager.configuration.topOverscrollHandlingMode == expectedMode)
+            #expect(
+                stateProbe.accessibilityValue?.contains("mode=\(expectedIdentifier)") == true
+            )
+            let refreshedMenu = try #require(
+                settingsItem.menu?.children.compactMap { $0 as? UIMenu }.first {
+                    $0.title == "顶部回弹模式"
+                }
+            )
+            let refreshedActions = refreshedMenu.children.compactMap { $0 as? UIAction }
+            #expect(refreshedActions.filter { $0.state == .on }.map(\.title) == [title])
         }
-        let actions = item?.menu?.children.compactMap { $0 as? UIAction } ?? []
-
-        #expect(item?.accessibilityValue == "容器")
-        #expect(actions.map(\.title) == ["关闭", "容器", "子页面"])
-        #expect(actions.map(\.state) == [.off, .on, .off])
     }
 
     @Test func normalLaunchDoesNotEnableAppearanceRecorder() {
@@ -172,13 +217,18 @@ struct AnchorPagerExampleTests {
             window.layoutIfNeeded()
             let collapsedContext = try #require(layoutProbe.layoutContexts.last)
 
-            let behaviorItem = try #require(
+            let settingsItem = try #require(
                 viewController.navigationItem.rightBarButtonItems?.first {
-                    $0.accessibilityLabel == "Header 顶部行为"
+                    $0.accessibilityLabel == "示例设置"
+                }
+            )
+            let headerMenu = try #require(
+                settingsItem.menu?.children.compactMap { $0 as? UIMenu }.first {
+                    $0.title == "Header 顶部行为"
                 }
             )
             let extendsAction = try #require(
-                behaviorItem.menu?.children.compactMap { $0 as? UIAction }.first {
+                headerMenu.children.compactMap { $0 as? UIAction }.first {
                     $0.title == "延伸到顶部"
                 }
             )
@@ -187,9 +237,18 @@ struct AnchorPagerExampleTests {
             }
             window.layoutIfNeeded()
             let switchedContext = try #require(layoutProbe.layoutContexts.last)
+            let refreshedHeaderMenu = try #require(
+                settingsItem.menu?.children.compactMap { $0 as? UIMenu }.first {
+                    $0.title == "Header 顶部行为"
+                }
+            )
             let expectedHeaderHeight = collapsedContext.headerFrame.height
                 + collapsedContext.headerFrame.minY
 
+            #expect(
+                refreshedHeaderMenu.children.compactMap { $0 as? UIAction }.map(\.state)
+                    == [.off, .on]
+            )
             #expect(abs(pagerViewController.verticalScrollView.contentOffset.y - 80) < 0.5)
             #expect(abs(switchedContext.headerFrame.minY) < 0.5)
             #expect(abs(switchedContext.headerFrame.height - expectedHeaderHeight) < 0.5)
