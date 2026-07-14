@@ -22,7 +22,7 @@ AnchorPager 是一个全新的独立 UIKit 容器框架，用于实现可变 Hea
 
 ### 当前复审门禁
 
-v0.5/v0.6 初次独立复审的 3 个 Important 已在 `f81ca1e` 修复，第二次整分支复审的零稳定区间边界反向切换 Important 已在 `5b80893` 修复，第三次整分支复审的已呈现 `.top/.child` 回稳总量跳变 Important 已在 `128821f` 修复；第二、三次复审的文档 Minor 均已同步修正。第四次整分支独立复审覆盖 `be2d783...13b3d95`，两个 Minor 已在 `b9699b0` 修复。2026-07-14 plain page bottom/bar 安全区和 formal Header bootstrap 回归已修复到 `c37e829`；真实 Header 附着前 required zero-height 缺口随后在 `d6ece31` 修复。该历史终态为 Framework 296/296、Example 38/38（10 单元 + 28 UI）与 generic Simulator build 全部通过。用户随后确认主容器真实 top inset 与固定高度 Header presentation 新契约；专项设计已确认但尚未实施、全量验收或独立复审，因此 v0.5 Task 7 与 v0.6 Ready 门禁当前重新关闭。
+v0.5/v0.6 初次独立复审的 3 个 Important 已在 `f81ca1e` 修复，第二次整分支复审的零稳定区间边界反向切换 Important 已在 `5b80893` 修复，第三次整分支复审的已呈现 `.top/.child` 回稳总量跳变 Important 已在 `128821f` 修复；第二、三次复审的文档 Minor 均已同步修正。第四次整分支独立复审覆盖 `be2d783...13b3d95`，两个 Minor 已在 `b9699b0` 修复。2026-07-14 plain page bottom/bar 安全区、formal Header bootstrap 和真实 Header 附着前 required zero-height 缺口分别修复到 `c37e829`、`d6ece31`。主容器真实 top inset 与固定高度 Header presentation 专项最终生产 HEAD 为 `424a0a3`；fresh-pass 发现的 2 个 Important 与 2 个 Minor 均已按 RED/GREEN 修复，终态 Critical 0、Important 0、Minor 0。Framework 322/322、Example 41/41（11 单元 + 30 UI）与 generic Simulator build 全部通过，0 fail、0 skip、0 error/warning/analyzer warning；v0.5 Task 7 与 v0.6 已恢复 Ready。
 
 ## 3. 参考项目
 

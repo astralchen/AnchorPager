@@ -8,7 +8,7 @@
 
 **技术栈：** Swift 6.2、Swift 6 language mode、UIKit、iOS 14+、Swift Package Manager、Tabman 4.0.1、Pageboy 5.0.2、XCTest/XCUITest、Xcode 26.3。
 
-**当前状态：** 历史 Tasks 1–7 与复审已完成；2026-07-14 主容器真实 top inset、逻辑 offset 与固定高度 Header 专项已完成实现和首轮全量验收（Framework 318/318、Example 41/41、generic build，0 fail/skip/error/warning/analyzer warning），但最终 fresh-pass 尚待完成，因此 v0.5/v0.6 Ready 继续关闭。
+**当前状态：** 已完成；2026-07-14 主容器真实 top inset、逻辑 offset 与固定高度 Header 专项已在生产 HEAD `424a0a3` 完成最终全量验收和 fresh-pass（Framework 322/322、Example 41/41、generic build，0 fail/skip/error/warning/analyzer warning；Critical 0、Important 0、Minor 0），v0.5/v0.6 恢复 Ready。
 
 > 2026-07-14 修订：本文后续 `topOverflow - bottomOverflow`、对称 viewport transform、raw container `0...D` 稳定区间和“整个 viewport 上移”代码/步骤只保留为历史实施记录，不得再次执行；最新契约为 `logical = raw + topInset`、固定 viewport + canonical content normal collapse、container top 共享 viewport、plain bottom Pageboy page surface，详见同日专项设计和计划。
 

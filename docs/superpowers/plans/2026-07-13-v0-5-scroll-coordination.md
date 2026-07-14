@@ -8,7 +8,7 @@
 
 **Tech Stack:** Swift 6.2+、Swift 6 language mode、UIKit、iOS 14+、Swift Package Manager、XCTest、XCUITest、Tabman 4.0.1、Pageboy 5.0.2。
 
-**当前状态：** 历史计划已完成；2026-07-14 主容器真实 top inset、逻辑 offset 与固定高度 Header 专项已完成实现和首轮全量验收（Framework 318/318、Example 41/41、generic build，0 fail/skip/error/warning/analyzer warning），但最终 fresh-pass 尚待完成，因此 v0.5 Task 7 Ready 继续关闭。
+**当前状态：** 已完成；2026-07-14 主容器真实 top inset、逻辑 offset 与固定高度 Header 专项已在生产 HEAD `424a0a3` 完成最终全量验收和 fresh-pass（Framework 322/322、Example 41/41、generic build，0 fail/skip/error/warning/analyzer warning；Critical 0、Important 0、Minor 0），v0.5 Task 7 恢复 Ready。
 
 ## Global Constraints
 

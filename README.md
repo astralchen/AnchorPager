@@ -6,7 +6,7 @@ AnchorPager 是一个 UIKit 容器框架，用于组合可变 Header、吸顶分
 
 2026-07-14 后续用户验收发现：`c37e829` 的 Header bootstrap 只覆盖正式中立测量前，真实 Header 会先附着到旧 `height == 0` host 并瞬时触发内部约束冲突。生产提交 `d6ece31` 已把 incoming fitting 和 required host height 更新前移到内容附着之前；UIViewController Header 保持 `addChild → load/measure → seed → addSubview → didMove`，正式 measurement/cache/log 语义不变。Apple Swift 6.3.3 / Xcode 26.6 下，Framework 296/296、Example 38/38（10 项单元测试 + 28 项 UI 测试）与 generic Simulator build 全部通过，0 fail、0 skip、0 error/warning/analyzer warning；独立新进程实际执行 Header 安装后未产生 UIKit `LayoutConstraints` 冲突。fresh-pass 复审为 Critical 0、Important 0、Minor 0，v0.5 Task 7 与 v0.6 恢复 Ready。
 
-2026-07-14 主容器 top inset 与固定高度 Header 专项已经完成实现和首轮全量验收：`.insideSafeArea` 使用本地顶部遮挡作为真实 `contentInset.top`，`.extendsUnderTopSafeArea` 使用 `0`；业务 Header 根视图在正常折叠中保持完整高度，由 AnchorPager 自有 presentation surface 上移。专项实现 HEAD 为 `1847aac`，正式验收 HEAD `ce09f2b` 只额外消除了测试代码的两条编译警告。Framework 318/318、Example 41/41（11 项单元测试 + 30 项 UI 测试）与 generic Simulator build 全部通过，0 fail、0 skip、0 error/warning/analyzer warning；Header 真实手势运行日志无 Auto Layout 约束冲突。当前仍待最终 fresh-pass 复审，因此 v0.5 Task 7 与 v0.6 Ready 暂不恢复，也不得进入 v0.7。
+2026-07-14 主容器 top inset 与固定高度 Header 专项已在最终生产 HEAD `424a0a3` 收口：`.insideSafeArea` 使用本地顶部遮挡作为真实 `contentInset.top`，`.extendsUnderTopSafeArea` 使用 `0`；业务 Header 根视图在正常折叠中保持完整高度，由 AnchorPager 自有 presentation surface 上移。fresh-pass 发现的 safe-area/bounds active boundary 清理、缺失 `willSelect` 的 plain selection terminal 清理、geometry 迁移日志和 Public DocC 共 2 个 Important、2 个 Minor 均已通过 RED/GREEN 修复，终态 Critical 0、Important 0、Minor 0。Framework 322/322、Example 41/41（11 项单元测试 + 30 项 UI 测试）与 generic Simulator build 全部通过，0 fail、0 skip、0 error/warning/analyzer warning；v0.5 Task 7 与 v0.6 已恢复 Ready。
 
 ## 安装
 
@@ -237,7 +237,7 @@ log stream --predicate 'subsystem == "com.anchorpager.AnchorPager"'
 
 ## 当前限制
 
-v0.5 连续纵向 handoff、无滚动页直接承载、stable/native boundary 分离、两类底部回弹路径、plain bottom 页面 surface/bar 分层、Header 安装前 bootstrap seed 和 v0.6 三种顶部模式已完成历史验收。主容器真实 top inset 与固定高度 Header presentation 专项尚未实施和重新验收，所以 v0.5 Task 7 与 v0.6 Ready 当前关闭。更后续的跨滚动区域减速速度合成、完整交互状态、状态栏点击顶滚和尺寸变化后的滚动位置恢复也尚未实现；refresh control 或业务刷新任务不属于 AnchorPager。Tabman/Pageboy 仅出现在 internal adapter 层，Public API 不暴露第三方类型。
+v0.5 连续纵向 handoff、无滚动页直接承载、stable/native boundary 分离、两类底部回弹路径、plain bottom 页面 surface/bar 分层、Header 安装前 bootstrap seed、主容器真实 top inset/固定高度 Header presentation 和 v0.6 三种顶部模式均已完成最终验收与 fresh-pass。更后续的跨滚动区域减速速度合成、完整交互状态、状态栏点击顶滚和尺寸变化后的滚动位置恢复尚未实现；refresh control 或业务刷新任务不属于 AnchorPager。Tabman/Pageboy 仅出现在 internal adapter 层，Public API 不暴露第三方类型。
 
 在 Xcode 26.3 / Swift 6.2.4 的 x86_64 iPhone 17 Simulator 验证中，把控制器同步析构改为
 `isolated deinit` 会在生命周期析构后稳定触发 allocator `pointer being freed was not allocated` 崩溃。

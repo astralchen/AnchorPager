@@ -1158,7 +1158,7 @@ git commit -m "同步主容器 inset 文档与验收"
 - Modify after zero findings: `docs/task-list.md`
 - Modify after zero findings: `docs/superpowers/specs/2026-07-14-container-top-inset-fixed-header-presentation-design.md`
 
-- [ ] **Step 1：对完整实现范围做 fresh-pass 审查**
+- [x] **Step 1：对完整实现范围做 fresh-pass 审查**
 
 审查范围从设计基线到当前 HEAD：
 
@@ -1177,11 +1177,11 @@ git diff 7885d9e...HEAD -- Sources Tests Examples README.md docs AGENTS.md
 5. normal/top/plain-bottom 三 surface 排他，LayoutContext 最终可见坐标。
 6. 日志事件低频且有测试，Example probe/UI 覆盖完整，长期文档没有提前 Ready。
 
-- [ ] **Step 2：任何发现都先补 RED，再做最小修复**
+- [x] **Step 2：任何发现都先补 RED，再做最小修复**
 
 每个 Critical/Important/行为 Minor 必须：新增可复现测试 → 运行 RED → 最小修复 → 聚焦 GREEN → Framework/Example 相关全量复跑 → 中文单主题提交。不得只在文档中豁免，也不得用异步 delay、重复 layout、强制 reset 或扩大 public API 掩盖。
 
-- [ ] **Step 3：用最终 HEAD 重跑全部门禁**
+- [x] **Step 3：用最终 HEAD 重跑全部门禁**
 
 ```bash
 swift package resolve
@@ -1191,11 +1191,11 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExa
 git diff --check
 ```
 
-- [ ] **Step 4：只在 Critical/Important 清零后恢复 Ready**
+- [x] **Step 4：只在 Critical/Important 清零后恢复 Ready**
 
 把最终生产 HEAD、测试统计、结果包、0 fail/skip/error/warning/analyzer warning 和复审结论写入 AGENTS、task-list 与专项设计状态。只有 fresh-pass Critical 0、Important 0 且所有门禁通过，才恢复 v0.5 Task 7 与 v0.6 Ready；否则明确保留未完成项，不进入 v0.7。
 
-- [ ] **Step 5：提交最终复审状态**
+- [x] **Step 5：提交最终复审状态**
 
 ```bash
 git add AGENTS.md docs/task-list.md docs/superpowers/specs/2026-07-14-container-top-inset-fixed-header-presentation-design.md

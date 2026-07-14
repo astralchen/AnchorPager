@@ -389,7 +389,7 @@
 
 ## v0.5：纵向嵌套滚动协调版
 
-设计见 `docs/superpowers/specs/2026-07-13-v0-5-scroll-coordination-design.md`，direct page 修订见 `docs/superpowers/specs/2026-07-13-plain-page-direct-containment-design.md`，边界 owner 历史契约见 `docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md`，2026-07-14 修复设计见 `docs/superpowers/specs/2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement-design.md`、`docs/superpowers/specs/2026-07-14-header-preinstall-bootstrap-seed-repair-design.md` 和 `docs/superpowers/specs/2026-07-14-container-top-inset-fixed-header-presentation-design.md`。plain bottom 页面/chrome 分层、析构清理与 Header 安装前 seed 的历史验收均已完成；container top inset 与固定高度 Header 专项已完成实现和首轮全量验收，最终 fresh-pass 尚待完成，因此 v0.5 Task 7 Ready 继续关闭。
+设计见 `docs/superpowers/specs/2026-07-13-v0-5-scroll-coordination-design.md`，direct page 修订见 `docs/superpowers/specs/2026-07-13-plain-page-direct-containment-design.md`，边界 owner 历史契约见 `docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md`，2026-07-14 修复设计见 `docs/superpowers/specs/2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement-design.md`、`docs/superpowers/specs/2026-07-14-header-preinstall-bootstrap-seed-repair-design.md` 和 `docs/superpowers/specs/2026-07-14-container-top-inset-fixed-header-presentation-design.md`。plain bottom 页面/chrome 分层、析构清理、Header 安装前 seed，以及 container top inset/固定高度 Header 专项均已完成实现、最终全量验收和 fresh-pass；v0.5 Task 7 当前为 Ready。
 
 - [x] 删除无滚动页 synthetic scroll wrapper 及其额外 containment
 - [x] 无滚动 original page 直接交给 Pageboy，Store 保存 page 非 nil、scroll target 为 nil
@@ -461,13 +461,14 @@
 - [x] 用户复核详细实施计划并选择逐任务执行方式
 - [x] 按 TDD 实现 container geometry、固定高度 canonical presentation、结构性 offset 迁移和日志；专项实现 HEAD `1847aac`
 - [x] 完成 Framework、Example、真实 UI、generic build 与运行时约束首轮全量验收：正式验收 HEAD `ce09f2b`，Framework 318/318、Example 41/41（11 单元 + 30 UI）、generic build，0 fail、0 skip、0 error/warning/analyzer warning；Header 真实手势日志无约束冲突
-- [ ] 完成实现者自审和独立 fresh-pass 复审，Critical/Important 清零后恢复 v0.5 Task 7 Ready
+- [x] fresh-pass 覆盖 `7885d9e...424a0a3`：2 个 Important 与 2 个 Minor 均按 RED/GREEN 修复到 `5ba84d4`、`424a0a3`，终态 Critical 0、Important 0、Minor 0
+- [x] 最终生产 HEAD `424a0a3` 全量验收：Framework 322/322、Example 41/41（11 单元 + 30 UI）、generic Simulator build，0 fail、0 skip、0 error/warning/analyzer warning；恢复 v0.5 Task 7 Ready
 
 ## v0.6：顶部 Overscroll 事件处理版
 
 依赖门禁：OverscrollCoordinator 只消费 v0.5 已绑定的 committed current/empty owner；pending provider page 不能成为 overscroll owner。
 
-设计与计划：`docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md`、`docs/superpowers/plans/2026-07-13-boundary-bounce-ownership.md`；plain bottom 当前修订见 `docs/superpowers/specs/2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement-design.md`，container boundary 最新坐标修订见 `docs/superpowers/specs/2026-07-14-container-top-inset-fixed-header-presentation-design.md`。mode、owner、cancel 和日志历史实现保持；container raw/logical boundary 已完成迁移和首轮重新验收，最终 fresh-pass 尚待完成，因此 v0.6 Ready 继续关闭。
+设计与计划：`docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md`、`docs/superpowers/plans/2026-07-13-boundary-bounce-ownership.md`；plain bottom 当前修订见 `docs/superpowers/specs/2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement-design.md`，container boundary 最新坐标修订见 `docs/superpowers/specs/2026-07-14-container-top-inset-fixed-header-presentation-design.md`。mode、owner、cancel 和日志历史实现保持；container raw/logical boundary 已完成迁移、最终重新验收和 fresh-pass，v0.6 当前为 Ready。
 
 - [x] 创建 `Sources/AnchorPager/Overscroll/AnchorPagerOverscrollCoordinator.swift`
 - [x] 实现 `.none`
@@ -500,7 +501,7 @@
 - [x] v0.6 最新修复验收复用本轮 Framework 283 / Example 37 / generic build，0 fail、0 skip、0 xcresult warning
 - [x] v0.6 实现提交为 `10f1799`、`a4f7c3f`、`47abcd6`，验收记录随 `同步纵向边界回弹验收记录` 提交
 - [x] v0.6 历史第四次独立复审与 Ready：Critical 0、Important 0；两个 Minor 已修复，Framework 283/283、Example 37/37 与 generic build 门禁通过
-- [x] v0.6 历史 Ready：2026-07-14 plain bottom 页面/chrome presentation、完整 Framework/Example/UI/generic build 复验和整分支 fresh-pass 复审均完成；后续 container top inset 专项已重新关闭当前门禁
+- [x] v0.6 历史 Ready：2026-07-14 plain bottom 页面/chrome presentation、完整 Framework/Example/UI/generic build 复验和整分支 fresh-pass 复审均完成；后续 container top inset 专项曾重新关闭门禁，现已在生产 HEAD `424a0a3` 完成并恢复 Ready
 - [x] Example 统一设置菜单设计确认：使用单个 `gearshape` 入口和“Header 顶部行为”“顶部回弹模式”两个二级菜单，不修改框架 Public API 或 owner 路由
 - [x] Example 统一设置菜单实施计划：测试先要求齿轮/二级菜单形成 RED，再做最小菜单实现，最后运行真实菜单 UI、完整回归、自审和 fresh-pass 复审
 - [x] Example 统一设置菜单 RED/GREEN：单元 RED 精确失败 3 条；真实菜单 UI RED 精确失败于“示例设置”入口缺失；最小实现后单元与 4 条目标 UI GREEN，提交 `7b1b6f7`
@@ -511,7 +512,7 @@
 - [x] Header 安装前 bootstrap seed 完整验收：Framework 296/296、Example 38/38（10 单元 + 28 UI）、generic Simulator build 均通过；三份结果包均为 0 error/warning/analyzer warning；新进程 Header 安装日志存在且 UIKit `LayoutConstraints` 无冲突
 - [x] Header 安装前 bootstrap seed 自审与 fresh-pass：Public API、Pageboy、child scroll/bounce、formal measurement/log 均未改变；Critical 0、Important 0、Minor 0；v0.5 Task 7 与 v0.6 恢复 Ready
 - [x] 使用逻辑 container offset 首轮重新验收 `.none/.container/.child` 顶部 owner、plain bottom 和真实 child 双边界
-- [ ] 完成最终 fresh-pass 并用最终 HEAD 重跑全量门禁后恢复 v0.6 Ready
+- [x] 完成最终 fresh-pass 并用生产 HEAD `424a0a3` 重跑全量门禁，恢复 v0.6 Ready
 
 ## v0.7：手势与交互状态机版
 
