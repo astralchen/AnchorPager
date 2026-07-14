@@ -2,7 +2,7 @@
 
 **日期：** 2026-07-14
 
-**状态：** 用户已确认设计，详细实施计划已编写并完成计划自审；用户复核计划、代码、完整验收和独立复审待完成
+**状态：** 设计、TDD 实现与首轮全量验收已完成；最终实现者自审、fresh-pass 复审和最终 HEAD 全量复验待完成，v0.5/v0.6 Ready 继续关闭
 
 **适用范围：** `AnchorPagerHeaderTopBehavior`、主容器顶部 inset、Header 固定高度呈现、正常折叠、bar 吸顶、纵向 handoff、双边界 bounce、运行时顶部行为切换与安全区变化。
 
@@ -356,15 +356,22 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExa
 3. `2026-07-13-v0-5-scroll-coordination-design.md` 与 `2026-07-13-boundary-bounce-ownership-design.md` 中直接把 raw container offset 当作逻辑 `0...D` 的公式；delegate、gesture、owner 与 native boundary pass-through 继续有效。
 4. `2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement-design.md` 的 page/chrome presentation 和 bootstrap measurement 继续有效，并与本设计的 canonical content surface 组合。
 
-## 设计自审与文档验收
+## 设计自审与首轮实施验收
 
 1. **Public API：** 没有新增、删除或重命名 symbol；`AnchorPagerHeaderTopBehavior` 与 `AnchorPagerLayoutContext` 只修订行为语义，未泄漏 Tabman/Pageboy 或 internal owner 词汇。
 2. **坐标闭环：** raw/logical 双向转换、expanded/collapsed boundary 与 `H + D - I` scroll range 使用同一 `I`；inside/extends 不再存在第二份 offset 原点。
 3. **分层职责：** ScrollCoordinator 保持唯一 offset writer，OverscrollCoordinator 只管理策略；固定 viewport、canonical content、共享 top bounce 和 Pageboy page-only bottom surface 没有形成双 transform owner。
 4. **UIKit 边界：** Header UIViewController containment、Pageboy page containment、Store generation/cache/snapshot 和 child managed inset 保持原 owner；不要求修改业务 child delegate、pan delegate、滚动开关或 bounce 配置。
-5. **回归覆盖：** 已列出纯几何、UIKit、真实 UI、运行时约束、日志、静态扫描、完整构建测试和 fresh-pass 复审门禁；当前无 TODO、TBD 或未选择方案。
-6. **文档状态：** AGENTS、requirements、architecture、task-list、README 与 roadmap 已同步把旧 Ready 标记为历史并重新关闭 v0.5/v0.6 门禁；实现完成前不把目标语义写成已交付事实。
-7. **已运行校验：** `git diff --check` 通过；设计关键词扫描没有残留当前 Ready、TODO 或 TBD。此次提交只修改文档，因此未运行 Framework/Example 测试，完整代码验收明确留在实施阶段。
+5. **回归覆盖：** 纯几何、UIKit、真实 UI、运行时约束、日志、完整构建测试均已执行；最终 fresh-pass 仍是恢复 Ready 的独立门禁。
+6. **文档状态：** AGENTS、requirements、architecture、task-list、README 与 roadmap 已同步首轮实施和验收事实，同时继续关闭 v0.5/v0.6 Ready。
+7. **实现范围：** `AnchorPagerContainerScrollGeometry` 统一 raw/logical、稳定边界、overflow 与 range；LayoutEngine 改为固定 Header 高度；ScrollCoordinator 所有 container 读写迁移到 geometry；ViewController 新增 canonical content presentation 并独占主容器 top inset；Example 新增 inset/Header 几何探针和真实手势 UI。
+8. **实现提交：** `feffaf6`、`4f5cb26`、`cea399a`、`33132c5`、`65cc9b7`、`1847aac`；验收 HEAD `ce09f2b` 只额外消除两条测试弱引用编译警告。
+9. **Framework 首轮全量：** `/private/tmp/AnchorPagerContainerTopInsetFrameworkFullClean-20260714.xcresult`，318/318、0 fail、0 skip、0 error、0 warning、0 analyzer warning。
+10. **Example 首轮全量：** `/private/tmp/AnchorPagerContainerTopInsetExampleFull-20260714.xcresult`，41/41（11 单元 + 30 UI）、0 fail、0 skip、0 error、0 warning、0 analyzer warning；`/private/tmp/AnchorPagerContainerTopInsetExampleBuild-20260714.xcresult` generic Simulator build 成功且诊断全零。
+11. **运行时约束：** 新 Header 真实手势 UI 单独通过，`/private/tmp/AnchorPagerContainerTopInsetRuntime-20260714.log` 对 `Unable to simultaneously satisfy constraints` 与 `UIViewAlertForUnsatisfiableConstraints` 均为零命中。Xcode 宿主会输出 LLDB version store 环境提示，但未进入 xcresult error/warning。
+12. **当前门禁：** 上述证据只表示 Task 7 首轮验收通过；Task 8 必须对 `7885d9e...HEAD` 做 fresh-pass、清零 Critical/Important 并使用最终 HEAD 重跑三项正式门禁后，才能恢复 Ready。
+13. **基础与静态门禁：** `swift package resolve`、`git diff --check` 通过；Public 目录 Tabman/Pageboy 零命中，生产代码的 delegate/bounce 写入只命中 AnchorPager 自有 `verticalScrollView`，synthetic/wrapper 与业务 transform 仅命中禁止或被取代的历史说明。
+14. **Task 7 自审：** Public API 未扩大；Header/Pageboy containment、generation/cache/snapshot、child managed inset 和业务 child delegate/pan/bounce ownership 未改变；新日志均为低频状态事件且有测试；长期文档没有提前恢复 Ready。未发现阻塞 Task 8 的问题。
 
 ## 完成定义
 

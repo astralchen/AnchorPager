@@ -80,8 +80,12 @@ open class AnchorPagerViewController: UIViewController {
 ```
 
 `verticalScrollView` 的实例只读暴露，供接入方读取容器滚动状态；其 `delegate` 由 AnchorPager
-内部保留，用于驱动 Header/bar 可见几何和 collapse progress，调用方不得替换。主容器 scroll range
-只表示 Header 折叠距离，横纵滚动指示器必须隐藏；用户可见滚动进度只由当前真实 child scroll target 表达，无滚动页没有滚动指示器。
+内部保留，用于驱动 Header/bar 可见几何和 collapse progress，调用方不得替换；其 `contentInset`
+同样由 AnchorPager 独占，调用方不得写入。主容器固定使用 `.never` 自动调整，`.insideSafeArea`
+的 top inset 等于本地顶部遮挡，`.extendsUnderTopSafeArea` 为 `0`，其余三边均为 `0`。设 top inset
+为 `I`、纯内容可折叠距离为 `D`、viewport 高度为 `H`，主容器必须统一使用
+`logical = raw + I`、稳定 raw 边界 `-I...(D-I)` 和 range `H + D - I`。横纵滚动指示器必须隐藏；
+用户可见滚动进度只由当前真实 child scroll target 表达，无滚动页没有滚动指示器。
 
 数据源协议：
 
@@ -178,6 +182,12 @@ public enum AnchorPagerHeaderTopBehavior: Sendable, Equatable {
     case extendsUnderTopSafeArea
 }
 ```
+
+两种顶部行为只决定主容器顶部 inset 与 Header 背景是否延伸到顶部系统区域，不决定折叠时缩小
+Header。业务 Header 根视图在稳定滚动和 bounce 期间必须保持完整解析高度；正常折叠只允许移动
+AnchorPager 自有 canonical content presentation surface。固定 viewport 是唯一屏幕裁剪边界，container
+top bounce 移动整个 viewport，plain page bottom bounce 只移动 Pageboy 页面 surface。不得直接修改业务
+Header 或业务 page 根 view 的 transform。
 
 Header offset adjustment：
 

@@ -6,7 +6,7 @@ AnchorPager 是一个 UIKit 容器框架，用于组合可变 Header、吸顶分
 
 2026-07-14 后续用户验收发现：`c37e829` 的 Header bootstrap 只覆盖正式中立测量前，真实 Header 会先附着到旧 `height == 0` host 并瞬时触发内部约束冲突。生产提交 `d6ece31` 已把 incoming fitting 和 required host height 更新前移到内容附着之前；UIViewController Header 保持 `addChild → load/measure → seed → addSubview → didMove`，正式 measurement/cache/log 语义不变。Apple Swift 6.3.3 / Xcode 26.6 下，Framework 296/296、Example 38/38（10 项单元测试 + 28 项 UI 测试）与 generic Simulator build 全部通过，0 fail、0 skip、0 error/warning/analyzer warning；独立新进程实际执行 Header 安装后未产生 UIKit `LayoutConstraints` 冲突。fresh-pass 复审为 Critical 0、Important 0、Minor 0，v0.5 Task 7 与 v0.6 恢复 Ready。
 
-2026-07-14 已确认下一项修订：`.insideSafeArea` 将由主容器真实 `contentInset.top == safeArea.top` 表达，`.extendsUnderTopSafeArea` 的主容器 top inset 为 `0`；Header 业务根视图在正常折叠中保持完整高度，由内部 presentation surface 上移。该专项目前只有设计，生产代码、全量验收与独立复审尚未完成，因此上述 Ready 仅为历史结论，当前不得据此进入 v0.7。
+2026-07-14 主容器 top inset 与固定高度 Header 专项已经完成实现和首轮全量验收：`.insideSafeArea` 使用本地顶部遮挡作为真实 `contentInset.top`，`.extendsUnderTopSafeArea` 使用 `0`；业务 Header 根视图在正常折叠中保持完整高度，由 AnchorPager 自有 presentation surface 上移。专项实现 HEAD 为 `1847aac`，正式验收 HEAD `ce09f2b` 只额外消除了测试代码的两条编译警告。Framework 318/318、Example 41/41（11 项单元测试 + 30 项 UI 测试）与 generic Simulator build 全部通过，0 fail、0 skip、0 error/warning/analyzer warning；Header 真实手势运行日志无 Auto Layout 约束冲突。当前仍待最终 fresh-pass 复审，因此 v0.5 Task 7 与 v0.6 Ready 暂不恢复，也不得进入 v0.7。
 
 ## 安装
 
@@ -132,15 +132,15 @@ configuration.bar.height = 56  // 可选：显式覆盖
 - `.fixed(max:min:)`：使用 `max` 作为展开高度，`min` 作为折叠高度。
 - `.ranged(min:max:)`：使用 Header 测量高度，并限制在 min/max 范围内。
 
-Header height mode 表示不包含顶部安全区遮挡的纯内容高度，可折叠距离也只由内容的展开/折叠高度决定。`AnchorPagerHeaderTopBehavior.insideSafeArea` 下，Header frame 从本地顶部 safe area 或系统栏遮挡下方开始，高度为当前可见内容高度；`.extendsUnderTopSafeArea` 下，Header frame 从容器 bounds 顶部开始，高度为“顶部遮挡 + 当前可见内容高度”。因此两种模式的分段栏和 child 内容基线一致，切换只改变 Header 外框是否延伸到顶部系统区域。例如内容高度为 `108`、顶部遮挡为 `116` 时，extends 模式的 `headerFrame.height == 224`。
+Header height mode 表示不包含顶部安全区遮挡的纯内容高度，可折叠距离也只由内容的展开/折叠高度决定。`AnchorPagerHeaderTopBehavior.insideSafeArea` 下，Header frame 从本地顶部 safe area 或系统栏遮挡下方开始，高度始终为完整展开内容高度；`.extendsUnderTopSafeArea` 下，Header frame 从容器 bounds 顶部开始，高度始终为“顶部遮挡 + 完整展开内容高度”。正常折叠只让固定高度 Header 向上移动，不修改业务 Header 根视图高度。两种模式的分段栏和 child 内容基线一致，切换只改变 Header 外框是否延伸到顶部系统区域。例如展开内容高度为 `108`、顶部遮挡为 `116` 时，extends 模式的 `headerFrame.height == 224`，折叠期间该高度保持不变。
 
 automatic/ranged Header 会在顶部遮挡下方的中立几何中测量，避免 Header 当前展示位置的 safe area 或 `layoutMarginsGuide` 被重复计入内容高度。测量缓存只属于当前 Header 内容身份；内容更换时旧缓存失效，首次正式中立布局前先以不发布状态的 compressed fitting 取得非负 seed，因此非空约束内容不会以 required `height == 0` 参与布局。该测量只在结构性布局路径执行；滚动热路径继续复用当前 Header 最近一次有效纯内容高度。
 
-AnchorPager 自有的主容器 `verticalScrollView` 会关闭 UIKit 自动 content inset 调整，避免 navigation bar、safe area 等顶部遮挡被系统和 AnchorPager 布局引擎重复叠加。该主容器的 `contentInsetAdjustmentBehavior` 应保持 `.never`，其 delegate 由 AnchorPager 内部管理，调用方不得替换。主容器只表示 Header 折叠范围，横纵滚动指示器保持隐藏；用户可见滚动进度只由当前真实 child scroll target 表达，无滚动页面没有滚动指示器。
+AnchorPager 自有的主容器 `verticalScrollView` 会关闭 UIKit 自动 content inset 调整。该主容器的 `contentInsetAdjustmentBehavior` 保持 `.never`，其 delegate 与 `contentInset` 均由 AnchorPager 内部管理，调用方不得替换或写入。`.insideSafeArea` 的 `contentInset.top` 等于当前本地顶部遮挡，`.extendsUnderTopSafeArea` 为 `0`；left/bottom/right 始终为 `0`。主容器只表示 Header 折叠范围，横纵滚动指示器保持隐藏；用户可见滚动进度只由当前真实 child scroll target 表达，无滚动页面没有滚动指示器。
 
-主容器内部把滚动范围和可见内容解耦：`scrollRangeView` 通过 `contentLayoutGuide` 定义固定的 `viewport height + Header 内容可折叠距离`，Header 和横向 paging adapter 则位于 `frameLayoutGuide` 对应的固定 viewport。非负稳定区间的 `contentOffset` 只驱动 LayoutEngine 计算 Header/bar 的 canonical frame，不参与 `contentSize` 反算。顶部 container overflow 由 UIKit bounce 驱动共享 viewport，使 Header、分段栏和页面整体下移；plain bottom overflow 的原生物理仍来自 container，但可见 presentation 只移动 adapter 内 `UIPageViewController.view`，不移动 Header/bar，也不手工实现弹簧动画。
+主容器内部把滚动范围和可见内容解耦。设顶部 inset 为 `I`、纯内容可折叠距离为 `D`、viewport 高度为 `H`：raw offset 与逻辑折叠量的关系为 `logical = raw + I`，展开/折叠 raw 边界分别是 `-I` 与 `D - I`，`scrollRangeView` 高度为 `H + D - I`。Header 和横向 paging adapter 位于 `frameLayoutGuide` 对应的固定 viewport 内，正常折叠只移动不裁剪的 canonical content presentation surface，不参与 `contentSize` 反算。顶部 container overflow 由 UIKit bounce 驱动共享 viewport，使 Header、分段栏和页面整体下移；plain bottom overflow 的原生物理仍来自 container，但可见 presentation 只移动 adapter 内 `UIPageViewController.view`，不移动 Header/bar，也不手工实现弹簧动画。
 
-横向分页 adapter 的 top 跟随 Header bottom，高度固定为 Header 完全折叠时的最大 viewport 高度。Header 折叠热路径只移动 adapter，不改变 Pageboy child bounds；展开时超出 viewport 的底部由容器裁剪。bottom safe area、tab bar 和 toolbar 不裁剪横向区域，而是写入 child 的 managed bottom inset。该 bottom 使用 child 局部坐标：等于 adapter 当前底端到 pager 安全可见底端的距离；展开时包含尚未折叠距离，完全折叠时收敛为根容器底部遮挡。
+横向分页 adapter 的 top 跟随 Header bottom，高度固定为 Header 完全折叠时的最大 viewport 高度。Header 折叠热路径只移动承载 Header 与 adapter 的 canonical content presentation，不改变 Header 根视图高度或 Pageboy child bounds；展开时超出 viewport 的底部由容器裁剪。bottom safe area、tab bar 和 toolbar 不裁剪横向区域，而是写入 child 的 managed bottom inset。该 bottom 使用 child 局部坐标：等于 adapter 当前底端到 pager 安全可见底端的距离；展开时包含尚未折叠距离，完全折叠时收敛为根容器底部遮挡。
 
 当 Header 内容高度或配置运行时变化时，调用：
 
@@ -157,7 +157,7 @@ pager.reloadHeaderLayout(offsetAdjustment: .preserveVisualPosition)
 
 child managed top 只等于实际分段栏对页面的遮挡，不包含 Header 或顶部 safe area；Header 和顶部系统遮挡由 adapter frame 处理。滚动指示器 top 同步避让实际分段栏，content/indicator bottom 等于 adapter 当前底端到 pager 安全可见底端的 child 局部遮挡，保证最后内容和指示器都不会进入 tab bar、toolbar 或底部安全区域。
 
-`AnchorPagerLayoutContext` 回调中的 `headerFrame`、`barFrame` 和 `contentFrame` 使用 pager view 的本地实际可见坐标。正常折叠时它们等于 LayoutEngine 的 canonical frame；顶部 container bounce 时三者包含同量正向 viewport presentation；plain bottom bounce 时 Header/bar 保持 canonical，只有 `contentFrame` 包含页面 surface 的负向位移。`reloadHeaderLayout(offsetAdjustment:)` 仍只使用 canonical 折叠状态，不会把瞬时 bounce 位移写入 Header 高度或折叠进度。
+`AnchorPagerLayoutContext` 回调中的 `headerFrame`、`barFrame` 和 `contentFrame` 使用 pager view 的本地最终可见坐标。正常折叠时固定高度 Header、bar 和内容 frame 已包含逻辑折叠位移；顶部 container bounce 时三者再包含同量正向 viewport presentation；plain bottom bounce 时 Header/bar 保持折叠后的 canonical 位置，只有 `contentFrame` 包含页面 surface 的负向位移。`reloadHeaderLayout(offsetAdjustment:)` 仍只使用稳定逻辑折叠状态，不会把瞬时 bounce 位移写入 Header 高度或折叠进度。
 
 ## 显式 Scroll View
 

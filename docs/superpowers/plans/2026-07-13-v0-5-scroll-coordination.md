@@ -8,7 +8,7 @@
 
 **Tech Stack:** Swift 6.2+、Swift 6 language mode、UIKit、iOS 14+、Swift Package Manager、XCTest、XCUITest、Tabman 4.0.1、Pageboy 5.0.2。
 
-**当前状态：** 已完成；2026-07-13 历史计划与 2026-07-14 plain bottom 分层 page presentation、Header bootstrap measurement、全量验收及整分支 fresh-pass 复审均已完成，生产代码 HEAD `c37e829`，v0.5 当前为 Ready。
+**当前状态：** 历史计划已完成；2026-07-14 主容器真实 top inset、逻辑 offset 与固定高度 Header 专项已完成实现和首轮全量验收（Framework 318/318、Example 41/41、generic build，0 fail/skip/error/warning/analyzer warning），但最终 fresh-pass 尚待完成，因此 v0.5 Task 7 Ready 继续关闭。
 
 ## Global Constraints
 

@@ -1092,7 +1092,7 @@ git commit -m "扩展示例 Header 几何验收"
 - Modify: `docs/superpowers/plans/2026-07-13-v0-5-scroll-coordination.md`
 - Modify: `docs/superpowers/plans/2026-07-13-boundary-bounce-ownership.md`
 
-- [ ] **Step 1：在修改完成状态文档前运行 Framework 全量**
+- [x] **Step 1：在修改完成状态文档前运行 Framework 全量**
 
 ```bash
 swift package resolve
@@ -1101,7 +1101,7 @@ xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 
 
 记录总数、失败、skip、error/warning/analyzer warning；任一非零不得继续把状态写成完成。
 
-- [ ] **Step 2：运行 Example 全量与 generic Simulator build**
+- [x] **Step 2：运行 Example 全量与 generic Simulator build**
 
 ```bash
 xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' -parallel-testing-enabled NO -resultBundlePath /private/tmp/AnchorPagerContainerTopInsetExampleFull-20260714.xcresult test
@@ -1119,7 +1119,7 @@ rg -n "Unable to simultaneously satisfy constraints|UIViewAlertForUnsatisfiableC
 
 第二条命令预期无输出并以未匹配状态结束；若有命中，专项验收失败，必须先新增约束回归测试并修复。
 
-- [ ] **Step 3：同步行为文档但继续关闭 Ready 门禁**
+- [x] **Step 3：同步行为文档但继续关闭 Ready 门禁**
 
 文档必须明确：
 
@@ -1129,7 +1129,7 @@ rg -n "Unable to simultaneously satisfy constraints|UIViewAlertForUnsatisfiableC
 - 已运行的精确命令、结果包、测试总数和当前生产 HEAD。
 - Task 7 此时只能标为“实现与全量验收通过，待 fresh-pass”；v0.5/v0.6 Ready 仍关闭。
 
-- [ ] **Step 4：运行静态门禁与文档一致性扫描**
+- [x] **Step 4：运行静态门禁与文档一致性扫描**
 
 ```bash
 rg -n "\.delegate\s*=|panGestureRecognizer\.delegate\s*=|isScrollEnabled\s*=|\.bounces\s*=|alwaysBounceVertical\s*=" Sources/AnchorPager
@@ -1141,7 +1141,7 @@ git diff --check
 
 逐项人工解释允许的测试/文档命中；生产禁止项或状态矛盾必须修复并重跑受影响测试。
 
-- [ ] **Step 5：自审并提交 Task 7**
+- [x] **Step 5：自审并提交 Task 7**
 
 ```bash
 git add AGENTS.md README.md docs/requirements.md docs/architecture.md docs/task-list.md docs/superpowers/specs/2026-07-09-anchorpager-version-roadmap-design.md docs/superpowers/specs/2026-07-14-container-top-inset-fixed-header-presentation-design.md docs/superpowers/plans/2026-07-13-v0-5-scroll-coordination.md docs/superpowers/plans/2026-07-13-boundary-bounce-ownership.md
