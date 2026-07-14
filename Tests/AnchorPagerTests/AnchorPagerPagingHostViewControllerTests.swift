@@ -87,8 +87,10 @@ final class AnchorPagerPagingHostViewControllerTests: XCTestCase {
         delegate.observedPage = page
         host.eventDelegate = delegate
         host.reload(titles: ["Page"], pageCount: 1, selectedIndex: 0)
-        weak var oldAdapter = host.activeAdapter
-        weak var oldInnerPageboyContainer = host.activeAdapter?.children.first
+        weak var oldAdapter: AnchorPagerPagingAdapter?
+        oldAdapter = host.activeAdapter
+        weak var oldInnerPageboyContainer: UIViewController?
+        oldInnerPageboyContainer = host.activeAdapter?.children.first
         weak var resetPlaceholder: UIViewController?
         XCTAssertNotNil(page.parent)
         XCTAssertNotNil(page.view.superview)
