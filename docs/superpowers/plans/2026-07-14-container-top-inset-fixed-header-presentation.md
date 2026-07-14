@@ -236,6 +236,7 @@ git commit -m "新增主容器逻辑滚动几何"
 
 **Files:**
 - Modify: `Sources/AnchorPager/Layout/AnchorPagerLayoutEngine.swift`
+- Modify: `Sources/AnchorPager/Public/AnchorPagerViewController.swift`（只同步 internal Input/adjustment 重命名；真实 raw/logical 转换仍留在 Task 5）
 - Modify: `Tests/AnchorPagerTests/AnchorPagerLayoutEngineTests.swift`
 
 **Interfaces:**
@@ -244,7 +245,7 @@ git commit -m "新增主容器逻辑滚动几何"
 - Produces: 固定高度 `headerFrame`、实际呈现 `barFrame/contentFrame/pagingFrame` 与逻辑 `collapseOffset`。
 - Produces: `adjustedLogicalOffsetY(current:old:new:strategy:)`。
 
-- [ ] **Step 1：先把 LayoutEngine 测试改为固定高度契约**
+- [x] **Step 1：先把 LayoutEngine 测试改为固定高度契约**
 
 将测试 helper 参数改名为 `logicalContentOffsetY`，并新增/修改以下断言：
 
@@ -295,7 +296,7 @@ func testHeaderHeightRemainsConstantAcrossExpandedPartialAndCollapsedOffsets() {
 
 更新 extends collapsed 测试：`logicalContentOffsetY == 80` 时 `headerFrame.minY == -80`、`headerFrame.height == topObstruction + expanded == 276`、`barFrame.minY == 196`。保留 paging height、child bottom obstruction、纯内容 height mode 与四种 offset adjustment 测试。
 
-- [ ] **Step 2：运行 RED，证明旧实现仍在缩高**
+- [x] **Step 2：运行 RED，证明旧实现仍在缩高**
 
 ```bash
 xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' -only-testing:AnchorPagerTests/AnchorPagerLayoutEngineTests/testTopBehaviorsKeepFixedHeaderHeightAndSameBarBaselineWhileCollapsed -only-testing:AnchorPagerTests/AnchorPagerLayoutEngineTests/testHeaderHeightRemainsConstantAcrossExpandedPartialAndCollapsedOffsets test
@@ -303,9 +304,9 @@ xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=
 
 预期：旧实现分别得到 inside height `70`、extends height `114`，固定高度断言失败。
 
-- [ ] **Step 3：把 LayoutEngine 输入和 frame 计算改为逻辑 offset**
+- [x] **Step 3：把 LayoutEngine 输入和 frame 计算改为逻辑 offset**
 
-把 `Input.contentOffsetY` 重命名为 `logicalContentOffsetY`，将 height 解析方法从 `private` 改为 module internal，并用以下 frame 计算替换 `visibleContentHeight` 分支：
+把 `Input.contentOffsetY` 重命名为 `logicalContentOffsetY`，并同步修改 ViewController 构造 label 与 `adjustedLogicalOffsetY` 调用名；此时 container top inset 仍为零，所以 ViewController 现有 raw 值与逻辑值等价，不在本任务提前实现 Task 5 的转换。将 height 解析方法从 `private` 改为 module internal，并用以下 frame 计算替换 `visibleContentHeight` 分支：
 
 ```swift
 let collapseOffset = clamped(
@@ -353,7 +354,7 @@ let pagingFrame = CGRect(
 
 把 `adjustedContentOffsetY` 重命名为 `adjustedLogicalOffsetY`；函数内部继续只在 `0...new.collapsibleDistance` 计算，不加减 container inset。`.preserveVisualPosition` 继续保持逻辑可见纯内容量 `E - collapseOffset`，从而保持 bar/paging baseline；不得改用固定业务根 view 与物理 viewport 的交集高度。
 
-- [ ] **Step 4：运行 LayoutEngine 完整 GREEN**
+- [x] **Step 4：运行 LayoutEngine 完整 GREEN**
 
 ```bash
 xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' -only-testing:AnchorPagerTests/AnchorPagerLayoutEngineTests test
@@ -362,12 +363,12 @@ git diff --check
 
 预期：LayoutEngine 全部通过；paging height 在三个折叠位置相同，child bottom obstruction仍从 `D + bottom` 收敛到 `bottom`。
 
-- [ ] **Step 5：自审并提交 Task 2**
+- [x] **Step 5：自审并提交 Task 2**
 
 自审确认 `headerFrame.height` 不再依赖 collapseOffset、两种 top behavior 的 bar baseline 相同、top obstruction 不进入 `D`、offset adjustment 返回逻辑值。
 
 ```bash
-git add Sources/AnchorPager/Layout/AnchorPagerLayoutEngine.swift Tests/AnchorPagerTests/AnchorPagerLayoutEngineTests.swift
+git add Sources/AnchorPager/Layout/AnchorPagerLayoutEngine.swift Sources/AnchorPager/Public/AnchorPagerViewController.swift Tests/AnchorPagerTests/AnchorPagerLayoutEngineTests.swift
 git commit -m "固定 Header 布局几何"
 ```
 

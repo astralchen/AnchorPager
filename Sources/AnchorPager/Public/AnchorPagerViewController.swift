@@ -444,7 +444,7 @@ open class AnchorPagerViewController: UIViewController {
             environment: layoutEnvironment
         )
         if let offsetAdjustment {
-            let adjustedOffsetY = layoutEngine.adjustedContentOffsetY(
+            let adjustedOffsetY = layoutEngine.adjustedLogicalOffsetY(
                 current: verticalScrollView.contentOffset.y,
                 old: oldLayoutOutput,
                 new: layoutOutput,
@@ -626,7 +626,7 @@ open class AnchorPagerViewController: UIViewController {
                 barHeight: resolvedBarInsets.top,
                 topObstructionHeight: environment.obstruction.top,
                 bottomObstructionHeight: environment.obstruction.bottom,
-                contentOffsetY: contentOffsetY
+                logicalContentOffsetY: contentOffsetY
             )
         )
     }

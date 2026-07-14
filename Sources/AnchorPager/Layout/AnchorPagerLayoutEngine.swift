@@ -9,7 +9,7 @@ struct AnchorPagerLayoutEngine {
         var barHeight: CGFloat
         var topObstructionHeight: CGFloat
         var bottomObstructionHeight: CGFloat
-        var contentOffsetY: CGFloat
+        var logicalContentOffsetY: CGFloat
     }
 
     struct ResolvedHeaderHeight: Equatable {
@@ -43,36 +43,32 @@ struct AnchorPagerLayoutEngine {
         )
         let collapsibleDistance = resolvedHeaderHeight.collapsibleDistance
         let collapseOffset = clamped(
-            nonNegativeFinite(input.contentOffsetY),
+            nonNegativeFinite(input.logicalContentOffsetY),
             lowerBound: 0,
             upperBound: collapsibleDistance
         )
         let collapseProgress = collapsibleDistance > 0
             ? collapseOffset / collapsibleDistance
             : 0
-        let visibleContentHeight = Swift.max(
-            resolvedHeaderHeight.collapsed,
-            resolvedHeaderHeight.expanded - collapseOffset
-        )
         let topPinY = bounds.minY + topObstructionHeight
-        let headerY: CGFloat
-        let headerFrameHeight: CGFloat
+        let headerFrame: CGRect
         switch input.headerTopBehavior {
         case .insideSafeArea:
-            headerY = topPinY
-            headerFrameHeight = visibleContentHeight
+            headerFrame = CGRect(
+                x: bounds.minX,
+                y: topPinY - collapseOffset,
+                width: bounds.width,
+                height: resolvedHeaderHeight.expanded
+            )
         case .extendsUnderTopSafeArea:
-            headerY = bounds.minY
-            headerFrameHeight = topObstructionHeight + visibleContentHeight
+            headerFrame = CGRect(
+                x: bounds.minX,
+                y: bounds.minY - collapseOffset,
+                width: bounds.width,
+                height: topObstructionHeight + resolvedHeaderHeight.expanded
+            )
         }
-
-        let headerFrame = CGRect(
-            x: bounds.minX,
-            y: headerY,
-            width: bounds.width,
-            height: headerFrameHeight
-        )
-        let barY = topPinY + visibleContentHeight
+        let barY = topPinY + resolvedHeaderHeight.expanded - collapseOffset
         let barFrame = CGRect(
             x: bounds.minX,
             y: barY,
@@ -108,7 +104,7 @@ struct AnchorPagerLayoutEngine {
         )
     }
 
-    func adjustedContentOffsetY(
+    func adjustedLogicalOffsetY(
         current: CGFloat,
         old: Output?,
         new: Output,
@@ -152,7 +148,7 @@ struct AnchorPagerLayoutEngine {
         }
     }
 
-    private func resolvedHeaderHeight(
+    func resolvedHeaderHeight(
         measuredHeaderHeight: CGFloat,
         mode: AnchorPagerHeaderHeightMode
     ) -> ResolvedHeaderHeight {

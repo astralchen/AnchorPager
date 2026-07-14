@@ -76,14 +76,14 @@ final class AnchorPagerLayoutEngineTests: XCTestCase {
         XCTAssertEqual(output.barFrame.minY, output.headerFrame.maxY)
     }
 
-    func testTopBehaviorsKeepSameBarBaseline() {
+    func testTopBehaviorsKeepFixedHeaderHeightAndSameBarBaselineWhileCollapsed() {
         let inside = AnchorPagerLayoutEngine().layout(
             for: input(
                 measuredHeaderHeight: 100,
                 headerHeightMode: .fixed(max: 100, min: 20),
                 headerTopBehavior: .insideSafeArea,
                 topObstructionHeight: 44,
-                contentOffsetY: 30
+                logicalContentOffsetY: 30
             )
         )
         let extended = AnchorPagerLayoutEngine().layout(
@@ -92,15 +92,35 @@ final class AnchorPagerLayoutEngineTests: XCTestCase {
                 headerHeightMode: .fixed(max: 100, min: 20),
                 headerTopBehavior: .extendsUnderTopSafeArea,
                 topObstructionHeight: 44,
-                contentOffsetY: 30
+                logicalContentOffsetY: 30
             )
         )
 
-        XCTAssertEqual(inside.barFrame.minY, extended.barFrame.minY)
-        XCTAssertEqual(inside.headerFrame.height, 70)
-        XCTAssertEqual(extended.headerFrame.height, 114)
+        XCTAssertEqual(inside.headerFrame, CGRect(x: 0, y: 14, width: 320, height: 100))
+        XCTAssertEqual(extended.headerFrame, CGRect(x: 0, y: -30, width: 320, height: 144))
+        XCTAssertEqual(inside.barFrame.minY, 114)
+        XCTAssertEqual(extended.barFrame.minY, 114)
+        XCTAssertEqual(inside.headerFrame.maxY, inside.barFrame.minY)
+        XCTAssertEqual(extended.headerFrame.maxY, extended.barFrame.minY)
         XCTAssertEqual(inside.resolvedHeaderHeight.collapsibleDistance, 80)
         XCTAssertEqual(extended.resolvedHeaderHeight.collapsibleDistance, 80)
+    }
+
+    func testHeaderHeightRemainsConstantAcrossExpandedPartialAndCollapsedOffsets() {
+        let engine = AnchorPagerLayoutEngine()
+        let outputs = [0, 30, 80].map {
+            engine.layout(
+                for: input(
+                    headerHeightMode: .fixed(max: 100, min: 20),
+                    topObstructionHeight: 44,
+                    logicalContentOffsetY: CGFloat($0)
+                )
+            )
+        }
+
+        XCTAssertEqual(outputs.map(\.headerFrame.height), [100, 100, 100])
+        XCTAssertEqual(outputs.map(\.headerFrame.minY), [44, 14, -36])
+        XCTAssertEqual(outputs.map(\.barFrame.minY), [144, 114, 64])
     }
 
     func testPagingFrameMovesWithHeaderButKeepsCollapsedViewportHeight() {
@@ -109,14 +129,14 @@ final class AnchorPagerLayoutEngineTests: XCTestCase {
             for: input(
                 headerHeightMode: .fixed(max: 100, min: 20),
                 topObstructionHeight: 44,
-                contentOffsetY: 0
+                logicalContentOffsetY: 0
             )
         )
         let collapsed = engine.layout(
             for: input(
                 headerHeightMode: .fixed(max: 100, min: 20),
                 topObstructionHeight: 44,
-                contentOffsetY: 80
+                logicalContentOffsetY: 80
             )
         )
 
@@ -134,21 +154,21 @@ final class AnchorPagerLayoutEngineTests: XCTestCase {
             for: input(
                 headerHeightMode: .fixed(max: 100, min: 20),
                 bottomObstructionHeight: 83,
-                contentOffsetY: 0
+                logicalContentOffsetY: 0
             )
         )
         let partial = engine.layout(
             for: input(
                 headerHeightMode: .fixed(max: 100, min: 20),
                 bottomObstructionHeight: 83,
-                contentOffsetY: 30
+                logicalContentOffsetY: 30
             )
         )
         let collapsed = engine.layout(
             for: input(
                 headerHeightMode: .fixed(max: 100, min: 20),
                 bottomObstructionHeight: 83,
-                contentOffsetY: 80
+                logicalContentOffsetY: 80
             )
         )
 
@@ -181,14 +201,15 @@ final class AnchorPagerLayoutEngineTests: XCTestCase {
                 headerHeightMode: .fixed(max: 160, min: 0),
                 headerTopBehavior: .extendsUnderTopSafeArea,
                 topObstructionHeight: 116,
-                contentOffsetY: 80
+                logicalContentOffsetY: 80
             )
         )
 
         XCTAssertEqual(output.collapseOffset, 80)
         XCTAssertEqual(output.collapseProgress, 0.5)
-        XCTAssertEqual(output.headerFrame.minY, 0)
-        XCTAssertEqual(output.headerFrame.height, 196)
+        XCTAssertEqual(output.headerFrame.minY, -80)
+        XCTAssertEqual(output.headerFrame.height, 276)
+        XCTAssertEqual(output.barFrame.minY, 196)
         XCTAssertEqual(output.barFrame.minY, output.headerFrame.maxY)
     }
 
@@ -210,19 +231,19 @@ final class AnchorPagerLayoutEngineTests: XCTestCase {
             for: input(
                 measuredHeaderHeight: 100,
                 headerHeightMode: .fixed(max: 100, min: 20),
-                contentOffsetY: 30
+                logicalContentOffsetY: 30
             )
         )
         let new = engine.layout(
             for: input(
                 measuredHeaderHeight: 160,
                 headerHeightMode: .fixed(max: 160, min: 20),
-                contentOffsetY: 30
+                logicalContentOffsetY: 30
             )
         )
 
         XCTAssertEqual(
-            engine.adjustedContentOffsetY(
+            engine.adjustedLogicalOffsetY(
                 current: 30,
                 old: old,
                 new: new,
@@ -231,7 +252,7 @@ final class AnchorPagerLayoutEngineTests: XCTestCase {
             90
         )
         XCTAssertEqual(
-            engine.adjustedContentOffsetY(
+            engine.adjustedLogicalOffsetY(
                 current: 30,
                 old: old,
                 new: new,
@@ -240,7 +261,7 @@ final class AnchorPagerLayoutEngineTests: XCTestCase {
             52.5
         )
         XCTAssertEqual(
-            engine.adjustedContentOffsetY(
+            engine.adjustedLogicalOffsetY(
                 current: 30,
                 old: old,
                 new: new,
@@ -249,7 +270,7 @@ final class AnchorPagerLayoutEngineTests: XCTestCase {
             0
         )
         XCTAssertEqual(
-            engine.adjustedContentOffsetY(
+            engine.adjustedLogicalOffsetY(
                 current: 30,
                 old: old,
                 new: new,
@@ -268,7 +289,7 @@ final class AnchorPagerLayoutEngineTests: XCTestCase {
         barHeight: CGFloat = 48,
         topObstructionHeight: CGFloat = 0,
         bottomObstructionHeight: CGFloat = 0,
-        contentOffsetY: CGFloat = 0
+        logicalContentOffsetY: CGFloat = 0
     ) -> AnchorPagerLayoutEngine.Input {
         AnchorPagerLayoutEngine.Input(
             bounds: bounds,
@@ -278,7 +299,7 @@ final class AnchorPagerLayoutEngineTests: XCTestCase {
             barHeight: barHeight,
             topObstructionHeight: topObstructionHeight,
             bottomObstructionHeight: bottomObstructionHeight,
-            contentOffsetY: contentOffsetY
+            logicalContentOffsetY: logicalContentOffsetY
         )
     }
 }
