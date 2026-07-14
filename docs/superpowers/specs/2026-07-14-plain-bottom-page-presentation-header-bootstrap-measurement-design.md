@@ -2,7 +2,7 @@
 
 **日期：** 2026-07-14
 
-**状态：** plain bottom/page surface 已完成；Header 正式测量前 bootstrap 已实现，但后续真实启动发现安装前仍存在 zero-height 时序缺口，转由 `2026-07-14-header-preinstall-bootstrap-seed-repair-design.md` 继续修复，v0.5/v0.6 Ready 再次关闭
+**状态：** 已完成；后续发现的 Header 安装前 zero-height 时序缺口已由 `2026-07-14-header-preinstall-bootstrap-seed-repair-design.md` 和生产提交 `d6ece31` 修复，并完成全量验收与 fresh-pass 复审，v0.5/v0.6 恢复 Ready
 
 **适用范围：** 无 `UIScrollView` 页面底部 container 回弹、Paging adapter presentation 分层、`AnchorPagerLayoutContext` 可见坐标、automatic Header 首次中立测量及示例约束告警。
 

@@ -8,7 +8,7 @@
 
 **技术栈：** Swift 6.2、Swift 6 language mode、UIKit、iOS 14+、Swift Package Manager、XCTest/XCUITest、Tabman 4.0.1、Pageboy 5.0.2、Xcode 26.6。
 
-**当前状态：** 设计已确认；实现、RED/GREEN、完整 Framework/Example/UI、运行时约束日志、generic build、自审与 fresh-pass 复审待完成。在这些门禁完成前，v0.5 Task 7 与 v0.6 不得恢复 Ready，也不得进入 v0.7。
+**当前状态：** 已完成；生产提交 `d6ece31`，RED/GREEN、完整 Framework/Example/UI、运行时约束日志、generic build、自审与 fresh-pass 复审全部通过，v0.5 Task 7 与 v0.6 恢复 Ready。
 
 ---
 
@@ -42,7 +42,7 @@
 
 **Produces:** 可直接证明真实 Header 附着时 host required height constant 的回归测试。
 
-- [ ] **Step 1：扩展约束 Header fixture**
+- [x] **Step 1：扩展约束 Header fixture**
 
 给 `ConstrainedLayoutRecordingHeaderView` 增加 `requiredHostHeightWhenAttached`，在 `didMoveToSuperview()` 且 `superview != nil` 时查找 host 上 active、required、单项 `height == constant` 约束并记录 constant。保留现有 `layoutSubviews()` 零高度探针，形成“约束激活瞬间”和“最终布局结果”两层证据。
 
@@ -62,7 +62,7 @@ override func didMoveToSuperview() {
 }
 ```
 
-- [ ] **Step 2：新增 ViewController 回归测试**
+- [x] **Step 2：新增 ViewController 回归测试**
 
 在现有 `testAutomaticHeaderBootstrapNeverLaysOutConstrainedContentAtRequiredZeroHeight` 相邻位置新增：
 
@@ -93,7 +93,7 @@ func testAutomaticHeaderBootstrapSeedsHostBeforeConstrainedContentAttachment() t
 }
 ```
 
-- [ ] **Step 3：运行 RED 并保存精确失败**
+- [x] **Step 3：运行 RED 并保存精确失败**
 
 ```bash
 xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testAutomaticHeaderBootstrapSeedsHostBeforeConstrainedContentAttachment test
@@ -113,7 +113,7 @@ xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=
 
 **Produces:** incoming bootstrap、同步 prepare、正确 UIViewController containment 与唯一 host height constraint。
 
-- [ ] **Step 1：先补 HeaderHost 合同测试**
+- [x] **Step 1：先补 HeaderHost 合同测试**
 
 新增 `testInstallPreparesBootstrapHeightBeforeAttachingHeaderView`：使用 fitting height 为 `64`、可记录 `didMoveToSuperview` 的 view，断言事件严格以 `prepare:64` 开始，随后才是 `attach`。
 
@@ -136,7 +136,7 @@ host.install(
 )
 ```
 
-- [ ] **Step 2：运行接口 RED**
+- [x] **Step 2：运行接口 RED**
 
 ```bash
 xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' -only-testing:AnchorPagerTests/AnchorPagerHeaderViewHostTests/testInstallPreparesBootstrapHeightBeforeAttachingHeaderView -only-testing:AnchorPagerTests/AnchorPagerHeaderViewHostTests/testInstallingHeaderViewControllerPreparesAfterContainmentBeginsAndBeforeAttachment test
@@ -144,7 +144,7 @@ xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=
 
 预期：当前实现因缺少新的 internal 参数而编译失败；记录该失败后再改生产代码。
 
-- [ ] **Step 3：扩展 HeaderHost internal 安装接口**
+- [x] **Step 3：扩展 HeaderHost internal 安装接口**
 
 把 `install` 改为要求显式 measurement size 和同步回调；不提供默认值，避免生产调用方绕过安装前 seed：
 
@@ -188,7 +188,7 @@ case let .viewController(controller):
 
 将现有 `measuredContentHeight(in:)` 重构为可同时服务 current content 和 incoming content 的私有纯同步 helper。测量优先级保持：有效正 `preferredHeight` → fitting → bounds → intrinsic → `0`；invalid 值沿原路径返回，由 bootstrap 静默归零、formal measure 写 assertion/log。
 
-- [ ] **Step 4：让 ViewController 在附着前写唯一约束**
+- [x] **Step 4：让 ViewController 在附着前写唯一约束**
 
 新增私有 helper：
 
@@ -216,11 +216,11 @@ prepareHostForContent: { [unowned self] seed in
 
 删除 install 返回后才创建 `constant: 0` 的旧分支。只有 `didReplaceHeader == true` 才清空 `lastMeasuredHeaderHeight`。`measureHeaderHeight(in:)` 复用同一 `headerMeasurementSize(in:)`，正式测量逻辑与日志不变。
 
-- [ ] **Step 5：更新 HeaderHost 既有测试调用**
+- [x] **Step 5：更新 HeaderHost 既有测试调用**
 
 测试文件增加 `@MainActor` 私有 install helper，为所有既有直接安装显式提供 `CGSize(width: 320, height: 0)` 和空 prepare；新顺序测试继续直连真实回调。不得给生产接口增加默认空回调来减少测试改动。
 
-- [ ] **Step 6：运行聚焦 GREEN**
+- [x] **Step 6：运行聚焦 GREEN**
 
 ```bash
 xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' -only-testing:AnchorPagerTests/AnchorPagerHeaderViewHostTests -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testAutomaticHeaderBootstrapSeedsHostBeforeConstrainedContentAttachment -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testAutomaticHeaderBootstrapNeverLaysOutConstrainedContentAtRequiredZeroHeight -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testReloadDataInstallsVisibleHeaderAndPagingAdapter -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testAutomaticHeaderHeightStaysStableAcrossTopBehaviorSwitchAndBounceSettlement test
@@ -229,7 +229,7 @@ git diff --check
 
 预期：HeaderHost 全类与四条 ViewController Header 相邻测试全部通过。
 
-- [ ] **Step 7：实施自审并提交**
+- [x] **Step 7：实施自审并提交**
 
 自审必须逐项确认：Public API 无变化；prepare 仅 identity change 调用；VC 先 `addChild`、后 load/measure、再 attach/`didMove`；无第二条 host height constraint；invalid/log 语义不变；未触碰 paging/scroll/inset/overscroll。
 
@@ -250,7 +250,7 @@ git commit -m '修复页眉安装前零高度约束冲突'
 
 **Produces:** 新鲜 Framework、Example/UI、generic build、UIKit LayoutConstraints 与静态架构证据。
 
-- [ ] **Step 1：解析依赖并运行完整 Framework**
+- [x] **Step 1：解析依赖并运行完整 Framework**
 
 ```bash
 swift package resolve
@@ -261,7 +261,7 @@ xcrun xcresulttool get build-results --path /private/tmp/AnchorPagerHeaderPreins
 
 记录实际 passed/failed/skipped 与 error/warning/analyzer warning；不预填通过数。
 
-- [ ] **Step 2：运行完整 Example 单元/UI**
+- [x] **Step 2：运行完整 Example 单元/UI**
 
 ```bash
 xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' -resultBundlePath /private/tmp/AnchorPagerHeaderPreinstallExample-20260714.xcresult test
@@ -271,14 +271,14 @@ xcrun xcresulttool get build-results --path /private/tmp/AnchorPagerHeaderPreins
 
 Example 必须完整运行，不能只以新结构测试替代真实 app/UI 验收。
 
-- [ ] **Step 3：运行 generic Simulator build**
+- [x] **Step 3：运行 generic Simulator build**
 
 ```bash
 xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'generic/platform=iOS Simulator' -resultBundlePath /private/tmp/AnchorPagerHeaderPreinstallBuild-20260714.xcresult build
 xcrun xcresulttool get build-results --path /private/tmp/AnchorPagerHeaderPreinstallBuild-20260714.xcresult
 ```
 
-- [ ] **Step 4：补充新进程运行时 LayoutConstraints 查询**
+- [x] **Step 4：补充新进程运行时 LayoutConstraints 查询**
 
 在 Example 已由测试安装后启动新进程：
 
@@ -289,7 +289,7 @@ xcrun simctl spawn booted log show --last 20s --style compact --predicate 'proce
 
 预期没有本次 Header `height == 0` 冲突。运行时查询是补充证据；Task 1/2 的结构测试才是确定性主门禁。
 
-- [ ] **Step 5：运行静态边界扫描与工作区校验**
+- [x] **Step 5：运行静态边界扫描与工作区校验**
 
 ```bash
 rg -n 'delegate\s*=|panGestureRecognizer\.delegate|isScrollEnabled\s*=|bounces\s*=|alwaysBounceVertical\s*=' Sources/AnchorPager
@@ -318,13 +318,13 @@ git status --short
 
 **Produces:** 只反映真实测试结果的门禁终态与整分支复审记录。
 
-- [ ] **Step 1：同步实际实现和验收证据**
+- [x] **Step 1：同步实际实现和验收证据**
 
 文档必须说明：旧 bootstrap 为什么太晚；新 prepare 在 attach 前；UIViewController containment 顺序；同 identity no-op；formal measurement/log 不变；实际提交；完整测试通过数；结果包；运行时 LayoutConstraints 查询；generic build；Public API/第三方/child ownership 无变化。
 
 只有 Task 3 全部通过后，才允许把 v0.5 Task 7/v0.6 恢复 Ready，并解除“不得进入 v0.7”。
 
-- [ ] **Step 2：执行完整自审**
+- [x] **Step 2：执行完整自审**
 
 覆盖：
 
@@ -335,7 +335,7 @@ git status --short
 5. 边界：Public API、Pageboy、scroll/inset/overscroll、日志事件无变化。
 6. 测试：结构、相邻、完整 UI、日志补充和结果包证据齐全。
 
-- [ ] **Step 3：执行 fresh-pass 整分支复审**
+- [x] **Step 3：执行 fresh-pass 整分支复审**
 
 ```bash
 git diff c37e829...HEAD -- Sources Tests Examples README.md AGENTS.md docs
@@ -344,7 +344,7 @@ git diff --check
 
 按 Critical / Important / Minor 输出结论。任何 Critical/Important 必须先修复并补 RED/GREEN，再重跑受影响测试；不得带着未解决问题恢复 Ready。
 
-- [ ] **Step 4：提交文档终态**
+- [x] **Step 4：提交文档终态**
 
 ```bash
 git add README.md AGENTS.md docs/requirements.md docs/architecture.md docs/task-list.md docs/superpowers/specs/2026-07-14-header-preinstall-bootstrap-seed-repair-design.md docs/superpowers/plans/2026-07-14-header-preinstall-bootstrap-seed-repair.md docs/superpowers/specs/2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement-design.md docs/superpowers/plans/2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement.md
@@ -363,3 +363,14 @@ git status --short
 3. Framework、Example 单元/UI、generic build、运行时日志补充、静态扫描和 `git diff --check` 均有新鲜证据。
 4. 自审和整分支 fresh-pass 复审没有未解决 Critical/Important。
 5. 文档只登记实际提交、实际通过数和实际结果包；满足后才恢复 v0.5 Task 7/v0.6 Ready。
+
+## 执行记录
+
+- 结构 RED：`/private/tmp/AnchorPagerHeaderPreinstallRED-20260714.xcresult`，失败值为 `0.0`；Host 合同 RED 明确缺少新 internal 参数。
+- 聚焦 GREEN：`/private/tmp/AnchorPagerHeaderPreinstallFocusedGREEN-20260714.xcresult`，16/16。
+- Framework：`/private/tmp/AnchorPagerHeaderPreinstallFramework-20260714.xcresult`，296/296、0 fail、0 skip。
+- Example：`/private/tmp/AnchorPagerHeaderPreinstallExample-20260714.xcresult`，38/38（10 单元 + 28 UI）、0 fail、0 skip。
+- generic build：`/private/tmp/AnchorPagerHeaderPreinstallBuild-20260714.xcresult`，成功。
+- 三份最终结果包均为 0 error、0 warning、0 analyzer warning。
+- 新进程 PID `9312` 记录两次 `header.view.install`；同一时间窗 UIKit `LayoutConstraints` 冲突查询为空。
+- 自审与 `c37e829...HEAD` fresh-pass：Critical 0、Important 0、Minor 0。

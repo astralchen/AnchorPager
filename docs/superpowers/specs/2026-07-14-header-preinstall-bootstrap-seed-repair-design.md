@@ -2,7 +2,7 @@
 
 **日期：** 2026-07-14
 
-**状态：** 书面规格已确认，实施计划已建立；RED/GREEN、全量验收和复审待完成
+**状态：** 已完成；生产提交 `d6ece31`，全量验收与 fresh-pass 复审通过
 
 **适用范围：** automatic Header 首次真实内容安装、Header identity replacement、bootstrap fitting、Header UIViewController containment、启动期 Auto Layout 约束告警及相关测试。
 
@@ -159,3 +159,14 @@ parent.addChild(headerViewController)
 3. 同 identity no-op、UIView/UIViewController Header、automatic/ranged/fixed measurement 均保持既有行为。
 4. Public API、containment、paging、scroll/inset/overscroll 和日志边界不变。
 5. RED/GREEN、聚焦测试、完整 Framework/Example/UI、generic build、`git diff --check`、自审和 fresh-pass 复审均有新鲜证据。
+
+## 实施与验收记录
+
+1. 附着瞬间结构测试先在旧实现精确失败：host required height 为 `0.0`；Host 安装合同测试随后先因新 internal 参数尚不存在而编译失败。
+2. `d6ece31` 在 Host 安装事务内完成 incoming fitting、同步 seed 回调和内容附着顺序；聚焦 16/16 通过。
+3. Framework 结果包 `/private/tmp/AnchorPagerHeaderPreinstallFramework-20260714.xcresult`：296/296、0 fail、0 skip、0 error/warning/analyzer warning。
+4. Example 结果包 `/private/tmp/AnchorPagerHeaderPreinstallExample-20260714.xcresult`：38/38（10 单元 + 28 UI）、0 fail、0 skip、0 error/warning/analyzer warning。
+5. generic build 结果包 `/private/tmp/AnchorPagerHeaderPreinstallBuild-20260714.xcresult`：成功，0 error/warning/analyzer warning。
+6. 独立 Example 新进程实际记录两次 `header.view.install`；同一 PID/时间窗的 UIKit `LayoutConstraints` 查询没有 `Unable to simultaneously satisfy constraints`。
+7. 静态扫描确认 Public API 无 Tabman/Pageboy、无 unsafe 并发逃逸；框架只设置自有 `verticalScrollView` 的 delegate/bounce，不触碰业务 child。
+8. fresh-pass 复审结论：Critical 0、Important 0、Minor 0。

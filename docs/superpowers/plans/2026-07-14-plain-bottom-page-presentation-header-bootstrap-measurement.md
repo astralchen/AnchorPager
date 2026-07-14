@@ -8,7 +8,7 @@
 
 **技术栈：** Swift 6.2、Swift 6 language mode、UIKit、iOS 14+、Swift Package Manager、Tabman 4.0.1、Pageboy 5.0.2、XCTest/XCUITest、Xcode 26.3。
 
-**当前状态：** Tasks 1–4 与当时验收已完成；后续真实启动证明 Task 3 只覆盖正式测量前 bootstrap，未覆盖真实 Header 附着前的 zero-height 时序。历史提交与结果保留，后续修复转由 `2026-07-14-header-preinstall-bootstrap-seed-repair-design.md` 及其实施计划执行；v0.5 Task 7 与 v0.6 Ready 再次关闭。
+**当前状态：** Tasks 1–4 与当时验收已完成；后续真实启动发现的 Header 附着前 zero-height 时序缺口已由 `2026-07-14-header-preinstall-bootstrap-seed-repair-design.md` 及对应实施计划修复到 `d6ece31`，最新 Framework 296/296、Example 38/38、generic build、运行时约束日志和 fresh-pass 均通过；v0.5 Task 7 与 v0.6 恢复 Ready。
 
 ---
 

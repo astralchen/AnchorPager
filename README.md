@@ -4,7 +4,7 @@ AnchorPager 是一个 UIKit 容器框架，用于组合可变 Header、吸顶分
 
 2026-07-13 使用 Apple Swift 6.3.3、iPhone 17 Pro / iOS 26.5 完成最终验收：生产代码 HEAD `128821f` 对应的最近 Framework 结果包 `/private/tmp/AnchorPagerPresentedTopFrameworkFull-20260713-2258.xcresult` 为 283/283；本次补强 owner 排他断言后的 Example 为 37/37（10 项单元测试 + 27 项 UI 测试），均为 0 failure、0 skip；Example generic iOS Simulator build 成功。三份最终结果的 error、warning 与 analyzer warning 均为 0。第四次整分支独立复审覆盖 `be2d783...13b3d95`，结论为 Critical 0、Important 0、Minor 2；README 旧验收摘要和 `.container` 顶部真实 UI 缺少 `childTopMax < 0.5` 严格断言两个 Minor 已在本提交修复，v0.5 Task 7 与 v0.6 均达到 Ready。
 
-2026-07-14 后续用户验收发现：无滚动页底部由 container 原生回弹时，旧共享 viewport presentation 会把 bar 推过顶部安全区；首次 automatic Header 中立测量还会让非空内容以 required `height == 0` 参与布局并触发约束冲突。`c37e829` 已完成 plain bottom 页面/chrome 分层、Header identity cache 与正式测量前 bootstrap；但后续真实启动日志证明真实 Header 在该 bootstrap 之前已经附着，仍会瞬时与旧 host `height == 0` 冲突。安装前 seed 修复规格和计划已确认，RED/GREEN、全量验收与复审完成前，v0.5 Task 7 与 v0.6 Ready 暂时关闭。
+2026-07-14 后续用户验收发现：`c37e829` 的 Header bootstrap 只覆盖正式中立测量前，真实 Header 会先附着到旧 `height == 0` host 并瞬时触发内部约束冲突。生产提交 `d6ece31` 已把 incoming fitting 和 required host height 更新前移到内容附着之前；UIViewController Header 保持 `addChild → load/measure → seed → addSubview → didMove`，正式 measurement/cache/log 语义不变。Apple Swift 6.3.3 / Xcode 26.6 下，Framework 296/296、Example 38/38（10 项单元测试 + 28 项 UI 测试）与 generic Simulator build 全部通过，0 fail、0 skip、0 error/warning/analyzer warning；独立新进程实际执行 Header 安装后未产生 UIKit `LayoutConstraints` 冲突。fresh-pass 复审为 Critical 0、Important 0、Minor 0，v0.5 Task 7 与 v0.6 恢复 Ready。
 
 ## 安装
 
@@ -235,7 +235,7 @@ log stream --predicate 'subsystem == "com.anchorpager.AnchorPager"'
 
 ## 当前限制
 
-v0.5 连续纵向 handoff、无滚动页直接承载、stable/native boundary 分离、两类底部回弹路径和 v0.6 三种顶部模式均已实现；plain bottom 页面 surface/bar 分层也已通过此前全量验收。当前仍在修复真实 Header 附着前的 zero-height 安装时序，因此 v0.5 Task 7 与 v0.6 Ready 暂时关闭。尚未实现的后续能力包括跨滚动区域的减速速度合成、完整交互状态、状态栏点击顶滚和尺寸变化后的滚动位置恢复；refresh control 或业务刷新任务也不属于 AnchorPager。Tabman/Pageboy 仅出现在 internal adapter 层，Public API 不暴露第三方类型。
+v0.5 连续纵向 handoff、无滚动页直接承载、stable/native boundary 分离、两类底部回弹路径、plain bottom 页面 surface/bar 分层、Header 安装前 bootstrap seed 和 v0.6 三种顶部模式均已完成当前验收，v0.5 Task 7 与 v0.6 为 Ready。尚未实现的后续能力包括跨滚动区域的减速速度合成、完整交互状态、状态栏点击顶滚和尺寸变化后的滚动位置恢复；refresh control 或业务刷新任务也不属于 AnchorPager。Tabman/Pageboy 仅出现在 internal adapter 层，Public API 不暴露第三方类型。
 
 在 Xcode 26.3 / Swift 6.2.4 的 x86_64 iPhone 17 Simulator 验证中，把控制器同步析构改为
 `isolated deinit` 会在生命周期析构后稳定触发 allocator `pointer being freed was not allocated` 崩溃。
