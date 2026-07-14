@@ -2913,6 +2913,18 @@ final class AnchorPagerViewControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testSelectionCompletionWithoutWillSelectCancelsPlainBottomPresentation() throws {
+        let fixture = try PlainBottomPresentationFixture(pageCount: 2)
+        defer { fixture.window.isHidden = true }
+        let surface = try fixture.presentBottomOverflow()
+        XCTAssertEqual(surface.transform.ty, -24, accuracy: 0.5)
+
+        fixture.pager.pagingHost(fixture.host, didSelect: 1, animated: false)
+
+        XCTAssertEqual(surface.transform, .identity)
+    }
+
+    @MainActor
     func testViewWillTransitionSynchronouslyCancelsActiveContainerPresentation() throws {
         let fixture = try TopOverscrollPresentationFixture()
         defer { fixture.window.isHidden = true }
@@ -2924,6 +2936,35 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         )
 
         fixture.assertCanonicalPresentationRestored()
+    }
+
+    @MainActor
+    func testSafeAreaChangeCancelsActiveContainerPresentationWhenTopInsetStaysZero() throws {
+        let fixture = try TopOverscrollPresentationFixture(
+            topBehavior: .extendsUnderTopSafeArea
+        )
+        defer { fixture.window.isHidden = true }
+        fixture.activateContainerPresentation()
+
+        fixture.pager.additionalSafeAreaInsets.top = 100
+        fixture.pager.viewSafeAreaInsetsDidChange()
+        fixture.window.layoutIfNeeded()
+
+        fixture.assertCanonicalPresentationRestored()
+    }
+
+    @MainActor
+    func testBoundsChangeCancelsActiveContainerPresentationWhenDistanceIsUnchanged() throws {
+        let fixture = try TopOverscrollPresentationFixture(
+            topBehavior: .extendsUnderTopSafeArea
+        )
+        defer { fixture.window.isHidden = true }
+        fixture.activateContainerPresentation()
+
+        fixture.pager.view.bounds.size = CGSize(width: 430, height: 780)
+        fixture.pager.viewDidLayoutSubviews()
+
+        fixture.assertCanonicalPresentationRestored(checksHeaderFrame: false)
     }
 
     @MainActor
@@ -3206,9 +3247,12 @@ private final class TopOverscrollPresentationFixture {
     private let canonicalHeaderFrame: CGRect
     private let overflowDistance: CGFloat = 24
 
-    init() throws {
+    init(
+        topBehavior: AnchorPagerHeaderTopBehavior = .insideSafeArea
+    ) throws {
         var configuration = AnchorPagerConfiguration.default
         configuration.header.heightMode = .fixed(max: 100, min: 0)
+        configuration.header.topBehavior = topBehavior
         pages = [ScrollChildViewController(), ScrollChildViewController()]
         for page in pages {
             page.loadViewIfNeeded()
@@ -3281,6 +3325,7 @@ private final class TopOverscrollPresentationFixture {
     }
 
     func assertCanonicalPresentationRestored(
+        checksHeaderFrame: Bool = true,
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
@@ -3303,13 +3348,15 @@ private final class TopOverscrollPresentationFixture {
             file: file,
             line: line
         )
-        XCTAssertEqual(
-            currentHeaderFrame.minY,
-            canonicalHeaderFrame.minY,
-            accuracy: 0.5,
-            file: file,
-            line: line
-        )
+        if checksHeaderFrame {
+            XCTAssertEqual(
+                currentHeaderFrame.minY,
+                canonicalHeaderFrame.minY,
+                accuracy: 0.5,
+                file: file,
+                line: line
+            )
+        }
     }
 
     func replaceDataSourcePages(with replacements: [ScrollChildViewController]) {

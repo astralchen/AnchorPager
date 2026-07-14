@@ -100,6 +100,7 @@ open class AnchorPagerViewController: UIViewController {
     private var lastLoggedBarFrame: CGRect?
     private var lastLoggedSafeAreaObstruction: LocalSafeAreaObstruction?
     private var lastLoggedBounds: CGRect?
+    private var lastAppliedLayoutEnvironment: LayoutEnvironment?
     private var containerGeometry: AnchorPagerContainerScrollGeometry = .zero
     private var hasAppliedContainerGeometry = false
     private var lastLoggedContainerTopInset: CGFloat?
@@ -457,6 +458,11 @@ open class AnchorPagerViewController: UIViewController {
         defer { isApplyingLayout = false }
 
         let layoutEnvironment = currentLayoutEnvironment()
+        if let lastAppliedLayoutEnvironment,
+           lastAppliedLayoutEnvironment != layoutEnvironment {
+            scrollCoordinator?.cancelBoundaryHandling()
+            resetPresentationSurfaces()
+        }
         let measuredHeight = measureHeaderHeight(in: layoutEnvironment)
         lastMeasuredHeaderHeight = measuredHeight
         let previousGeometry = containerGeometry
@@ -541,6 +547,7 @@ open class AnchorPagerViewController: UIViewController {
             logsChanges: true,
             updatesScrollRange: true
         )
+        lastAppliedLayoutEnvironment = layoutEnvironment
     }
 
     private func updateVisibleLayoutForScrolling() {
@@ -703,7 +710,7 @@ open class AnchorPagerViewController: UIViewController {
         )
     }
 
-    private struct LayoutEnvironment {
+    private struct LayoutEnvironment: Equatable {
         var bounds: CGRect
         var obstruction: LocalSafeAreaObstruction
     }
@@ -990,6 +997,7 @@ extension AnchorPagerViewController: AnchorPagerPagingHostViewControllerDelegate
         animated: Bool
     ) {
         guard index >= 0, index < pageCount else { return }
+        cancelBoundaryHandlingAndRestoreCanonicalPresentation()
         pageStateStore.didSelect(index, context: pageAccessContext)
         reconcileCommittedScrollBinding()
         commitSelectedIndex(index, animated: animated)
