@@ -916,6 +916,31 @@ final class AnchorPagerViewControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testAutomaticHeaderBootstrapSeedsHostBeforeConstrainedContentAttachment() throws {
+        var configuration = AnchorPagerConfiguration.default
+        configuration.header.heightMode = .automatic(min: 0, max: nil)
+        let pager = AnchorPagerViewController(configuration: configuration)
+        let header = ConstrainedLayoutRecordingHeaderView()
+        let dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [UIViewController()],
+            headerContent: .view(header)
+        )
+        pager.dataSource = dataSource
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = pager
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+
+        pager.reloadData()
+
+        XCTAssertGreaterThan(
+            try XCTUnwrap(header.requiredHostHeightWhenAttached),
+            0
+        )
+    }
+
+    @MainActor
     func testReloadHeaderLayoutPreservesVisualPositionWhenHeaderHeightChanges() {
         var configuration = AnchorPagerConfiguration.default
         configuration.header.heightMode = .automatic(min: 0, max: nil)
@@ -3062,6 +3087,7 @@ private final class DynamicFittingView: UIView {
 
 private final class ConstrainedLayoutRecordingHeaderView: UIView {
     private(set) var didLayoutAtRequiredZeroHeight = false
+    private(set) var requiredHostHeightWhenAttached: CGFloat?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -3082,6 +3108,18 @@ private final class ConstrainedLayoutRecordingHeaderView: UIView {
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) 未实现")
+    }
+
+    override func didMoveToSuperview() {
+        super.didMoveToSuperview()
+        guard let hostView = superview else { return }
+        requiredHostHeightWhenAttached = hostView.constraints.first { constraint in
+            constraint.isActive
+                && constraint.priority == .required
+                && (constraint.firstItem as? UIView) === hostView
+                && constraint.firstAttribute == .height
+                && constraint.secondItem == nil
+        }?.constant
     }
 
     override func layoutSubviews() {

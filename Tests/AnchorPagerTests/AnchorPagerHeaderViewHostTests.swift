@@ -10,7 +10,7 @@ final class AnchorPagerHeaderViewHostTests: XCTestCase {
         let headerView = UIView()
         let host = AnchorPagerHeaderViewHost()
 
-        host.install(.view(headerView), in: parent)
+        install(.view(headerView), in: parent, using: host)
 
         XCTAssertTrue(host.view.superview === parent.view)
         XCTAssertTrue(headerView.superview === host.view)
@@ -23,7 +23,7 @@ final class AnchorPagerHeaderViewHostTests: XCTestCase {
         let headerController = UIViewController()
         let host = AnchorPagerHeaderViewHost()
 
-        host.install(.viewController(headerController), in: parent)
+        install(.viewController(headerController), in: parent, using: host)
 
         XCTAssertTrue(headerController.parent === parent)
         XCTAssertTrue(headerController.view.superview === host.view)
@@ -41,12 +41,24 @@ final class AnchorPagerHeaderViewHostTests: XCTestCase {
         parent.loadViewIfNeeded()
         let headerView = CountingHeaderView()
         let host = AnchorPagerHeaderViewHost()
+        var preparationCount = 0
 
-        let didInstall = host.install(.view(headerView), in: parent)
-        let didReinstall = host.install(.view(headerView), in: parent)
+        let didInstall = install(
+            .view(headerView),
+            in: parent,
+            using: host,
+            prepareHostForContent: { _ in preparationCount += 1 }
+        )
+        let didReinstall = install(
+            .view(headerView),
+            in: parent,
+            using: host,
+            prepareHostForContent: { _ in preparationCount += 1 }
+        )
 
         XCTAssertTrue(didInstall)
         XCTAssertFalse(didReinstall)
+        XCTAssertEqual(preparationCount, 1)
         XCTAssertTrue(headerView.superview === host.view)
         XCTAssertEqual(headerView.removeFromSuperviewCallCount, 0)
         XCTAssertEqual(host.view.subviews.filter { $0 === headerView }.count, 1)
@@ -62,9 +74,9 @@ final class AnchorPagerHeaderViewHostTests: XCTestCase {
         AnchorPagerLogger.sink = { events.append($0) }
         defer { AnchorPagerLogger.sink = nil }
 
-        host.install(.viewController(headerController), in: parent)
+        install(.viewController(headerController), in: parent, using: host)
         events.removeAll()
-        host.install(.viewController(headerController), in: parent)
+        install(.viewController(headerController), in: parent, using: host)
 
         XCTAssertTrue(headerController.parent === parent)
         XCTAssertTrue(headerController.view.superview === host.view)
@@ -79,7 +91,7 @@ final class AnchorPagerHeaderViewHostTests: XCTestCase {
         parent.loadViewIfNeeded()
         let headerView = FixedFittingView(height: 64)
         let host = AnchorPagerHeaderViewHost()
-        host.install(.view(headerView), in: parent)
+        install(.view(headerView), in: parent, using: host)
 
         let height = host.measure(in: CGSize(width: 320, height: 0))
 
@@ -92,7 +104,7 @@ final class AnchorPagerHeaderViewHostTests: XCTestCase {
         parent.loadViewIfNeeded()
         let headerView = FixedFittingView(height: 64)
         let host = AnchorPagerHeaderViewHost()
-        host.install(.view(headerView), in: parent)
+        install(.view(headerView), in: parent, using: host)
         var events: [AnchorPagerLogger.Event] = []
         AnchorPagerLogger.sink = { events.append($0) }
         defer { AnchorPagerLogger.sink = nil }
@@ -111,7 +123,7 @@ final class AnchorPagerHeaderViewHostTests: XCTestCase {
         let headerController = UIViewController()
         headerController.preferredContentSize = CGSize(width: 320, height: 80)
         let host = AnchorPagerHeaderViewHost()
-        host.install(.viewController(headerController), in: parent)
+        install(.viewController(headerController), in: parent, using: host)
 
         let height = host.measure(in: CGSize(width: 320, height: 0))
 
@@ -124,7 +136,7 @@ final class AnchorPagerHeaderViewHostTests: XCTestCase {
         parent.loadViewIfNeeded()
         let headerController = FittingHeaderViewController(height: 92)
         let host = AnchorPagerHeaderViewHost()
-        host.install(.viewController(headerController), in: parent)
+        install(.viewController(headerController), in: parent, using: host)
 
         let height = host.measure(in: CGSize(width: 320, height: 0))
 
@@ -137,7 +149,7 @@ final class AnchorPagerHeaderViewHostTests: XCTestCase {
         parent.loadViewIfNeeded()
         let headerView = InvalidFittingView()
         let host = AnchorPagerHeaderViewHost()
-        host.install(.view(headerView), in: parent)
+        install(.view(headerView), in: parent, using: host)
         var events: [AnchorPagerLogger.Event] = []
         AnchorPagerLogger.sink = { events.append($0) }
         defer { AnchorPagerLogger.sink = nil }
@@ -164,7 +176,7 @@ final class AnchorPagerHeaderViewHostTests: XCTestCase {
         AnchorPagerLogger.sink = { events.append($0) }
         defer { AnchorPagerLogger.sink = nil }
 
-        host.install(.viewController(headerController), in: parent)
+        install(.viewController(headerController), in: parent, using: host)
         _ = host.measure(in: CGSize(width: 320, height: 0))
         host.remove()
 
@@ -172,6 +184,70 @@ final class AnchorPagerHeaderViewHostTests: XCTestCase {
         XCTAssertTrue(events.contains(.init(category: .lifecycle, level: .info, event: "header.controller.didMove")))
         XCTAssertTrue(events.contains(.init(category: .layout, level: .debug, event: "header.measure")))
         XCTAssertTrue(events.contains(.init(category: .header, level: .info, event: "header.controller.remove")))
+    }
+
+    @MainActor
+    func testInstallPreparesBootstrapHeightBeforeAttachingHeaderView() {
+        let parent = UIViewController()
+        parent.loadViewIfNeeded()
+        var events: [String] = []
+        let headerView = AttachmentRecordingFittingView(height: 64) {
+            events.append("attach")
+        }
+        let host = AnchorPagerHeaderViewHost()
+
+        install(
+            .view(headerView),
+            in: parent,
+            using: host,
+            prepareHostForContent: { height in
+                events.append("prepare:\(Int(height))")
+            }
+        )
+
+        XCTAssertEqual(events, ["prepare:64", "attach"])
+    }
+
+    @MainActor
+    func testInstallingHeaderViewControllerPreparesAfterContainmentBeginsAndBeforeAttachment() {
+        let parent = UIViewController()
+        parent.loadViewIfNeeded()
+        var events: [String] = []
+        let headerController = ContainmentRecordingHeaderViewController(
+            expectedParent: parent,
+            onEvent: { events.append($0) }
+        )
+        let host = AnchorPagerHeaderViewHost()
+
+        install(
+            .viewController(headerController),
+            in: parent,
+            using: host,
+            prepareHostForContent: { height in
+                events.append("prepare:\(Int(height))")
+            }
+        )
+
+        XCTAssertEqual(
+            events,
+            ["loadWithParent", "prepare:80", "attach", "didMove"]
+        )
+    }
+
+    @MainActor
+    @discardableResult
+    private func install(
+        _ content: AnchorPagerHeaderContent,
+        in parentViewController: UIViewController,
+        using host: AnchorPagerHeaderViewHost,
+        prepareHostForContent: (CGFloat) -> Void = { _ in }
+    ) -> Bool {
+        host.install(
+            content,
+            in: parentViewController,
+            bootstrapMeasurementSize: CGSize(width: 320, height: 0),
+            prepareHostForContent: prepareHostForContent
+        )
     }
 }
 
@@ -229,5 +305,67 @@ private final class InvalidFittingView: UIView {
         verticalFittingPriority: UILayoutPriority
     ) -> CGSize {
         CGSize(width: targetSize.width, height: -12)
+    }
+}
+
+private final class AttachmentRecordingFittingView: UIView {
+    private let measuredHeight: CGFloat
+    private let onAttach: () -> Void
+
+    init(height: CGFloat, onAttach: @escaping () -> Void) {
+        self.measuredHeight = height
+        self.onAttach = onAttach
+        super.init(frame: .zero)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func didMoveToSuperview() {
+        super.didMoveToSuperview()
+        if superview != nil {
+            onAttach()
+        }
+    }
+
+    override func systemLayoutSizeFitting(
+        _ targetSize: CGSize,
+        withHorizontalFittingPriority horizontalFittingPriority: UILayoutPriority,
+        verticalFittingPriority: UILayoutPriority
+    ) -> CGSize {
+        CGSize(width: targetSize.width, height: measuredHeight)
+    }
+}
+
+private final class ContainmentRecordingHeaderViewController: UIViewController {
+    private weak var expectedParent: UIViewController?
+    private let onEvent: (String) -> Void
+
+    init(
+        expectedParent: UIViewController,
+        onEvent: @escaping (String) -> Void
+    ) {
+        self.expectedParent = expectedParent
+        self.onEvent = onEvent
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func loadView() {
+        onEvent(parent === expectedParent ? "loadWithParent" : "loadWithoutParent")
+        view = AttachmentRecordingFittingView(height: 80) { [onEvent] in
+            onEvent("attach")
+        }
+    }
+
+    override func didMove(toParent parent: UIViewController?) {
+        super.didMove(toParent: parent)
+        if parent != nil {
+            onEvent("didMove")
+        }
     }
 }

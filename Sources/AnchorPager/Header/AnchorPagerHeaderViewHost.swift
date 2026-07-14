@@ -17,7 +17,9 @@ final class AnchorPagerHeaderViewHost {
     func install(
         _ content: AnchorPagerHeaderContent,
         in parentViewController: UIViewController,
-        hostParentView: UIView? = nil
+        hostParentView: UIView? = nil,
+        bootstrapMeasurementSize: CGSize,
+        prepareHostForContent: (CGFloat) -> Void
     ) -> Bool {
         self.parentViewController = parentViewController
         installHostViewIfNeeded(in: hostParentView ?? parentViewController.view)
@@ -29,11 +31,26 @@ final class AnchorPagerHeaderViewHost {
 
         switch content {
         case let .view(headerView):
+            prepareHostForContent(
+                bootstrapMeasurement(
+                    for: headerView,
+                    preferredHeight: nil,
+                    in: bootstrapMeasurementSize
+                )
+            )
             installHeaderView(headerView)
             AnchorPagerLogger.log(.info, category: .header, event: "header.view.install")
         case let .viewController(headerViewController):
             parentViewController.addChild(headerViewController)
-            installHeaderView(headerViewController.view)
+            let headerView = headerViewController.view!
+            prepareHostForContent(
+                bootstrapMeasurement(
+                    for: headerView,
+                    preferredHeight: headerViewController.preferredContentSize.height,
+                    in: bootstrapMeasurementSize
+                )
+            )
+            installHeaderView(headerView)
             headerViewController.didMove(toParent: parentViewController)
             currentViewController = headerViewController
             AnchorPagerLogger.log(.info, category: .header, event: "header.controller.add")
@@ -65,6 +82,20 @@ final class AnchorPagerHeaderViewHost {
 
     func bootstrapMeasurement(in size: CGSize) -> CGFloat {
         let measuredHeight = measuredContentHeight(in: size)
+        guard !isInvalidMeasuredHeight(measuredHeight) else { return 0 }
+        return max(0, measuredHeight)
+    }
+
+    private func bootstrapMeasurement(
+        for headerView: UIView,
+        preferredHeight: CGFloat?,
+        in size: CGSize
+    ) -> CGFloat {
+        let measuredHeight = measuredContentHeight(
+            for: headerView,
+            preferredHeight: preferredHeight,
+            in: size
+        )
         guard !isInvalidMeasuredHeight(measuredHeight) else { return 0 }
         return max(0, measuredHeight)
     }
@@ -129,18 +160,30 @@ final class AnchorPagerHeaderViewHost {
     }
 
     private func measuredContentHeight(in size: CGSize) -> CGFloat {
-        if let preferredHeight = currentViewController?.preferredContentSize.height,
+        measuredContentHeight(
+            for: currentView,
+            preferredHeight: currentViewController?.preferredContentSize.height,
+            in: size
+        )
+    }
+
+    private func measuredContentHeight(
+        for headerView: UIView?,
+        preferredHeight: CGFloat?,
+        in size: CGSize
+    ) -> CGFloat {
+        if let preferredHeight,
            preferredHeight > 0 {
             return preferredHeight
         }
-        if let preferredHeight = currentViewController?.preferredContentSize.height,
+        if let preferredHeight,
            isInvalidMeasuredHeight(preferredHeight) {
             return preferredHeight
         }
 
-        guard let currentView else { return 0 }
+        guard let headerView else { return 0 }
 
-        let fittingSize = currentView.systemLayoutSizeFitting(
+        let fittingSize = headerView.systemLayoutSizeFitting(
             CGSize(width: size.width, height: UIView.layoutFittingCompressedSize.height),
             withHorizontalFittingPriority: .required,
             verticalFittingPriority: .fittingSizeLevel
@@ -152,14 +195,14 @@ final class AnchorPagerHeaderViewHost {
             return fittingSize.height
         }
 
-        if currentView.bounds.height > 0 {
-            return currentView.bounds.height
+        if headerView.bounds.height > 0 {
+            return headerView.bounds.height
         }
-        if isInvalidMeasuredHeight(currentView.bounds.height) {
-            return currentView.bounds.height
+        if isInvalidMeasuredHeight(headerView.bounds.height) {
+            return headerView.bounds.height
         }
 
-        let intrinsicHeight = currentView.intrinsicContentSize.height
+        let intrinsicHeight = headerView.intrinsicContentSize.height
         if intrinsicHeight > 0, intrinsicHeight != UIView.noIntrinsicMetric {
             return intrinsicHeight
         }

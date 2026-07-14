@@ -359,20 +359,34 @@ open class AnchorPagerViewController: UIViewController {
 
     private func installHeaderHost() {
         let headerContent = currentHeaderContent ?? .view(UIView())
+        let bootstrapMeasurementSize = headerMeasurementSize(
+            in: currentLayoutEnvironment()
+        )
         let didReplaceHeader = headerViewHost.install(
             headerContent,
             in: self,
-            hostParentView: viewportView
+            hostParentView: viewportView,
+            bootstrapMeasurementSize: bootstrapMeasurementSize,
+            prepareHostForContent: { [unowned self] seed in
+                setHeaderHostHeight(seed)
+            }
         )
         if didReplaceHeader {
             lastMeasuredHeaderHeight = nil
         }
+    }
 
-        if headerHeightConstraint == nil {
-            let headerHeightConstraint = headerViewHost.view.heightAnchor.constraint(equalToConstant: 0)
-            headerHeightConstraint.isActive = true
-            self.headerHeightConstraint = headerHeightConstraint
+    private func setHeaderHostHeight(_ height: CGFloat) {
+        if let headerHeightConstraint {
+            headerHeightConstraint.constant = height
+            return
         }
+
+        let headerHeightConstraint = headerViewHost.view.heightAnchor.constraint(
+            equalToConstant: height
+        )
+        headerHeightConstraint.isActive = true
+        self.headerHeightConstraint = headerHeightConstraint
     }
 
     private func installPagingHostIfNeeded() {
@@ -544,16 +558,20 @@ open class AnchorPagerViewController: UIViewController {
         viewportView.transform = .identity
         _ = pagingHost.setPagePresentationTranslationY(0)
         headerViewHost.setTopOffset(environment.bounds.minY + environment.obstruction.top)
-        let fittingSize = CGSize(
-            width: environment.bounds.width,
-            height: UIView.layoutFittingCompressedSize.height
-        )
+        let fittingSize = headerMeasurementSize(in: environment)
         let neutralHeight = lastMeasuredHeaderHeight
             ?? headerViewHost.bootstrapMeasurement(in: fittingSize)
         headerHeightConstraint?.constant = neutralHeight
         view.layoutIfNeeded()
 
         return headerViewHost.measure(in: fittingSize)
+    }
+
+    private func headerMeasurementSize(in environment: LayoutEnvironment) -> CGSize {
+        CGSize(
+            width: environment.bounds.width,
+            height: UIView.layoutFittingCompressedSize.height
+        )
     }
 
     private func containerPresentation(
