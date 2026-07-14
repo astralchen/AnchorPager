@@ -378,6 +378,7 @@ git commit -m "固定 Header 布局几何"
 
 **Files:**
 - Modify: `Sources/AnchorPager/Core/AnchorPagerScrollCoordinator.swift`
+- Modify: `Sources/AnchorPager/Public/AnchorPagerViewController.swift`（仅迁移 geometry 调用入口；真实 top inset 在 Task 5 接入）
 - Modify: `Tests/AnchorPagerTests/AnchorPagerScrollCoordinatorTests.swift`
 
 **Interfaces:**
@@ -386,7 +387,7 @@ git commit -m "固定 Header 布局几何"
 - Produces: `updateGeometry(_:targetLogicalOffset:)`；`Position.containerOffset` 始终表示逻辑 container distance。
 - Preserves: child KVO/pan binding、simultaneous recognition、top mode matrix、native boundary pass-through 与业务 bounce 配置。
 
-- [ ] **Step 1：增加带 top inset 的协调 RED**
+- [x] **Step 1：增加带 top inset 的协调 RED**
 
 扩展测试 `Fixture`：
 
@@ -470,7 +471,7 @@ func testGeometryMigrationWritesRawOffsetForPreservedLogicalDistance() {
 }
 ```
 
-- [ ] **Step 2：运行 RED，确认失败来自 raw offset 假设**
+- [x] **Step 2：运行 RED，确认失败来自 raw offset 假设**
 
 ```bash
 xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' -only-testing:AnchorPagerTests/AnchorPagerScrollCoordinatorTests/testInsetGeometryUsesLogicalOffsetsForHandoffAndBoundaries -only-testing:AnchorPagerTests/AnchorPagerScrollCoordinatorTests/testChildTopModePinsContainerToInsetExpandedBoundary -only-testing:AnchorPagerTests/AnchorPagerScrollCoordinatorTests/testGeometryMigrationWritesRawOffsetForPreservedLogicalDistance test
@@ -478,7 +479,7 @@ xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=
 
 预期：接口编译失败或旧 coordinator 把 raw `-44/56` 当作逻辑 `0/56`，目标断言失败。
 
-- [ ] **Step 3：替换 coordinator geometry 状态与结构性更新入口**
+- [x] **Step 3：替换 coordinator geometry 状态与结构性更新入口**
 
 删除 `private var collapsibleDistance`，新增：
 
@@ -510,7 +511,7 @@ func updateGeometry(
 
 `handlePan`、resolver、maximum stable total、transition logs 全部使用 `containerGeometry.collapsibleDistance`。
 
-- [ ] **Step 4：集中替换 raw read/write 与边界判断**
+- [x] **Step 4：集中替换 raw read/write 与边界判断**
 
 用以下实现替换对应 helper：
 
@@ -562,7 +563,7 @@ let containerLogicalOffset = containerGeometry.logicalOffset(
 
 然后用 `< -boundaryEpsilon`、`>= D - boundaryEpsilon`、`> D + boundaryEpsilon` 判断。`childDidChange` 也只比较 `containerLogicalOffset < D - epsilon`。所有 top stable write 使用逻辑 `0`，所有 bottom stable write 使用逻辑 `D`。
 
-- [ ] **Step 5：运行 ScrollCoordinator 完整 GREEN**
+- [x] **Step 5：运行 ScrollCoordinator 完整 GREEN**
 
 ```bash
 xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' -only-testing:AnchorPagerTests/AnchorPagerScrollCoordinatorTests -only-testing:AnchorPagerTests/AnchorPagerOverscrollCoordinatorTests -only-testing:AnchorPagerTests/AnchorPagerContainerScrollViewTests test
@@ -571,7 +572,9 @@ git diff --check
 
 预期：旧 topInset=0 全量行为保持，新增 topInset=44 三项通过；owner/boundary/handoff 日志计数不增加，业务 bounce 属性测试继续通过。
 
-- [ ] **Step 6：静态审查并提交 Task 3**
+- [x] **Step 6：静态审查并提交 Task 3**
+
+自审确认 `Position.containerOffset`、resolver 输入、owner/handoff 和日志阈值均为逻辑距离；所有 container raw offset 读取都先经过 `containerGeometry`，所有稳定边界写入都从逻辑值转换为 raw。ViewController 在本任务仅迁移新接口并继续传 `topInset: 0`，未提前取得 Task 5 的 inset 所有权；child delegate、pan delegate、`bounces` 与 `alwaysBounceVertical` 均未触达。
 
 ```bash
 rg -n "containerScrollView\.contentOffset\.y" Sources/AnchorPager/Core/AnchorPagerScrollCoordinator.swift
@@ -580,7 +583,7 @@ rg -n "containerScrollView\.contentOffset\.y" Sources/AnchorPager/Core/AnchorPag
 逐项确认每个命中都通过 `containerGeometry` 转换或仅执行已经转换好的 raw 写入；不得再直接把 raw 与 `0`/`D` 比较。
 
 ```bash
-git add Sources/AnchorPager/Core/AnchorPagerScrollCoordinator.swift Tests/AnchorPagerTests/AnchorPagerScrollCoordinatorTests.swift
+git add Sources/AnchorPager/Core/AnchorPagerScrollCoordinator.swift Sources/AnchorPager/Public/AnchorPagerViewController.swift Tests/AnchorPagerTests/AnchorPagerScrollCoordinatorTests.swift
 git commit -m "迁移纵向协调到逻辑 offset"
 ```
 

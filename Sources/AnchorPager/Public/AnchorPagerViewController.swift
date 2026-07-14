@@ -531,7 +531,10 @@ open class AnchorPagerViewController: UIViewController {
 
         applyManagedInsets(output: output, logsChanges: logsChanges)
         scrollCoordinator?.updateGeometry(
-            collapsibleDistance: output.resolvedHeaderHeight.collapsibleDistance
+            AnchorPagerContainerScrollGeometry(
+                topInset: 0,
+                collapsibleDistance: output.resolvedHeaderHeight.collapsibleDistance
+            )
         )
 
         if logsChanges {

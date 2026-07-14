@@ -517,10 +517,75 @@ final class AnchorPagerScrollCoordinatorTests: XCTestCase {
         fixture.container.contentOffset.y = -24
         fixture.coordinator.containerDidScroll()
 
-        fixture.coordinator.updateGeometry(collapsibleDistance: 120)
+        fixture.coordinator.updateGeometry(
+            AnchorPagerContainerScrollGeometry(
+                topInset: 0,
+                collapsibleDistance: 120
+            )
+        )
 
         XCTAssertNil(fixture.coordinator.activeBoundaryForTesting)
         XCTAssertEqual(fixture.container.contentOffset.y, 0, accuracy: 0.001)
+    }
+
+    func testInsetGeometryUsesLogicalOffsetsForHandoffAndBoundaries() {
+        let fixture = Fixture(
+            collapsedOffset: 100,
+            childMaximumDistance: 500,
+            topInset: 44
+        )
+
+        fixture.coordinator.handlePan(state: .began, translationY: 0)
+        fixture.coordinator.handlePan(state: .changed, translationY: -150)
+        XCTAssertEqual(fixture.container.contentOffset.y, 56, accuracy: 0.001)
+        XCTAssertEqual(
+            fixture.child.contentOffset.y + fixture.child.contentInset.top,
+            50,
+            accuracy: 0.001
+        )
+
+        fixture.container.contentOffset.y = -68
+        fixture.coordinator.containerDidScroll()
+        XCTAssertEqual(fixture.container.contentOffset.y, -68, accuracy: 0.001)
+
+        fixture.coordinator.cancelBoundaryHandling()
+        XCTAssertEqual(fixture.container.contentOffset.y, -44, accuracy: 0.001)
+    }
+
+    func testChildTopModePinsContainerToInsetExpandedBoundary() {
+        let fixture = Fixture(topInset: 44)
+        fixture.coordinator.updateTopOverscrollHandlingMode(.child)
+        fixture.container.contentOffset.y = -68
+        fixture.child.contentOffset.y = -fixture.child.contentInset.top - 12
+
+        fixture.coordinator.containerDidScroll()
+
+        XCTAssertEqual(fixture.container.contentOffset.y, -44, accuracy: 0.001)
+        XCTAssertEqual(
+            fixture.child.contentOffset.y,
+            -fixture.child.contentInset.top - 12,
+            accuracy: 0.001
+        )
+    }
+
+    func testGeometryMigrationWritesRawOffsetForPreservedLogicalDistance() {
+        let fixture = Fixture(topInset: 44)
+        fixture.container.contentOffset.y = -4
+
+        fixture.coordinator.updateGeometry(
+            AnchorPagerContainerScrollGeometry(
+                topInset: 0,
+                collapsibleDistance: 100
+            ),
+            targetLogicalOffset: 40
+        )
+
+        XCTAssertEqual(fixture.container.contentOffset.y, 40, accuracy: 0.001)
+        XCTAssertEqual(
+            fixture.child.contentOffset.y,
+            -fixture.child.contentInset.top,
+            accuracy: 0.001
+        )
     }
 
     func testChangedCommittedChildCancelsActiveBoundaryAndSettlesReplacement() {
@@ -725,7 +790,12 @@ final class AnchorPagerScrollCoordinatorTests: XCTestCase {
         fixture.container.contentOffset.y = -24
         fixture.coordinator.containerDidScroll()
 
-        fixture.coordinator.updateGeometry(collapsibleDistance: 100)
+        fixture.coordinator.updateGeometry(
+            AnchorPagerContainerScrollGeometry(
+                topInset: 0,
+                collapsibleDistance: 100
+            )
+        )
 
         XCTAssertEqual(fixture.container.contentOffset.y, -24, accuracy: 0.001)
     }
@@ -848,15 +918,29 @@ private final class Fixture {
     let child: UIScrollView
     let coordinator: AnchorPagerScrollCoordinator
 
-    init(collapsedOffset: CGFloat, childMaximumDistance: CGFloat) {
+    init(
+        collapsedOffset: CGFloat = 100,
+        childMaximumDistance: CGFloat = 500,
+        topInset: CGFloat = 0
+    ) {
         child = UIScrollView()
         container.bounds = CGRect(x: 0, y: 0, width: 320, height: 640)
+        container.contentInset.top = topInset
+        container.contentOffset.y = -topInset
         child.bounds = CGRect(x: 0, y: 0, width: 320, height: 600)
         child.contentInset = UIEdgeInsets(top: 50, left: 0, bottom: 0, right: 0)
-        child.contentSize = CGSize(width: 320, height: 550 + childMaximumDistance)
+        child.contentSize = CGSize(
+            width: 320,
+            height: 600 + childMaximumDistance - child.contentInset.top
+        )
         child.contentOffset.y = -child.contentInset.top
         coordinator = AnchorPagerScrollCoordinator(containerScrollView: container)
-        coordinator.updateGeometry(collapsibleDistance: collapsedOffset)
+        coordinator.updateGeometry(
+            AnchorPagerContainerScrollGeometry(
+                topInset: topInset,
+                collapsibleDistance: collapsedOffset
+            )
+        )
         coordinator.bindCommittedChild(child)
     }
 

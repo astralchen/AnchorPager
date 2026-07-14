@@ -18,7 +18,7 @@ final class AnchorPagerScrollCoordinator {
     private var childBinding: AnchorPagerChildScrollBinding?
     private weak var committedChildScrollView: UIScrollView?
     private var bindingToken = 0
-    private var collapsibleDistance: CGFloat = 0
+    private var containerGeometry: AnchorPagerContainerScrollGeometry = .zero
     private var gestureStartTotal: CGFloat?
     private var gestureStartTranslationY: CGFloat = 0
     private var isApplyingGuardedOffsets = false
@@ -52,13 +52,26 @@ final class AnchorPagerScrollCoordinator {
         }
     }
 
-    func updateGeometry(collapsibleDistance: CGFloat) {
-        let next = max(0, collapsibleDistance.isFinite ? collapsibleDistance : 0)
-        if abs(self.collapsibleDistance - next) > epsilon {
+    func updateGeometry(
+        _ geometry: AnchorPagerContainerScrollGeometry,
+        targetLogicalOffset: CGFloat? = nil
+    ) {
+        let previous = currentStablePosition()
+        if containerGeometry != geometry {
             overscrollCoordinator.cancel()
         }
-        self.collapsibleDistance = next
-        settleStableOffsets()
+        containerGeometry = geometry
+
+        guard let targetLogicalOffset else {
+            settleStableOffsets()
+            return
+        }
+
+        let containerTarget = geometry.clampedLogicalOffset(targetLogicalOffset)
+        let childTarget = containerTarget >= geometry.collapsibleDistance - epsilon
+            ? previous.childDistance
+            : 0
+        apply(.init(containerOffset: containerTarget, childDistance: childTarget))
     }
 
     func bindCommittedChild(_ scrollView: UIScrollView?) {
@@ -114,7 +127,7 @@ final class AnchorPagerScrollCoordinator {
                 gestureStartTotal: gestureStartTotal,
                 gestureStartTranslationY: gestureStartTranslationY,
                 currentTranslationY: translationY,
-                containerCollapsedOffset: collapsibleDistance,
+                containerCollapsedOffset: containerGeometry.collapsibleDistance,
                 childMaximumDistance: childMaximumDistance,
                 fallback: currentStablePosition()
             )
@@ -123,7 +136,8 @@ final class AnchorPagerScrollCoordinator {
                 apply(AnchorPagerScrollPositionResolver.resolve(input))
                 return
             }
-            let maximumStableTotal = collapsibleDistance + childMaximumDistance
+            let maximumStableTotal = containerGeometry.collapsibleDistance
+                + childMaximumDistance
             if desiredTotal < -boundaryEpsilon {
                 beginBoundary(.top, resolverInput: input)
             } else if desiredTotal > maximumStableTotal + boundaryEpsilon {
@@ -203,9 +217,10 @@ private extension AnchorPagerScrollCoordinator {
     }
 
     func currentStablePosition() -> AnchorPagerScrollPositionResolver.Position {
-        let container = min(
-            max(0, containerScrollView.contentOffset.y),
-            collapsibleDistance
+        let container = containerGeometry.clampedLogicalOffset(
+            containerGeometry.logicalOffset(
+                forRawOffset: containerScrollView.contentOffset.y
+            )
         )
         let childDistance = committedChildScrollView.map {
             min(
@@ -229,12 +244,15 @@ private extension AnchorPagerScrollCoordinator {
         defer { isApplyingGuardedOffsets = false }
 
         let nextOwner: Owner = position.childDistance > epsilon ? .child : .container
+        let containerTarget = containerGeometry.rawOffset(
+            forLogicalOffset: position.containerOffset
+        )
         let childTarget = childTopOffset + position.childDistance
 
         let writeContainer = {
-            if abs(self.containerScrollView.contentOffset.y - position.containerOffset)
+            if abs(self.containerScrollView.contentOffset.y - containerTarget)
                 > self.epsilon {
-                self.containerScrollView.contentOffset.y = position.containerOffset
+                self.containerScrollView.contentOffset.y = containerTarget
             }
         }
         let writeChild = {
@@ -270,7 +288,7 @@ private extension AnchorPagerScrollCoordinator {
         let current = currentStablePosition()
         if current.childDistance > epsilon {
             return .init(
-                containerOffset: collapsibleDistance,
+                containerOffset: containerGeometry.collapsibleDistance,
                 childDistance: current.childDistance
             )
         }
@@ -304,7 +322,7 @@ private extension AnchorPagerScrollCoordinator {
                 apply(.init(containerOffset: 0, childDistance: 0))
             case .bottom:
                 apply(.init(
-                    containerOffset: collapsibleDistance,
+                    containerOffset: containerGeometry.collapsibleDistance,
                     childDistance: childMaximumDistance
                 ))
             }
@@ -324,7 +342,7 @@ private extension AnchorPagerScrollCoordinator {
         case (.top, .child):
             writeContainerBoundary(0)
         case (.bottom, .child):
-            writeContainerBoundary(collapsibleDistance)
+            writeContainerBoundary(containerGeometry.collapsibleDistance)
         case (.bottom, .container):
             break
         }
@@ -368,7 +386,7 @@ private extension AnchorPagerScrollCoordinator {
         let rawChildDistance = child.contentOffset.y - childTopOffset
         apply(AnchorPagerScrollPositionResolver.resolveCanonicalTotal(
             containerBoundary + rawChildDistance,
-            containerCollapsedOffset: collapsibleDistance,
+            containerCollapsedOffset: containerGeometry.collapsibleDistance,
             childMaximumDistance: childMaximumDistance,
             fallback: currentStablePosition()
         ))
@@ -379,7 +397,9 @@ private extension AnchorPagerScrollCoordinator {
     ) -> CGFloat {
         switch (active.boundary, active.owner) {
         case (.top, .container):
-            return max(0, -containerScrollView.contentOffset.y)
+            return containerGeometry.topOverflow(
+                forRawOffset: containerScrollView.contentOffset.y
+            )
         case (.top, .child):
             let distance = (committedChildScrollView?.contentOffset.y ?? childTopOffset)
                 - childTopOffset
@@ -389,38 +409,44 @@ private extension AnchorPagerScrollCoordinator {
                 - childTopOffset
             return max(0, distance - childMaximumDistance)
         case (.bottom, .container):
-            return max(0, containerScrollView.contentOffset.y - collapsibleDistance)
+            return containerGeometry.bottomOverflow(
+                forRawOffset: containerScrollView.contentOffset.y
+            )
         }
     }
 
-    func writeContainerBoundary(_ target: CGFloat) {
-        guard abs(containerScrollView.contentOffset.y - target) > epsilon else { return }
+    func writeContainerBoundary(_ logicalTarget: CGFloat) {
+        let rawTarget = containerGeometry.rawOffset(forLogicalOffset: logicalTarget)
+        guard abs(containerScrollView.contentOffset.y - rawTarget) > epsilon else { return }
         isApplyingGuardedOffsets = true
         defer { isApplyingGuardedOffsets = false }
-        containerScrollView.contentOffset.y = target
+        containerScrollView.contentOffset.y = rawTarget
     }
 
     func handleObservedBoundaryIfNeeded() -> Bool {
+        let containerLogicalOffset = containerGeometry.logicalOffset(
+            forRawOffset: containerScrollView.contentOffset.y
+        )
         let childDistance = committedChildScrollView.map {
             $0.contentOffset.y + $0.contentInset.top
         }
         if overscrollCoordinator.activeOwner == nil {
-            if containerScrollView.contentOffset.y < -boundaryEpsilon {
+            if containerLogicalOffset < -boundaryEpsilon {
                 beginBoundary(.top)
                 return true
             } else if (childDistance ?? 0) < -boundaryEpsilon,
-                      containerScrollView.contentOffset.y <= boundaryEpsilon {
+                      containerLogicalOffset <= boundaryEpsilon {
                 beginBoundary(.top)
                 return true
             } else if let childDistance,
-                      containerScrollView.contentOffset.y
-                        >= collapsibleDistance - boundaryEpsilon,
+                      containerLogicalOffset
+                        >= containerGeometry.collapsibleDistance - boundaryEpsilon,
                       childDistance > childMaximumDistance + boundaryEpsilon {
                 beginBoundary(.bottom)
                 return true
             } else if committedChildScrollView == nil,
-                      containerScrollView.contentOffset.y
-                        > collapsibleDistance + boundaryEpsilon {
+                      containerLogicalOffset
+                        > containerGeometry.collapsibleDistance + boundaryEpsilon {
                 beginBoundary(.bottom)
                 return true
             }
@@ -446,7 +472,10 @@ private extension AnchorPagerScrollCoordinator {
         if handleObservedBoundaryIfNeeded() {
             return
         }
-        if containerScrollView.contentOffset.y < collapsibleDistance - epsilon {
+        let containerLogicalOffset = containerGeometry.logicalOffset(
+            forRawOffset: containerScrollView.contentOffset.y
+        )
+        if containerLogicalOffset < containerGeometry.collapsibleDistance - epsilon {
             pinChildToTop()
             return
         }
@@ -493,8 +522,8 @@ private extension AnchorPagerScrollCoordinator {
         from previous: AnchorPagerScrollPositionResolver.Position,
         to current: AnchorPagerScrollPositionResolver.Position
     ) {
-        if previous.containerOffset < collapsibleDistance - epsilon,
-           current.containerOffset >= collapsibleDistance - epsilon {
+        if previous.containerOffset < containerGeometry.collapsibleDistance - epsilon,
+           current.containerOffset >= containerGeometry.collapsibleDistance - epsilon {
             AnchorPagerLogger.log(
                 .info,
                 category: .scroll,
