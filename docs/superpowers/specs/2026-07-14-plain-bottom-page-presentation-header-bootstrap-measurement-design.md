@@ -2,7 +2,7 @@
 
 **日期：** 2026-07-14
 
-**状态：** 设计与实施计划已确认，实施与重新验收待完成
+**状态：** 已完成；生产代码 HEAD `c37e829`，完整验收与整分支 fresh-pass 复审通过，v0.5/v0.6 已恢复 Ready
 
 **适用范围：** 无 `UIScrollView` 页面底部 container 回弹、Paging adapter presentation 分层、`AnchorPagerLayoutContext` 可见坐标、automatic Header 首次中立测量及示例约束告警。
 
@@ -176,3 +176,10 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExa
 4. automatic Header 首次布局无 required zero-height 内容冲突，测量结果稳定。
 5. Public API、Pageboy containment、Store generation/cache/snapshot、managed inset 和日志热路径边界不变。
 6. RED/GREEN 目标测试、完整 Framework/Example/UI、generic build、静态扫描、`git diff --check`、自审和独立复审均有新鲜通过证据。
+
+## 验收与复审记录（2026-07-14）
+
+- Apple Swift 6.3.3、Xcode 26.6、iPhone 17 Pro / iOS 26.5；`swift package resolve` 通过。
+- 生产代码 HEAD `c37e829`：Framework 293/293，结果包 `/private/tmp/AnchorPagerPlainBottomFramework-20260714-c37e829.xcresult`；Example 37/37（10 单元 + 27 UI），结果包 `/private/tmp/AnchorPagerPlainBottomExample-20260714-c37e829.xcresult`；generic build 结果包 `/private/tmp/AnchorPagerPlainBottomBuild-20260714-c37e829-retry.xcresult`。
+- 三份最终结果均为 0 fail、0 skip、0 error、0 warning、0 analyzer warning；Public 第三方泄漏、业务 child 配置写入、synthetic/unsafe 标记三项扫描零命中，`git diff --check` 通过。
+- 实现者自审未发现阻塞问题。与实现步骤分离的整分支 fresh-pass 复审覆盖 `7a72e15...c37e829`，发现 deinit 未显式归零 page surface 的 1 个 Important；修复提交 `c37e829` 经专门 RED/GREEN 与完整复验后，复审终态为 Critical 0、Important 0、Minor 0。

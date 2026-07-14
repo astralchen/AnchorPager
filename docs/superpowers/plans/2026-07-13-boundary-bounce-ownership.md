@@ -8,7 +8,7 @@
 
 **技术栈：** Swift 6.2、Swift 6 language mode、UIKit、iOS 14+、Swift Package Manager、Tabman 4.0.1、Pageboy 5.0.2、XCTest/XCUITest、Xcode 26.3。
 
-**当前状态：** 2026-07-13 历史 Tasks 1–7 与复审完成；2026-07-14 plain bottom 页面/chrome presentation 修订待实施和重新验收，当前不标记 v0.5/v0.6 Ready。
+**当前状态：** 已完成；2026-07-13 历史 Tasks 1–7 与复审完成，2026-07-14 plain bottom 页面/chrome presentation 修订、完整重新验收和整分支 fresh-pass 复审已在生产代码 HEAD `c37e829` 收口，v0.5/v0.6 当前为 Ready。
 
 > 2026-07-14 修订：本文后续 `topOverflow - bottomOverflow`、对称 viewport transform 和“整个 viewport 上移”代码/步骤只保留为历史实施记录，不得再次执行；最新 page/chrome 分层契约以同日专项设计和后续新计划为准。
 

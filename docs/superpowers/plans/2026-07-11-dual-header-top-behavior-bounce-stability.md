@@ -8,7 +8,7 @@
 
 **Tech Stack:** Swift 6、iOS 14+、UIKit、Swift Package Manager、Tabman `4.0.1`、Pageboy `5.0.2`、XCTest、XCUITest。
 
-**2026-07-14 修订状态：** 历史计划完成；首次无缓存时的 required zero-height 中立布局规则已被 bootstrap fitting seed 设计取代，修复计划待按 `2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement-design.md` 另行实施和验收。
+**2026-07-14 修订状态：** 历史计划完成；首次 required zero-height 中立布局规则已被“Header 身份缓存失效 + bootstrap fitting seed”取代，实现提交 `dfabd6c`，完整验收与整分支 fresh-pass 复审已在生产代码 HEAD `c37e829` 收口，关联门禁为 Ready。
 
 ## Global Constraints
 

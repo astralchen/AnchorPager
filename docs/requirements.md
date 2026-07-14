@@ -22,7 +22,7 @@ AnchorPager 是一个全新的独立 UIKit 容器框架，用于实现可变 Hea
 
 ### 当前复审门禁
 
-v0.5/v0.6 初次独立复审的 3 个 Important 已在 `f81ca1e` 修复，第二次整分支复审的零稳定区间边界反向切换 Important 已在 `5b80893` 修复，第三次整分支复审的已呈现 `.top/.child` 回稳总量跳变 Important 已在 `128821f` 修复；第二、三次复审的文档 Minor 均已同步修正。第四次整分支独立复审覆盖 `be2d783...13b3d95`，结论为 Critical 0、Important 0、Minor 2；两个 Minor 已在 `b9699b0` 修复，历史验收为 Framework 283/283、Example 37/37（10 单元 + 27 UI）、0 fail、0 skip，generic iOS Simulator build 成功。2026-07-14 后续用户验收发现 plain page bottom 共享 viewport presentation 会把 bar 推过顶部安全区，首次 automatic Header required zero-height 中立布局还会触发内容约束冲突；专项设计已确认，实施、全量验收和独立复审待完成。当前 v0.5 Task 7 与 v0.6 重新关闭 Ready 门禁。
+v0.5/v0.6 初次独立复审的 3 个 Important 已在 `f81ca1e` 修复，第二次整分支复审的零稳定区间边界反向切换 Important 已在 `5b80893` 修复，第三次整分支复审的已呈现 `.top/.child` 回稳总量跳变 Important 已在 `128821f` 修复；第二、三次复审的文档 Minor 均已同步修正。第四次整分支独立复审覆盖 `be2d783...13b3d95`，结论为 Critical 0、Important 0、Minor 2；两个 Minor 已在 `b9699b0` 修复。2026-07-14 plain page bottom/bar 安全区和 automatic Header bootstrap 回归已修复到生产代码 HEAD `c37e829`；Framework 293/293、Example 37/37（10 单元 + 27 UI）与 generic iOS Simulator build 全部通过，0 fail、0 skip、0 error/warning/analyzer warning。整分支 fresh-pass 复审发现的 deinit page surface 清理 Important 已修复并完成 RED/GREEN，终态为 Critical 0、Important 0、Minor 0；v0.5 Task 7 与 v0.6 当前为 Ready。
 
 ## 3. 参考项目
 
@@ -245,9 +245,10 @@ extension UIViewController {
 11. 两种顶部行为只改变 Header 外框是否延伸到顶部系统区域，不改变分段栏吸顶基线和 child 内容安全区域。
 12. Header height mode 和可折叠距离只表示纯内容高度，本地顶部遮挡不得进入可折叠距离。
 13. automatic/ranged Header 必须在顶部遮挡下方的中立几何中测量，不能让最终 top behavior 或负 offset presentation 污染测量结果。
-14. Header frame 和 height 可以运行时变化。
-15. `reloadHeaderLayout` 必须支持重新测量、重新布局，并按 offsetAdjustment 保持视觉状态。
-16. Header 视觉迁移不能反复 add/remove header view controller。
+14. Header 测量缓存只属于当前 UIView/UIViewController 内容身份；身份替换必须使旧缓存失效，首次无当前身份缓存时先取得不发布正式状态或日志的非负 bootstrap fitting seed，非空约束内容不得以 required `height == 0` 参与中立布局。
+15. Header frame 和 height 可以运行时变化。
+16. `reloadHeaderLayout` 必须支持重新测量、重新布局，并按 offsetAdjustment 保持视觉状态。
+17. Header 视觉迁移不能反复 add/remove header view controller。
 
 ## 8. 安全区域要求
 
@@ -299,11 +300,11 @@ extension UIViewController {
 7. 同一次下拉手势中只能有一个 top overscroll owner。
 8. Header 展开优先级高于 top overscroll handling。
 9. 横向分页、Header layout reload、屏幕旋转或 child 切换期间，active top overscroll handling 必须有明确暂停、取消或恢复策略。
-10. 底部 bounce 不受顶部 mode 影响：真实 scroll page 由 child 处理，无滚动页由 verticalScrollView 处理。
+10. 底部 bounce 不受顶部 mode 影响：真实 scroll page 由 child 处理；无滚动页由 verticalScrollView 提供原生物理，但可见 presentation 只允许移动 Pageboy 页面 surface，Header/bar 保持 canonical。
 11. AnchorPager 不得修改业务 child 的 `bounces` 或 `alwaysBounceVertical`；`.child` 顶部和真实 child bottom 只允许业务 scroll view 按自身配置处理原生回弹，短内容是否回弹由业务方配置 `alwaysBounceVertical`。
 12. `.container` 或 `.none` 的顶部非 owner 约束通过 guarded stable-boundary write 完成，不得为了屏蔽瞬时越界而临时关闭业务 child bounce。
 13. stable range 与 native boundary 必须分离；原生 owner 越界期间，container delegate、child observation、pan target 和结构性 geometry update 都不得把 owner 反向夹回 canonical range。
-14. container 顶部和底部回弹必须使用对称 presentation，并且 presentation distance 不得进入 LayoutEngine canonical output、scroll range、managed inset、snapshot 或 page generation。
+14. container 顶部和 plain bottom 使用同一 UIKit container 物理但分层呈现：顶部移动共享 viewport，plain bottom 只移动 Pageboy 页面 surface；presentation distance 不得进入 LayoutEngine canonical output、scroll range、managed inset、snapshot 或 page generation，LayoutContext 必须报告实际可见分层坐标。
 15. mode 切换、selection will-select、matching reload、Header layout reload、尺寸过渡和控制器释放必须同步取消 active boundary；取消路径应幂等。
 16. overscroll 日志只在 boundary/owner/mode 的 begin、finish、cancel 或 unavailable 状态变化时输出，不得逐帧记录位移。
 

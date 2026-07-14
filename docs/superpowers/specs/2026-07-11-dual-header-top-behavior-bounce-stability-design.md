@@ -435,4 +435,4 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExa
 
 后续用户启动日志证明：首次 automatic Header 没有 `lastMeasuredHeaderHeight` 时，旧步骤把 host required height 设为 `0` 再同步 layout；示例标题栈的 safe-area top/bottom 内容约束因此不可满足。该问题不改变“最终 top behavior 无关的中立位置测量”原则，只废止首次 required zero-height seed。
 
-修订后的首次路径先对 Header 内容执行一次不发布状态的 compressed fitting，得到 finite、nonnegative bootstrap seed；随后以 seed 建立 required host height、同步中立 layout，再执行正式 fitting。只有正式结果更新测量缓存、canonical output 和既有日志；bootstrap 不更新 context、progress、range、inset 或 frame 日志。详细关系、RED/GREEN 和清理门禁见 2026-07-14 专项设计。该修复完成全量验收与独立复审前，本规格关联的 v0.5/v0.6 当前状态不标记 Ready。
+修订后的首次路径让测量缓存只属于当前 Header 内容身份，身份替换先使旧缓存失效，再对当前内容执行一次不发布状态的 compressed fitting，得到 finite、nonnegative bootstrap seed；随后以 seed 建立 required host height、同步中立 layout，再执行正式 fitting。只有正式结果更新测量缓存、canonical output 和既有日志；bootstrap 不更新 context、progress、range、inset 或 frame 日志。实现提交为 `dfabd6c`，完整验收与整分支 fresh-pass 复审已在生产代码 HEAD `c37e829` 通过；详细关系、RED/GREEN 和清理证据见 2026-07-14 专项设计，关联的 v0.5/v0.6 当前为 Ready。

@@ -4,7 +4,7 @@ AnchorPager 是一个 UIKit 容器框架，用于组合可变 Header、吸顶分
 
 2026-07-13 使用 Apple Swift 6.3.3、iPhone 17 Pro / iOS 26.5 完成最终验收：生产代码 HEAD `128821f` 对应的最近 Framework 结果包 `/private/tmp/AnchorPagerPresentedTopFrameworkFull-20260713-2258.xcresult` 为 283/283；本次补强 owner 排他断言后的 Example 为 37/37（10 项单元测试 + 27 项 UI 测试），均为 0 failure、0 skip；Example generic iOS Simulator build 成功。三份最终结果的 error、warning 与 analyzer warning 均为 0。第四次整分支独立复审覆盖 `be2d783...13b3d95`，结论为 Critical 0、Important 0、Minor 2；README 旧验收摘要和 `.container` 顶部真实 UI 缺少 `childTopMax < 0.5` 严格断言两个 Minor 已在本提交修复，v0.5 Task 7 与 v0.6 均达到 Ready。
 
-2026-07-14 后续用户验收发现：无滚动页底部由 container 原生回弹时，当前共享 viewport presentation 会把 bar 推过顶部安全区；首次 automatic Header 中立测量还会让非空内容以 required `height == 0` 参与布局并触发约束冲突。修复设计已确认，实施、全量验收和独立复审尚未完成，因此上一段 Ready 仅作为历史验收记录，当前 v0.5 Task 7 与 v0.6 暂不标记 Ready。
+2026-07-14 后续用户验收发现：无滚动页底部由 container 原生回弹时，旧共享 viewport presentation 会把 bar 推过顶部安全区；首次 automatic Header 中立测量还会让非空内容以 required `height == 0` 参与布局并触发约束冲突。专项修复已完成到生产代码 HEAD `c37e829`：plain bottom 只移动 Pageboy 页面 surface，Header/bar 保持 canonical；Header 内容身份变化会使旧测量缓存失效，并先取得 bootstrap fitting seed；各类 terminal 与 deinit 均同步归零 presentation。Apple Swift 6.3.3 / Xcode 26.6 下，Framework 293/293、Example 37/37（10 项单元测试 + 27 项 UI 测试）与 generic Simulator build 全部通过，0 fail、0 skip、0 error/warning/analyzer warning。整分支 fresh-pass 复审终态为 Critical 0、Important 0、Minor 0，v0.5 Task 7 与 v0.6 已恢复 Ready。
 
 ## 安装
 
@@ -132,11 +132,11 @@ configuration.bar.height = 56  // 可选：显式覆盖
 
 Header height mode 表示不包含顶部安全区遮挡的纯内容高度，可折叠距离也只由内容的展开/折叠高度决定。`AnchorPagerHeaderTopBehavior.insideSafeArea` 下，Header frame 从本地顶部 safe area 或系统栏遮挡下方开始，高度为当前可见内容高度；`.extendsUnderTopSafeArea` 下，Header frame 从容器 bounds 顶部开始，高度为“顶部遮挡 + 当前可见内容高度”。因此两种模式的分段栏和 child 内容基线一致，切换只改变 Header 外框是否延伸到顶部系统区域。例如内容高度为 `108`、顶部遮挡为 `116` 时，extends 模式的 `headerFrame.height == 224`。
 
-automatic/ranged Header 会在顶部遮挡下方的中立几何中测量，避免 Header 当前展示位置的 safe area 或 `layoutMarginsGuide` 被重复计入内容高度。该测量只在结构性布局路径执行；滚动热路径继续复用最近一次有效纯内容高度。
+automatic/ranged Header 会在顶部遮挡下方的中立几何中测量，避免 Header 当前展示位置的 safe area 或 `layoutMarginsGuide` 被重复计入内容高度。测量缓存只属于当前 Header 内容身份；内容更换时旧缓存失效，首次正式中立布局前先以不发布状态的 compressed fitting 取得非负 seed，因此非空约束内容不会以 required `height == 0` 参与布局。该测量只在结构性布局路径执行；滚动热路径继续复用当前 Header 最近一次有效纯内容高度。
 
 AnchorPager 自有的主容器 `verticalScrollView` 会关闭 UIKit 自动 content inset 调整，避免 navigation bar、safe area 等顶部遮挡被系统和 AnchorPager 布局引擎重复叠加。该主容器的 `contentInsetAdjustmentBehavior` 应保持 `.never`，其 delegate 由 AnchorPager 内部管理，调用方不得替换。主容器只表示 Header 折叠范围，横纵滚动指示器保持隐藏；用户可见滚动进度只由当前真实 child scroll target 表达，无滚动页面没有滚动指示器。
 
-主容器内部把滚动范围和可见内容解耦：`scrollRangeView` 通过 `contentLayoutGuide` 定义固定的 `viewport height + Header 内容可折叠距离`，Header 和横向 paging adapter 则位于 `frameLayoutGuide` 对应的固定 viewport。非负 `contentOffset` 只驱动 LayoutEngine 计算 Header/bar 的 canonical frame，不参与 `contentSize` 反算；负 offset 由 UIKit bounce 驱动，并通过 viewport presentation translation 同步移动 Header、分段栏和页面，不手工实现弹簧动画。
+主容器内部把滚动范围和可见内容解耦：`scrollRangeView` 通过 `contentLayoutGuide` 定义固定的 `viewport height + Header 内容可折叠距离`，Header 和横向 paging adapter 则位于 `frameLayoutGuide` 对应的固定 viewport。非负稳定区间的 `contentOffset` 只驱动 LayoutEngine 计算 Header/bar 的 canonical frame，不参与 `contentSize` 反算。顶部 container overflow 由 UIKit bounce 驱动共享 viewport，使 Header、分段栏和页面整体下移；plain bottom overflow 的原生物理仍来自 container，但可见 presentation 只移动 adapter 内 `UIPageViewController.view`，不移动 Header/bar，也不手工实现弹簧动画。
 
 横向分页 adapter 的 top 跟随 Header bottom，高度固定为 Header 完全折叠时的最大 viewport 高度。Header 折叠热路径只移动 adapter，不改变 Pageboy child bounds；展开时超出 viewport 的底部由容器裁剪。bottom safe area、tab bar 和 toolbar 不裁剪横向区域，而是写入 child 的 managed bottom inset。该 bottom 使用 child 局部坐标：等于 adapter 当前底端到 pager 安全可见底端的距离；展开时包含尚未折叠距离，完全折叠时收敛为根容器底部遮挡。
 
@@ -155,7 +155,7 @@ pager.reloadHeaderLayout(offsetAdjustment: .preserveVisualPosition)
 
 child managed top 只等于实际分段栏对页面的遮挡，不包含 Header 或顶部 safe area；Header 和顶部系统遮挡由 adapter frame 处理。滚动指示器 top 同步避让实际分段栏，content/indicator bottom 等于 adapter 当前底端到 pager 安全可见底端的 child 局部遮挡，保证最后内容和指示器都不会进入 tab bar、toolbar 或底部安全区域。
 
-`AnchorPagerLayoutContext` 回调中的 `headerFrame`、`barFrame` 和 `contentFrame` 使用 pager view 的本地实际可见坐标。正常折叠时它们等于 LayoutEngine 的 canonical frame；负 offset bounce 期间会包含 viewport presentation translation，因此实际 Header/paging frame 与 context 始终对齐。`reloadHeaderLayout(offsetAdjustment:)` 仍只使用 canonical 折叠状态，不会把瞬时 bounce 位移写入 Header 高度或折叠进度。
+`AnchorPagerLayoutContext` 回调中的 `headerFrame`、`barFrame` 和 `contentFrame` 使用 pager view 的本地实际可见坐标。正常折叠时它们等于 LayoutEngine 的 canonical frame；顶部 container bounce 时三者包含同量正向 viewport presentation；plain bottom bounce 时 Header/bar 保持 canonical，只有 `contentFrame` 包含页面 surface 的负向位移。`reloadHeaderLayout(offsetAdjustment:)` 仍只使用 canonical 折叠状态，不会把瞬时 bounce 位移写入 Header 高度或折叠进度。
 
 ## 显式 Scroll View
 
@@ -198,7 +198,7 @@ final class PlainPageViewController: UIViewController {
 }
 ```
 
-当页面没有显式或默认发现的 `UIScrollView` 时，AnchorPager 直接把 original page 交给 Pageboy/UIKit containment，Store 保持 page 非 nil、scroll target 为 nil。框架不会为该页面创建替代 `UIScrollView`，也不会写入 managed inset、offset snapshot、child bounce、`additionalSafeAreaInsets` 或业务页面手势代理。页面根 view 按固定 paging viewport 铺开并至少覆盖宿主的物理屏幕底边；业务内容是否避开 safe area 由页面自身决定。该页只有 container pan：顶部 `.container` 可见回弹与底部回弹均由 container 呈现，`.child` 顶部因没有真实 scroll target 而不可用。
+当页面没有显式或默认发现的 `UIScrollView` 时，AnchorPager 直接把 original page 交给 Pageboy/UIKit containment，Store 保持 page 非 nil、scroll target 为 nil。框架不会为该页面创建替代 `UIScrollView`，也不会写入 managed inset、offset snapshot、child bounce、`additionalSafeAreaInsets` 或业务页面手势代理。页面根 view 按固定 paging viewport 铺开并至少覆盖宿主的物理屏幕底边；业务内容是否避开 safe area 由页面自身决定。该页只有 container pan：顶部 `.container` 由共享 viewport 整体呈现；底部仍由 container 提供原生物理，但只移动 Pageboy 页面 surface；`.child` 顶部因没有真实 scroll target 而不可用。
 
 ## 页面生命周期与缓存
 
@@ -235,7 +235,7 @@ log stream --predicate 'subsystem == "com.anchorpager.AnchorPager"'
 
 ## 当前限制
 
-v0.5 连续纵向 handoff、无滚动页直接承载、stable/native boundary 分离、两类底部回弹路径和 v0.6 三种顶部模式已有完整实现与历史验收，但 plain bottom 页面 presentation/bar 安全区和 Header 首次 bootstrap 测量修复正在重新验收，当前不标记 Ready。尚未实现的后续能力包括跨滚动区域的减速速度合成、完整交互状态、状态栏点击顶滚和尺寸变化后的滚动位置恢复；refresh control 或业务刷新任务也不属于 AnchorPager。Tabman/Pageboy 仅出现在 internal adapter 层，Public API 不暴露第三方类型。
+v0.5 连续纵向 handoff、无滚动页直接承载、stable/native boundary 分离、两类底部回弹路径和 v0.6 三种顶部模式均已实现并完成当前验收；plain bottom 页面 surface/bar 分层和 Header bootstrap 测量专项也已通过全量测试与整分支复审，v0.5 Task 7 与 v0.6 当前为 Ready。尚未实现的后续能力包括跨滚动区域的减速速度合成、完整交互状态、状态栏点击顶滚和尺寸变化后的滚动位置恢复；refresh control 或业务刷新任务也不属于 AnchorPager。Tabman/Pageboy 仅出现在 internal adapter 层，Public API 不暴露第三方类型。
 
 在 Xcode 26.3 / Swift 6.2.4 的 x86_64 iPhone 17 Simulator 验证中，把控制器同步析构改为
 `isolated deinit` 会在生命周期析构后稳定触发 allocator `pointer being freed was not allocated` 崩溃。

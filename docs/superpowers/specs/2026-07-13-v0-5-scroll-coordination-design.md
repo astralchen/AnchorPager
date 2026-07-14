@@ -6,7 +6,7 @@
 
 **日期：** 2026-07-13
 
-**状态：** 2026-07-13 历史 Task 1–7 与复审完成；2026-07-14 plain bottom 分层 presentation/Header bootstrap 修订待实施和重新验收，当前不标记 Ready
+**状态：** 已完成；2026-07-13 Task 1–7 与复审、2026-07-14 plain bottom 分层 presentation/Header bootstrap 修订、完整重新验收和整分支 fresh-pass 复审均完成，v0.5 当前为 Ready
 
 **适用范围：** v0.5 `AnchorPagerScrollCoordinator`、当前 container/current child 连续纵向 handoff、最小 simultaneous recognition、stable/native boundary 分离和真实手势验收
 
@@ -327,4 +327,4 @@ resource.scrollObservation.release
 
 ## 2026-07-14 后续回归修订
 
-用户验收确认真实 child bottom 正常，而 plain page bottom 的共享 viewport transform 会把 bar 推过安全区；同次启动还暴露首次 Header required zero-height 中立布局约束冲突。用户已确认：`verticalScrollView` 保留 plain bottom 原生物理 owner，Pageboy 页面/chrome presentation 分层，首次 Header 先取得 bootstrap fitting seed。最新契约见 `2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement-design.md`；实施、完整验收和独立复审完成前，上一段 Ready 只作为历史结论，本规格当前不标记 v0.5 Ready。
+用户验收确认真实 child bottom 正常，而 plain page bottom 的共享 viewport transform 会把 bar 推过安全区；同次启动还暴露首次 Header required zero-height 中立布局约束冲突。用户已确认：`verticalScrollView` 保留 plain bottom 原生物理 owner，Pageboy 页面/chrome presentation 分层，首次 Header 先取得 bootstrap fitting seed。最新契约见 `2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement-design.md`；实现、完整验收和整分支 fresh-pass 复审已在生产代码 HEAD `c37e829` 完成，本规格当前恢复 v0.5 Ready。

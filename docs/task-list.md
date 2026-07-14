@@ -389,7 +389,7 @@
 
 ## v0.5：纵向嵌套滚动协调版
 
-设计见 `docs/superpowers/specs/2026-07-13-v0-5-scroll-coordination-design.md`，direct page 修订见 `docs/superpowers/specs/2026-07-13-plain-page-direct-containment-design.md`，边界 owner 历史契约见 `docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md`，2026-07-14 修复设计见 `docs/superpowers/specs/2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement-design.md`，实施计划见 `docs/superpowers/plans/2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement.md`。2026-07-13 第四次复审与历史验收已完成；后续用户验收发现 plain bottom 页面/chrome presentation 未分层和 Header 首次 zero-height 测量回归，当前重新打开 Task 7，暂不标记 Ready。
+设计见 `docs/superpowers/specs/2026-07-13-v0-5-scroll-coordination-design.md`，direct page 修订见 `docs/superpowers/specs/2026-07-13-plain-page-direct-containment-design.md`，边界 owner 历史契约见 `docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md`，2026-07-14 修复设计见 `docs/superpowers/specs/2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement-design.md`，实施计划见 `docs/superpowers/plans/2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement.md`。2026-07-14 plain bottom 页面/chrome 分层、Header bootstrap 与析构清理已实现到生产代码 HEAD `c37e829`，全量验收和整分支 fresh-pass 复审均完成，v0.5 Task 7 当前为 Ready。
 
 - [x] 删除无滚动页 synthetic scroll wrapper 及其额外 containment
 - [x] 无滚动 original page 直接交给 Pageboy，Store 保存 page 非 nil、scroll target 为 nil
@@ -432,7 +432,7 @@
 - [x] UIKit 集成测试验证 child scroll delegate 与 child pan delegate 在绑定/解绑后保持原实例
 - [x] UIKit 集成测试验证全过程不修改业务 child 的 `bounces` 与 `alwaysBounceVertical`
 - [x] stable range 与 native boundary pass-through 分离；active owner 不被 container delegate、child KVO、pan target 或 geometry refresh 反向夹紧
-- [x] container top/bottom presentation 对称，且不污染 canonical layout/range、managed inset 或 snapshot
+- [x] container top 使用共享 viewport、plain bottom 只使用 Pageboy 页面 surface，分层 presentation 不污染 canonical layout/range、managed inset 或 snapshot
 - [x] plain page 保持 direct Pageboy containment、nil scroll target 和物理屏幕底边，底部 bounce 由 container 处理
 - [x] Task 7 实现者新鲜验收：Apple Swift 6.3.3；Framework 264 项、Example 36 项（9 单元 + 27 UI），0 fail、0 skip；Example generic Simulator build 成功；三份 xcresult 0 error/warning；实现提交链 `cff0e55`、`8805892`、`27390b4`、`f9fd570`、`687733a`、`c20e259`、`344317d`、`10f1799`、`a4f7c3f`、`47abcd6`
 - [x] Task 7 实现者验收记录提交：`同步纵向边界回弹验收记录`（本次文档提交）
@@ -451,17 +451,17 @@
 - [x] 2026-07-14 后续回归关系梳理：plain page bottom 由 `verticalScrollView` 提供原生物理，但共享 `viewportView` transform 同时上移 Header/bar/page；真实 child bottom 由 child owner 处理所以不受影响；首次 automatic Header required `height == 0` 中立布局会触发非空内容约束冲突
 - [x] 2026-07-14 专项设计确认：container top 仍整体移动，plain bottom 只移动 Paging adapter 内 Pageboy 页面 surface；Header 首次先取 bootstrap fitting seed，再执行中立正式测量；Public API、Pageboy containment、child scroll ownership 不变
 - [x] 2026-07-14 专项实施计划：拆为 Paging surface、ViewController 分层、Header bootstrap、Example UI 探针、全量验收与复审五个 RED→GREEN 任务
-- [ ] 为 plain bottom bar 安全区、页面 presentation、回稳清理与 Header 非零首次布局编写并运行 RED
-- [ ] 实施 Paging adapter 页面 presentation surface 与 Header bootstrap measurement 最小修复
-- [ ] 运行聚焦 GREEN、完整 Framework/Example/UI、generic build、静态门禁和 `git diff --check`
-- [ ] 执行代码自审与独立复审，Critical/Important 清零
-- [ ] 恢复 v0.5 Ready：仅在上述修复、验收和复审全部完成后勾选
+- [x] 为 plain bottom bar 安全区、页面 presentation、回稳清理与 Header 非零首次布局编写并运行 RED；目标失败原因分别为旧共享 viewport 位移、缺少 Paging surface 接口和跨 Header 身份复用零高度缓存
+- [x] 实施 Paging adapter 页面 presentation surface、ViewController chrome/page 分层、按 Header 身份失效的 bootstrap measurement、Example page/bar 探针与析构归零；提交 `574e9bf`、`f7a76bd`、`dfabd6c`、`bb6aa08`、`c37e829`
+- [x] 运行聚焦 GREEN、完整 Framework 293/293、Example 37/37（10 单元 + 27 UI）、generic build、静态门禁和 `git diff --check`；0 fail、0 skip、0 error/warning/analyzer warning
+- [x] 执行实现者自审与整分支 fresh-pass 复审；发现的 1 个 Important（deinit 未显式归零 page surface）已在 `c37e829` 修复并完成 RED/GREEN，终态 Critical 0、Important 0、Minor 0
+- [x] 恢复 v0.5 Ready：2026-07-14 专项实现、验收和复审门禁全部完成
 
 ## v0.6：顶部 Overscroll 事件处理版
 
 依赖门禁：OverscrollCoordinator 只消费 v0.5 已绑定的 committed current/empty owner；pending provider page 不能成为 overscroll owner。
 
-设计与计划：`docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md`、`docs/superpowers/plans/2026-07-13-boundary-bounce-ownership.md`；plain bottom 当前修订见 `docs/superpowers/specs/2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement-design.md`。mode、owner、cancel 和日志历史实现保持；由于 plain bottom 可见 presentation 回归尚未修复/重新验收，v0.6 当前不标记 Ready。
+设计与计划：`docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md`、`docs/superpowers/plans/2026-07-13-boundary-bounce-ownership.md`；plain bottom 当前修订见 `docs/superpowers/specs/2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement-design.md`。mode、owner、cancel 和日志历史实现保持；plain bottom 可见 presentation 回归已完成全量重新验收与整分支 fresh-pass 复审，v0.6 当前为 Ready。
 
 - [x] 创建 `Sources/AnchorPager/Overscroll/AnchorPagerOverscrollCoordinator.swift`
 - [x] 实现 `.none`
@@ -494,7 +494,7 @@
 - [x] v0.6 最新修复验收复用本轮 Framework 283 / Example 37 / generic build，0 fail、0 skip、0 xcresult warning
 - [x] v0.6 实现提交为 `10f1799`、`a4f7c3f`、`47abcd6`，验收记录随 `同步纵向边界回弹验收记录` 提交
 - [x] v0.6 历史第四次独立复审与 Ready：Critical 0、Important 0；两个 Minor 已修复，Framework 283/283、Example 37/37 与 generic build 门禁通过
-- [ ] v0.6 当前 Ready：等待 2026-07-14 plain bottom 页面/chrome presentation 修复、完整 UI 复验和独立复审
+- [x] v0.6 当前 Ready：2026-07-14 plain bottom 页面/chrome presentation、完整 Framework/Example/UI/generic build 复验和整分支 fresh-pass 复审均完成
 
 ## v0.7：手势与交互状态机版
 

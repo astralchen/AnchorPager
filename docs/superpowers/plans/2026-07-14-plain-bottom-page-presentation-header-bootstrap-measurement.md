@@ -8,7 +8,7 @@
 
 **技术栈：** Swift 6.2、Swift 6 language mode、UIKit、iOS 14+、Swift Package Manager、Tabman 4.0.1、Pageboy 5.0.2、XCTest/XCUITest、Xcode 26.3。
 
-**当前状态：** 设计已确认并提交为 `7a72e15`；生产修复、RED/GREEN、完整验收和独立复审尚未执行，v0.5 Task 7 与 v0.6 当前不标记 Ready。
+**当前状态：** 已完成；Tasks 1–4 分别提交为 `574e9bf`、`f7a76bd`、`dfabd6c`、`bb6aa08`，fresh-pass 复审清理提交为 `c37e829`；目标 RED/GREEN、完整 Framework/Example/UI、generic build、静态门禁、自审和整分支复审全部通过，v0.5 Task 7 与 v0.6 已恢复 Ready。
 
 ---
 
@@ -330,7 +330,7 @@ git add Sources/AnchorPager/Public/AnchorPagerViewController.swift Tests/AnchorP
 git commit -m "分离无滚动页底部内容回弹"
 ```
 
-**执行记录（2026-07-14）：** 新契约 RED 精确暴露旧实现会把 Header/bar 与 plain page 一起上移；同时发现原测试把临时 data source 赋给 weak 属性，实际走了空数据路径，已改为强持有以恢复真实 Pageboy containment。最小实现按 committed page 非 nil 且 committed scroll nil 拆分 chrome/page surface，surface 应用失败时 LayoutContext 不报告虚假位移。selection、reloadHeaderLayout、尺寸切换、空数据 reload 四个同步清理测试在既有 `cancelBoundaryHandling()` 稳定化路径和 Task 1 adapter teardown 归零下均已通过，因此没有额外引入重复清理 helper 或不稳定的同步 deinit 测试；释放路径由 adapter teardown-before-containment 测试覆盖。目标、顶部回弹、plain direct/nil scroll 等 8 项定向测试通过；自审确认 Public API、offset writer、业务 child scroll/pan/delegate/bounce 配置和 containment 均未改变。
+**执行记录（2026-07-14）：** 新契约 RED 精确暴露旧实现会把 Header/bar 与 plain page 一起上移；同时发现原测试把临时 data source 赋给 weak 属性，实际走了空数据路径，已改为强持有以恢复真实 Pageboy containment。最小实现按 committed page 非 nil 且 committed scroll nil 拆分 chrome/page surface，surface 应用失败时 LayoutContext 不报告虚假位移。selection、reloadHeaderLayout、尺寸切换、空数据 reload 四个同步清理测试在既有 `cancelBoundaryHandling()` 稳定化路径和 Task 1 adapter teardown 归零下均已通过，因此没有额外引入重复清理 helper。最初带 window 的同步析构 UI 尝试会让 XCTest 收尾不稳定，最终复用仓库既有无窗口 `autoreleasepool` 模式增加直接析构门禁：移除 `deinit` 显式清零时测试失败，恢复后 page surface 析构、既有 inset 析构和 adapter teardown 三项均通过。目标、顶部回弹、plain direct/nil scroll 等 8 项定向测试通过；自审确认 Public API、offset writer、业务 child scroll/pan/delegate/bounce 配置和 containment 均未改变。
 
 ---
 
@@ -541,14 +541,17 @@ git commit -m "补强无滚动页回弹界面验收"
 - Modify: `docs/architecture.md`
 - Modify: `docs/task-list.md`
 - Modify: `docs/superpowers/specs/2026-07-11-dual-header-top-behavior-bounce-stability-design.md`
+- Modify: `docs/superpowers/specs/2026-07-13-v0-5-scroll-coordination-design.md`
+- Modify: `docs/superpowers/specs/2026-07-13-plain-page-direct-containment-design.md`
 - Modify: `docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md`
 - Modify: `docs/superpowers/specs/2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement-design.md`
 - Modify: `docs/superpowers/plans/2026-07-11-dual-header-top-behavior-bounce-stability.md`
+- Modify: `docs/superpowers/plans/2026-07-13-plain-page-direct-containment.md`
 - Modify: `docs/superpowers/plans/2026-07-13-boundary-bounce-ownership.md`
 - Modify: `docs/superpowers/plans/2026-07-13-v0-5-scroll-coordination.md`
 - Modify: `docs/superpowers/plans/2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement.md`
 
-- [ ] **Step 1：同步最终架构与测试契约，但暂不提前标记 Ready**
+- [x] **Step 1：同步最终架构与测试契约，但暂不提前标记 Ready**
 
 文档必须明确：
 
@@ -559,7 +562,7 @@ git commit -m "补强无滚动页回弹界面验收"
 5. Public API、Pageboy containment、Store/inset/snapshot、业务 child 配置不变。
 6. Task 1–4 的实际提交、目标测试和已知未完成门禁如实记录；完整验收和复审完成前保持 Not Ready。
 
-- [ ] **Step 2：执行静态架构门禁**
+- [x] **Step 2：执行静态架构门禁**
 
 ```bash
 rg -n 'import (Tabman|Pageboy)' Sources/AnchorPager/Public
@@ -570,7 +573,7 @@ git diff --check
 
 预期：前三个 `rg` 无输出（exit 1），`git diff --check` exit 0。外层 `verticalScrollView.delegate` 与 `alwaysBounceVertical` 的既有合法配置不在扫描目录中。
 
-- [ ] **Step 3：解析依赖并运行完整 Framework**
+- [x] **Step 3：解析依赖并运行完整 Framework**
 
 ```bash
 swift package resolve
@@ -579,7 +582,7 @@ xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 
 
 预期：全部 Framework 测试通过，0 fail、0 skip；记录实际 test count、Swift/Xcode 版本、结果包路径和生产代码 HEAD。
 
-- [ ] **Step 4：运行完整 Example 单元/UI 与 generic build**
+- [x] **Step 4：运行完整 Example 单元/UI 与 generic build**
 
 ```bash
 xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' -parallel-testing-enabled NO -resultBundlePath /private/tmp/AnchorPagerPlainBottomExample-20260714-7a72e15.xcresult test
@@ -588,7 +591,7 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExa
 
 预期：Example unit/UI 全部通过，0 fail、0 skip；generic Simulator build 成功。结果包均为 0 error、0 warning、0 analyzer warning。首次启动控制台不再出现本任务所述 `UIView.height == 0` 与 Header safe-area content 的 unsatisfiable constraints；自动化门禁以 `ConstrainedLayoutRecordingHeaderView` 测试为准，控制台检查为补充证据。
 
-- [ ] **Step 5：执行实现者自审**
+- [x] **Step 5：执行实现者自审**
 
 逐项检查并在本计划末尾记录结论：
 
@@ -600,31 +603,37 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExa
 - Header UIView/UIViewController、有缓存/无缓存、invalid measurement。
 - actor 隔离、日志去重、测试覆盖、文档状态和验收命令。
 
-- [ ] **Step 6：执行独立代码复审并清零阻塞问题**
+- [x] **Step 6：执行独立代码复审并清零阻塞问题**
 
 复审范围从 `7a72e15` 到最新生产提交，重点比较 Paging adapter surface、ViewController owner/presentation 门禁、Header bootstrap 和 Example UI 探针。Critical/Important 必须修复并重新运行受影响目标与完整验收；Minor 要么修复，要么在计划中给出明确不阻塞理由。复审未清零前不得恢复 Ready。
 
-- [ ] **Step 7：写入真实验收证据并恢复门禁状态**
+- [x] **Step 7：写入真实验收证据并恢复门禁状态**
 
 只有 Step 2–6 全部完成后，才把 design/spec/plan 状态改为完成，在 `docs/task-list.md` 勾选专项修复与 v0.5/v0.6 当前 Ready，并写入实际测试总数、结果包、HEAD、0 error/warning/analyzer warning、自审和独立复审结论。
 
 ```bash
 git diff --check
-git add README.md AGENTS.md docs/requirements.md docs/architecture.md docs/task-list.md docs/superpowers/specs/2026-07-11-dual-header-top-behavior-bounce-stability-design.md docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md docs/superpowers/specs/2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement-design.md docs/superpowers/plans/2026-07-11-dual-header-top-behavior-bounce-stability.md docs/superpowers/plans/2026-07-13-boundary-bounce-ownership.md docs/superpowers/plans/2026-07-13-v0-5-scroll-coordination.md docs/superpowers/plans/2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement.md
+git add README.md AGENTS.md docs/requirements.md docs/architecture.md docs/task-list.md docs/superpowers/specs/2026-07-11-dual-header-top-behavior-bounce-stability-design.md docs/superpowers/specs/2026-07-13-v0-5-scroll-coordination-design.md docs/superpowers/specs/2026-07-13-plain-page-direct-containment-design.md docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md docs/superpowers/specs/2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement-design.md docs/superpowers/plans/2026-07-11-dual-header-top-behavior-bounce-stability.md docs/superpowers/plans/2026-07-13-plain-page-direct-containment.md docs/superpowers/plans/2026-07-13-boundary-bounce-ownership.md docs/superpowers/plans/2026-07-13-v0-5-scroll-coordination.md docs/superpowers/plans/2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement.md
 git commit -m "同步内容层回弹修复验收"
 ```
+
+**执行记录（2026-07-14）：** Apple Swift 6.3.3、Xcode 26.6、iPhone 17 Pro / iOS 26.5。`swift package resolve` 通过；生产代码 HEAD `c37e829` 的 Framework 为 293/293，结果包 `/private/tmp/AnchorPagerPlainBottomFramework-20260714-c37e829.xcresult`；Example 为 37/37（10 单元 + 27 UI），结果包 `/private/tmp/AnchorPagerPlainBottomExample-20260714-c37e829.xcresult`；generic Simulator build 成功，结果包 `/private/tmp/AnchorPagerPlainBottomBuild-20260714-c37e829-retry.xcresult`。三份结果均为 0 fail、0 skip、0 error、0 warning、0 analyzer warning。generic build 首次沙箱内运行因 Xcode/SwiftPM 缓存与 CoreSimulator 权限失败，不属于代码失败；相同命令在获准环境重试后通过。
+
+静态门禁中，Public Tabman/Pageboy、业务 child delegate/pan/bounce 写入、synthetic/unsafe 标记三项 `rg` 均零命中（exit 1），`git diff --check` 通过。实现者自审确认 Public API、Pageboy containment、generation/store/inset/snapshot、业务 child 配置和热路径日志边界未变化。
+
+与实现步骤分离的整分支 fresh-pass 复审覆盖 `7a72e15...c37e829`，发现 deinit 只释放协调资源但未显式恢复 viewport/page surface identity 的 1 个 Important。先移除清理实现验证新增 `testDeinitResetsPagePresentationSurface` 按预期 RED，再恢复同步清理并通过 GREEN；修复提交 `c37e829`。重新运行受影响析构/removal 测试和上述完整验收后，复审终态为 Critical 0、Important 0、Minor 0。
 
 ---
 
 ## 最终完成定义
 
-- [ ] plain bottom native physics 仍由外层 container 提供，页面内容可见上移，Header/bar 始终保持安全区吸顶。
-- [ ] top container、real child top/bottom、plain direct containment、nil scroll target、物理屏幕底边均无回归。
-- [ ] stable、cancel、selection、reload、header layout、rotation、empty、removal、deinit 后 page surface identity。
-- [ ] automatic Header 首次非空约束内容从未以 required zero height 参与布局，正式测量与 invalid 日志语义保持。
-- [ ] Public API、Pageboy containment、Store/generation/cache/snapshot/inset、业务 child delegate/pan/bounce 配置不变。
-- [ ] 聚焦 RED/GREEN、完整 Framework、完整 Example/UI、generic build、静态扫描和 `git diff --check` 均有新鲜通过证据。
-- [ ] 实现者自审完成，独立复审 Critical 0、Important 0，长期文档只标记真实状态。
+- [x] plain bottom native physics 仍由外层 container 提供，页面内容可见上移，Header/bar 始终保持安全区吸顶。
+- [x] top container、real child top/bottom、plain direct containment、nil scroll target、物理屏幕底边均无回归。
+- [x] stable、cancel、selection、reload、header layout、rotation、empty、removal、deinit 后 page surface identity。
+- [x] automatic Header 首次非空约束内容从未以 required zero height 参与布局，正式测量与 invalid 日志语义保持。
+- [x] Public API、Pageboy containment、Store/generation/cache/snapshot/inset、业务 child delegate/pan/bounce 配置不变。
+- [x] 聚焦 RED/GREEN、完整 Framework、完整 Example/UI、generic build、静态扫描和 `git diff --check` 均有新鲜通过证据。
+- [x] 实现者自审完成，整分支 fresh-pass 复审 Critical 0、Important 0、Minor 0，长期文档只标记真实状态。
 
 ---
 
@@ -635,4 +644,4 @@ git commit -m "同步内容层回弹修复验收"
 - [x] 测试名称核对：计划引用的既有 Framework/Example UI 测试名称与当前源码一致；新测试名称在各 Task 中唯一确定。
 - [x] 第三方边界核对：Tabman 4.0.1 的 `TMBar` 约束为 `UIView`，Pageboy 内部页面容器可通过标准 child `UIPageViewController` 识别；计划不使用第三方 private/internal symbol。
 - [x] 占位符扫描：没有遗留实现占位、开放选择或设备占位；目标设备固定为 `iPhone 17 Pro,OS=26.5`。
-- [x] 状态真实性：当前只登记“设计与计划已确认”，没有提前勾选实现、测试、验收、复审或 Ready。
+- [x] 状态真实性：实施期间未提前勾选 Ready；只有完整验收与整分支 fresh-pass 复审完成后才恢复门禁。

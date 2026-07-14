@@ -8,7 +8,7 @@
 
 **Tech Stack:** Swift 6.2、Swift 6 language mode、UIKit、iOS 14+、Swift Package Manager、Tabman 4.0.1、Pageboy 5.0.2、XCTest/XCUITest、XcodeBuildMCP。
 
-**当前状态：** direct containment 专项保持完成；2026-07-14 plain bottom 分层 page presentation 修订待实施和重新验收，关联 v0.5/v0.6 当前不标记 Ready。
+**当前状态：** 已完成；direct containment 专项与 2026-07-14 plain bottom 分层 page presentation 修订、完整重新验收和整分支 fresh-pass 复审均完成，关联 v0.5/v0.6 当前为 Ready。
 
 ## Global Constraints
 
@@ -717,3 +717,4 @@ Expected: 工作区无未解释改动；最近四个实施提交依次覆盖 Sto
 - plain page 仍为 original Pageboy containment、committed scroll target nil、无 managed inset/snapshot/child pan；顶部 `.container`、底部 container presentation、`.child` 顶部不可用且不回退的真实 UI 均通过。
 - `testPlainPageRootReachesPhysicalBottomAndUsesContainerOnlyPan`、plain top/bottom bounce 用例均包含在本轮 Example 全量 xcresult 中。
 - 第四次整分支独立复审为 Critical 0、Important 0、Minor 2；两个 Minor 已在最终状态提交中修复，本补充随 v0.5/v0.6 标记 Ready。
+- 2026-07-14 分层 page presentation 在生产代码 HEAD `c37e829` 完成复验：Framework 293/293、Example 37/37 与 generic Simulator build 全部通过，0 fail、0 skip、0 error/warning/analyzer warning；direct containment、nil scroll target、物理底边和 container-only pan 均无回归。

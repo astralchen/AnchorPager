@@ -5,7 +5,7 @@
 
 **日期：** 2026-07-13
 
-**状态：** direct containment 专项保持完成；plain bottom 分层 presentation 修订实施与重新验收待完成，关联 v0.5/v0.6 当前不标记 Ready
+**状态：** 已完成；direct containment 专项与 2026-07-14 plain bottom 分层 presentation 修订、完整验收和整分支 fresh-pass 复审均完成，关联 v0.5/v0.6 当前为 Ready
 
 ## 背景
 
@@ -145,4 +145,4 @@ UIKit 的祖先 `verticalScrollView.panGestureRecognizer` 可以从普通 descen
 
 最终边界实现、`f81ca1e`、`5b80893` 与 `128821f` 复审修复均未改变 direct containment、committed page 非 nil / scroll target nil、无 managed inset/snapshot/child observation 和物理底边契约。plain page 顶部 `.container` 与底部边界的原生物理均由外层 container 提供；`.child` 顶部不可用且不回退。2026-07-13 历史验收为 Framework 283/283、Example 37/37 与 generic Simulator build 全部通过。
 
-2026-07-14 用户确认 plain bottom 继续由 `verticalScrollView` 处理原生回弹，但仅页面内容区域上移；Header/bar 必须保持安全区吸顶。该修订只改变 adapter 内页面 presentation surface，不改变 original Pageboy containment、nil scroll target、root 物理底边或 container-only pan。实施、全量验收和独立复审待完成，因此关联 v0.5/v0.6 当前不标记 Ready。
+2026-07-14 用户确认 plain bottom 继续由 `verticalScrollView` 处理原生回弹，但仅页面内容区域上移；Header/bar 必须保持安全区吸顶。该修订只改变 adapter 内页面 presentation surface，不改变 original Pageboy containment、nil scroll target、root 物理底边或 container-only pan。实现、全量验收和整分支 fresh-pass 复审已在生产代码 HEAD `c37e829` 完成，关联 v0.5/v0.6 当前为 Ready。
