@@ -71,7 +71,10 @@ final class AnchorPagerScrollCoordinator {
         let childTarget = containerTarget >= geometry.collapsibleDistance - epsilon
             ? previous.childDistance
             : 0
-        apply(.init(containerOffset: containerTarget, childDistance: childTarget))
+        apply(
+            .init(containerOffset: containerTarget, childDistance: childTarget),
+            transitionBaseline: previous
+        )
     }
 
     func bindCommittedChild(_ scrollView: UIScrollView?) {
@@ -236,10 +239,13 @@ private extension AnchorPagerScrollCoordinator {
         return position.containerOffset + position.childDistance
     }
 
-    func apply(_ position: AnchorPagerScrollPositionResolver.Position) {
+    func apply(
+        _ position: AnchorPagerScrollPositionResolver.Position,
+        transitionBaseline: AnchorPagerScrollPositionResolver.Position? = nil
+    ) {
         guard !isApplyingGuardedOffsets else { return }
 
-        let previous = currentStablePosition()
+        let previous = transitionBaseline ?? currentStablePosition()
         isApplyingGuardedOffsets = true
         defer { isApplyingGuardedOffsets = false }
 

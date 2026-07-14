@@ -106,11 +106,11 @@ public enum AnchorPagerHeaderTopBehavior: Sendable, Equatable {
 
     /// Header 从容器 bounds 顶部开始布局。
     ///
-    /// `headerFrame.height` 等于本地顶部遮挡加当前可见纯内容高度，
+    /// `headerFrame.height` 等于本地顶部遮挡加完整展开纯内容高度，
     /// 并保持 `barFrame.minY == headerFrame.maxY`。因此该模式与
     /// `insideSafeArea` 使用相同的分段栏和 child 内容基线，只改变
     /// Header 外框是否延伸到顶部系统区域；主容器的 `contentInset.top`
-    /// 固定为 `0`。
+    /// 固定为 `0`。正常折叠只移动 Header，不缩小其高度。
     case extendsUnderTopSafeArea
 }
 

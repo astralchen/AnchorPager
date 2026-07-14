@@ -588,6 +588,27 @@ final class AnchorPagerScrollCoordinatorTests: XCTestCase {
         )
     }
 
+    func testInsetOnlyGeometryMigrationDoesNotRepeatStableBoundaryLogs() {
+        let fixture = Fixture(topInset: 44)
+        fixture.container.contentOffset.y = 56
+        fixture.coordinator.containerDidScroll()
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+
+        fixture.coordinator.updateGeometry(
+            AnchorPagerContainerScrollGeometry(
+                topInset: 0,
+                collapsibleDistance: 100
+            ),
+            targetLogicalOffset: 100
+        )
+
+        XCTAssertEqual(fixture.container.contentOffset.y, 100, accuracy: 0.001)
+        XCTAssertFalse(events.contains { $0.event == "scroll.boundary.collapsed" })
+        XCTAssertFalse(events.contains { $0.event == "scroll.boundary.expanded" })
+    }
+
     func testChangedCommittedChildCancelsActiveBoundaryAndSettlesReplacement() {
         let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
         let replacement = fixture.makeChild(maximumDistance: 300)
