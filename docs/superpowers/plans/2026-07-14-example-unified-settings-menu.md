@@ -45,7 +45,7 @@
 - Consumes: `AnchorPagerViewController.configuration.header.topBehavior`、`configuration.topOverscrollHandlingMode`、`reloadHeaderLayout(offsetAdjustment:)` 与现有 `ExampleScrollCoordinationState` 探针。
 - Produces: Example internal `makeSettingsItem() -> UIBarButtonItem`、`makeSettingsMenu() -> UIMenu`、`updateSettingsMenu()`；不产生框架 API。
 
-- [ ] **Step 1：先把单元测试改成统一菜单契约**
+- [x] **Step 1：先把单元测试改成统一菜单契约**
 
 在 `AnchorPagerExampleTests` 中用以下两个测试替换旧的两个独立菜单测试：
 
@@ -114,8 +114,7 @@
 
         #expect(pager.configuration.topOverscrollHandlingMode == expectedMode)
         #expect(
-            (stateProbe.accessibilityValue as? String)?
-                .contains("mode=\(expectedIdentifier)") == true
+            stateProbe.accessibilityValue?.contains("mode=\(expectedIdentifier)") == true
         )
         let refreshedMenu = try #require(
             settingsItem.menu?.children.compactMap { $0 as? UIMenu }.first {
@@ -162,7 +161,7 @@ let refreshedHeaderMenu = try #require(
 )
 ```
 
-- [ ] **Step 2：先更新真实 UI 测试，使其要求齿轮二级菜单**
+- [x] **Step 2：先更新真实 UI 测试，使其要求齿轮二级菜单**
 
 新增一条 top mode 真实交互测试，不替换既有 Header 行为覆盖：
 
@@ -230,7 +229,7 @@ private func openSettingsSubmenu(named title: String, in app: XCUIApplication) {
 }
 ```
 
-- [ ] **Step 3：运行 RED，确认失败来自统一设置入口尚不存在**
+- [x] **Step 3：运行 RED，确认失败来自统一设置入口尚不存在**
 
 运行 Example 单元测试：
 
@@ -248,7 +247,7 @@ xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorP
 
 预期：FAIL；失败点为导航栏不存在“示例设置”按钮。
 
-- [ ] **Step 4：实现最小统一设置菜单**
+- [x] **Step 4：实现最小统一设置菜单**
 
 在 `ExamplePagerViewController` 中把两个 item 属性替换为：
 
@@ -313,7 +312,7 @@ updateSettingsMenu()
 
 其他配置写入、Header layout refresh、探针 mode 和 presentation reset 代码保持原样。
 
-- [ ] **Step 5：运行 GREEN 单元测试**
+- [x] **Step 5：运行 GREEN 单元测试**
 
 ```bash
 xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' -parallel-testing-enabled NO -only-testing:AnchorPagerExampleTests test
@@ -321,7 +320,7 @@ xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorP
 
 预期：Example 单元测试全部 PASS，0 fail、0 skip、0 warning。
 
-- [ ] **Step 6：运行新增及相邻真实菜单 UI GREEN**
+- [x] **Step 6：运行新增及相邻真实菜单 UI GREEN**
 
 ```bash
 xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' -parallel-testing-enabled NO \
@@ -334,7 +333,7 @@ xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorP
 
 预期：4 条真实 UI 全部 PASS；齿轮入口、两个二级菜单、top mode 探针更新、Header 勾选态、双向切换和回弹恢复均正常。
 
-- [ ] **Step 7：自审并提交 Task 1**
+- [x] **Step 7：自审并提交 Task 1**
 
 自审确认：
 
@@ -350,6 +349,15 @@ git add Examples/AnchorPagerExample/AnchorPagerExample/ExamplePagerViewControlle
 git commit -m "统一示例设置菜单"
 ```
 
+**Task 1 执行记录（2026-07-14）：**
+
+- Example 单元基线退出码 0。
+- 修改测试后的单元 RED 精确失败 3 条：统一菜单结构、顶部 mode 切换、Header action；消除测试自身类型转换警告后复跑仍为同样 3 条预期失败。
+- 新增真实菜单 UI RED 精确失败于等待“示例设置”按钮，1 fail、0 unexpected；结果包 `/private/tmp/AnchorPagerUnifiedSettingsUIRed-20260714-1143.xcresult`。
+- 最小实现后 Example 单元测试退出码 0；新增 mode UI 与 3 条 Header 相邻 UI 共 4 条退出码 0。
+- 自审确认仅修改三个 Example 文件，未触达 `Sources/AnchorPager/`、Public API、containment、scroll/inset/owner、日志或业务 child delegate/bounce。
+- 实现与测试提交：`7b1b6f7 统一示例设置菜单`。
+
 ---
 
 ### Task 2：同步文档、完整验收与最终复审
@@ -364,7 +372,7 @@ git commit -m "统一示例设置菜单"
 - Consumes: Task 1 的齿轮设置入口和通过的 Example RED/GREEN 证据。
 - Produces: 完整 Example/UI/build、相邻 Framework 回归、自审和 Ready 文档终态。
 
-- [ ] **Step 1：更新接入者与长期状态文档**
+- [x] **Step 1：更新接入者与长期状态文档**
 
 在 README 的 Example 段落明确：
 
@@ -374,7 +382,7 @@ git commit -m "统一示例设置菜单"
 
 在 `docs/task-list.md` 将实施项更新为实际提交、RED/GREEN 和 UI 证据；在设计规格和本计划中只登记已经运行的命令与结果，不提前填写通过数或 Ready。
 
-- [ ] **Step 2：运行相邻 Framework mode 回归**
+- [x] **Step 2：运行相邻 Framework mode 回归**
 
 ```bash
 xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' -parallel-testing-enabled NO -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests/testRuntimeTopModeChangeCancelsContainerPresentationAndKeepsChildConfiguration test
@@ -382,7 +390,7 @@ xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=
 
 预期：PASS，证明 Example 改为统一入口没有绕开框架现有运行时 mode reconcile 契约。
 
-- [ ] **Step 3：运行完整 Example 单元/UI**
+- [x] **Step 3：运行完整 Example 单元/UI**
 
 ```bash
 xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' -parallel-testing-enabled NO -resultBundlePath /private/tmp/AnchorPagerExampleUnifiedSettingsFull-20260714.xcresult test
@@ -390,7 +398,7 @@ xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorP
 
 预期：全部 Example 单元/UI PASS，0 fail、0 skip；解析 xcresult 并记录实际总数、单元/UI 数、error/warning/analyzer warning。
 
-- [ ] **Step 4：运行 Example generic Simulator build**
+- [x] **Step 4：运行 Example generic Simulator build**
 
 ```bash
 xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'generic/platform=iOS Simulator' -resultBundlePath /private/tmp/AnchorPagerExampleUnifiedSettingsBuild-20260714.xcresult build
@@ -398,19 +406,19 @@ xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorP
 
 预期：build succeeded，0 error、0 warning、0 analyzer warning。若沙箱阻止 Xcode/SwiftPM 缓存或 CoreSimulator，使用同一命令获准重试并如实记录首次环境失败。
 
-- [ ] **Step 5：运行最终静态门禁与实现者自审**
+- [x] **Step 5：运行最终静态门禁与实现者自审**
 
 ```bash
 git diff --check
 git status --short
 rg -n 'headerTopBehaviorItem|topOverscrollHandlingItem' Examples/AnchorPagerExample/AnchorPagerExample
-rg -n 'accessibilityLabel == "Header 顶部行为"|accessibilityLabel == "顶部回弹"' Examples/AnchorPagerExample
+rg -n 'accessibilityLabel == "Header 顶部行为"|accessibilityLabel == "顶部回弹"' Examples/AnchorPagerExample/AnchorPagerExample
 git diff --name-only HEAD~1..HEAD
 ```
 
-预期：前两项旧属性/旧独立 item 扫描零命中；实现提交只触达三个 Example 文件。自审覆盖 Public API、框架源码、containment/lifecycle、scroll/inset/owner、actor 隔离、闭包生命周期、可访问性、测试和文档。
+结果：生产 target 的旧属性/旧独立 item 扫描零命中；测试 target 仅保留两条“旧入口必须不存在”的负向断言；实现提交只触达三个 Example 文件。自审覆盖 Public API、框架源码、containment/lifecycle、scroll/inset/owner、actor 隔离、闭包生命周期、可访问性、测试和文档。
 
-- [ ] **Step 6：执行与实现步骤分离的 fresh-pass 复审**
+- [x] **Step 6：执行与实现步骤分离的 fresh-pass 复审**
 
 复审 Task 1 提交，重点检查：
 
@@ -422,7 +430,7 @@ git diff --name-only HEAD~1..HEAD
 
 Critical/Important 必须修复并重跑受影响测试；Minor 要么修复，要么在计划中记录明确不阻塞理由。
 
-- [ ] **Step 7：写入真实验收证据并提交文档**
+- [x] **Step 7：写入真实验收证据并提交文档**
 
 只有 Step 2–6 全部通过后，才把设计状态改为完成，在 task-list 勾选统一设置菜单实施和验收，并记录实际结果包、测试总数、工具链、提交和复审结论。
 
@@ -432,17 +440,26 @@ git add README.md docs/task-list.md docs/superpowers/specs/2026-07-14-example-un
 git commit -m "完成示例设置菜单验收"
 ```
 
+**Task 2 执行记录（2026-07-14）：**
+
+- Framework 相邻 mode 回归退出码 0。
+- 完整 Example 结果包 `/private/tmp/AnchorPagerExampleUnifiedSettingsFull-20260714.xcresult`：38/38（10 单元 + 28 UI）、0 fail、0 skip；build-results summary 为 0 error、0 warning、0 analyzer warning。
+- generic Simulator 构建结果包 `/private/tmp/AnchorPagerExampleUnifiedSettingsBuild-20260714.xcresult`：status succeeded，0 error、0 warning、0 analyzer warning。
+- 静态门禁确认生产 target 无旧独立 item；Task 1 提交只包含三个 Example 文件，`Sources/AnchorPager/` 零变化。
+- fresh-pass 复审覆盖标准嵌套菜单、configuration 唯一事实、同步菜单重建、Header/mode 副作用、弱引用、真实 XCUITest 和架构边界；结论 Critical 0、Important 0、Minor 0。
+- 验收工具链：Xcode 26.6（17F113）、Apple Swift 6.3.3；测试设备 iPhone 17 Pro / iOS 26.5。
+
 ---
 
 ## 最终完成定义
 
-- [ ] 单个齿轮 item 替换两个独立配置文本 item，导航栏其余入口不变。
-- [ ] 标准二级菜单标题、顺序、默认值和唯一勾选态符合规格。
-- [ ] Header behavior 与 top mode 的 action、副作用和菜单重建全部通过同进程测试。
-- [ ] 真实 XCUITest 从齿轮进入子菜单并把 mode 从 container 切换到 child。
-- [ ] 既有 Header 安全区、双向行为切换和回弹恢复 UI 用例通过新入口。
-- [ ] Example 完整单元/UI、generic build、相邻 Framework mode 回归和 `git diff --check` 均有新鲜证据。
-- [ ] 实现者自审与 fresh-pass 复审清零 Critical/Important，长期文档只标记真实状态。
+- [x] 单个齿轮 item 替换两个独立配置文本 item，导航栏其余入口不变。
+- [x] 标准二级菜单标题、顺序、默认值和唯一勾选态符合规格。
+- [x] Header behavior 与 top mode 的 action、副作用和菜单重建全部通过同进程测试。
+- [x] 真实 XCUITest 从齿轮进入子菜单并把 mode 从 container 切换到 child。
+- [x] 既有 Header 安全区、双向行为切换和回弹恢复 UI 用例通过新入口。
+- [x] Example 完整单元/UI、generic build、相邻 Framework mode 回归和 `git diff --check` 均有新鲜证据。
+- [x] 实现者自审与 fresh-pass 复审清零 Critical/Important，长期文档只标记真实状态。
 
 ## 计划自审记录（2026-07-14）
 
@@ -452,3 +469,4 @@ git commit -m "完成示例设置菜单验收"
 - [x] 回归覆盖：3 条旧 Header 菜单 UI 路径全部保留并改走统一 helper，另新增 1 条 top mode 真实交互；单元 Header action 同步改走子菜单。
 - [x] 边界覆盖：没有框架源码/Public API/containment/owner/inset/logging 变更；`.child` + nil 语义保持。
 - [x] 占位符扫描：计划没有 TBD、TODO、未选方案、设备占位或未定义方法；目标设备固定为 iPhone 17 Pro / iOS 26.5。
+- [x] 实施后复审：实现与计划一致；修正静态扫描范围后没有生产残留，Critical 0、Important 0、Minor 0。

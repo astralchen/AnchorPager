@@ -212,7 +212,7 @@ final class PlainPageViewController: UIViewController {
 
 ## 示例工程
 
-仓库包含 `Examples/AnchorPagerExample.xcodeproj`，用于验证示例 App 能接入本地 `AnchorPager` package、以 `UITabBarController` 作为 window root、首屏直接显示 AnchorPager 示例页，并可通过导航按钮 push 另一个 AnchorPager 示例页来验证 `hidesBottomBarWhenPushed` 隐藏 tab bar。示例页保持默认自适应 bar，通过 public API 提供 Header、真实 scroll view child 和无滚动 child；UI test 验证真实 scroll 页的 managed inset，以及无滚动页的直接 containment、物理底边和 container-only pan。
+仓库包含 `Examples/AnchorPagerExample.xcodeproj`，用于验证示例 App 能接入本地 `AnchorPager` package、以 `UITabBarController` 作为 window root、首屏直接显示 AnchorPager 示例页，并可通过导航按钮 push 另一个 AnchorPager 示例页来验证 `hidesBottomBarWhenPushed` 隐藏 tab bar。示例页保持默认自适应 bar，通过 public API 提供 Header、真实 scroll view child 和无滚动 child；UI test 验证真实 scroll 页的 managed inset，以及无滚动页的直接 containment、物理底边和 container-only pan。示例导航栏使用单个“示例设置”齿轮菜单切换 Header 顶部行为和顶部回弹模式；两组配置位于独立二级菜单，当前值以勾选态显示，切换后立即应用。
 
 ```bash
 xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'generic/platform=iOS Simulator' build

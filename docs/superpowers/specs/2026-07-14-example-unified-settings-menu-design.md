@@ -2,7 +2,7 @@
 
 **日期：** 2026-07-14
 
-**状态：** 书面规格已确认，实施计划已编写，待执行
+**状态：** 已完成实现、完整验收与 fresh-pass 复审
 
 **适用范围：** Example 导航栏配置入口、`AnchorPagerHeaderTopBehavior` 与 `AnchorPagerTopOverscrollHandlingMode` 运行时切换、菜单选中态及相关 Example 单元/UI 测试。
 
@@ -146,3 +146,13 @@
 5. 真实 UI 测试证明用户可从齿轮菜单切换到 `.child`，探针同步为 `mode=child`。
 6. Example 完整单元/UI、generic Simulator build、必要 Framework 回归和 `git diff --check` 通过。
 7. 自审确认 Public API、containment、scroll/inset/owner、日志和文档边界未变化。
+
+## 实施与验收记录
+
+1. 实现与测试提交为 `7b1b6f7 统一示例设置菜单`，只修改 Example 控制器、单元测试和 UI 测试三个文件。
+2. TDD RED 精确失败于统一设置入口缺失：单元 3 条预期失败；真实菜单 UI 1 fail、0 unexpected，结果包为 `/private/tmp/AnchorPagerUnifiedSettingsUIRed-20260714-1143.xcresult`。
+3. 最小实现后的 Example 单元测试和 4 条目标 UI 全部通过；目标 UI 覆盖顶部 mode 切换和 3 条既有 Header 菜单路径。
+4. Framework 相邻用例 `testRuntimeTopModeChangeCancelsContainerPresentationAndKeepsChildConfiguration` 通过。
+5. 完整 Example 结果包 `/private/tmp/AnchorPagerExampleUnifiedSettingsFull-20260714.xcresult` 为 38/38（10 单元 + 28 UI）、0 fail、0 skip、0 error、0 warning、0 analyzer warning。
+6. generic Simulator 构建结果包 `/private/tmp/AnchorPagerExampleUnifiedSettingsBuild-20260714.xcresult` 状态为 succeeded，0 error、0 warning、0 analyzer warning。
+7. 实现者自审与 fresh-pass 复审均确认 Public API、第三方 adapter、containment/lifecycle、scroll/inset/owner、actor 隔离和日志边界无变化；fresh-pass 结论为 Critical 0、Important 0、Minor 0。
