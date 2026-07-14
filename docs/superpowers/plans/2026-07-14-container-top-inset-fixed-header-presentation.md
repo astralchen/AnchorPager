@@ -56,7 +56,7 @@
 - Produces: `expandedRawOffset`、`collapsedRawOffset`、`topOverflow(forRawOffset:)`、`bottomOverflow(forRawOffset:)`、`scrollRangeHeight(viewportHeight:)`。
 - Consumes: `AnchorPagerHeaderTopBehavior`；不 import UIKit，不读写 `UIScrollView`。
 
-- [ ] **Step 1：先写纯坐标失败测试**
+- [x] **Step 1：先写纯坐标失败测试**
 
 创建 `AnchorPagerContainerScrollGeometryTests.swift`：
 
@@ -135,7 +135,7 @@ final class AnchorPagerContainerScrollGeometryTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2：运行 RED，确认只因新类型不存在而失败**
+- [x] **Step 2：运行 RED，确认只因新类型不存在而失败**
 
 ```bash
 xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' -only-testing:AnchorPagerTests/AnchorPagerContainerScrollGeometryTests test
@@ -143,7 +143,7 @@ xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=
 
 预期：编译失败并明确缺少 `AnchorPagerContainerScrollGeometry`；不得出现依赖解析或其他测试失败。
 
-- [ ] **Step 3：实现最小纯坐标类型**
+- [x] **Step 3：实现最小纯坐标类型**
 
 创建 `AnchorPagerContainerScrollGeometry.swift`：
 
@@ -212,7 +212,7 @@ struct AnchorPagerContainerScrollGeometry: Equatable {
 }
 ```
 
-- [ ] **Step 4：运行 GREEN 与纯计算相邻回归**
+- [x] **Step 4：运行 GREEN 与纯计算相邻回归**
 
 ```bash
 xcodebuild -quiet -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' -only-testing:AnchorPagerTests/AnchorPagerContainerScrollGeometryTests -only-testing:AnchorPagerTests/AnchorPagerScrollPositionResolverTests test
@@ -221,7 +221,7 @@ git diff --check
 
 预期：两个测试类全部通过；新文件不 import UIKit、没有 actor/unsafe 标记。
 
-- [ ] **Step 5：自审并提交 Task 1**
+- [x] **Step 5：自审并提交 Task 1**
 
 自审确认 top inset 只有一个解析入口，raw/logical 转换互逆，`D == 0` 时 expanded/collapsed raw boundary 相同，range 公式为 `H + D - I`。
 
