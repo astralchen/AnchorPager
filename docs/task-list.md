@@ -496,7 +496,8 @@
 - [x] v0.6 历史第四次独立复审与 Ready：Critical 0、Important 0；两个 Minor 已修复，Framework 283/283、Example 37/37 与 generic build 门禁通过
 - [x] v0.6 当前 Ready：2026-07-14 plain bottom 页面/chrome presentation、完整 Framework/Example/UI/generic build 复验和整分支 fresh-pass 复审均完成
 - [x] Example 统一设置菜单设计确认：使用单个 `gearshape` 入口和“Header 顶部行为”“顶部回弹模式”两个二级菜单，不修改框架 Public API 或 owner 路由
-- [ ] Example 统一设置菜单实施计划、RED/GREEN、真实菜单 UI 测试、完整回归、自审与验收待完成
+- [x] Example 统一设置菜单实施计划：测试先要求齿轮/二级菜单形成 RED，再做最小菜单实现，最后运行真实菜单 UI、完整回归、自审和 fresh-pass 复审
+- [ ] Example 统一设置菜单 RED/GREEN、真实菜单 UI 测试、完整回归、自审与验收待完成
 
 ## v0.7：手势与交互状态机版
 

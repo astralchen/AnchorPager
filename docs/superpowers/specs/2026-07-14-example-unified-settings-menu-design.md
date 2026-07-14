@@ -2,7 +2,7 @@
 
 **日期：** 2026-07-14
 
-**状态：** 对话设计已确认，书面规格待用户复核
+**状态：** 书面规格已确认，实施计划已编写，待执行
 
 **适用范围：** Example 导航栏配置入口、`AnchorPagerHeaderTopBehavior` 与 `AnchorPagerTopOverscrollHandlingMode` 运行时切换、菜单选中态及相关 Example 单元/UI 测试。
 
