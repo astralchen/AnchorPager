@@ -2,9 +2,11 @@
 
 **日期：** 2026-07-14
 
-**状态：** 设计已确认，实施与重新验收待完成
+**状态：** 设计与实施计划已确认，实施与重新验收待完成
 
 **适用范围：** 无 `UIScrollView` 页面底部 container 回弹、Paging adapter presentation 分层、`AnchorPagerLayoutContext` 可见坐标、automatic Header 首次中立测量及示例约束告警。
+
+**实施计划：** `docs/superpowers/plans/2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement.md`
 
 ## 背景与证据
 

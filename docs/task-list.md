@@ -389,7 +389,7 @@
 
 ## v0.5：纵向嵌套滚动协调版
 
-设计见 `docs/superpowers/specs/2026-07-13-v0-5-scroll-coordination-design.md`，direct page 修订见 `docs/superpowers/specs/2026-07-13-plain-page-direct-containment-design.md`，边界 owner 历史契约见 `docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md`，2026-07-14 修复设计见 `docs/superpowers/specs/2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement-design.md`。2026-07-13 第四次复审与历史验收已完成；后续用户验收发现 plain bottom 页面/chrome presentation 未分层和 Header 首次 zero-height 测量回归，当前重新打开 Task 7，暂不标记 Ready。
+设计见 `docs/superpowers/specs/2026-07-13-v0-5-scroll-coordination-design.md`，direct page 修订见 `docs/superpowers/specs/2026-07-13-plain-page-direct-containment-design.md`，边界 owner 历史契约见 `docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md`，2026-07-14 修复设计见 `docs/superpowers/specs/2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement-design.md`，实施计划见 `docs/superpowers/plans/2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement.md`。2026-07-13 第四次复审与历史验收已完成；后续用户验收发现 plain bottom 页面/chrome presentation 未分层和 Header 首次 zero-height 测量回归，当前重新打开 Task 7，暂不标记 Ready。
 
 - [x] 删除无滚动页 synthetic scroll wrapper 及其额外 containment
 - [x] 无滚动 original page 直接交给 Pageboy，Store 保存 page 非 nil、scroll target 为 nil
@@ -450,6 +450,7 @@
 - [x] v0.5 历史 Ready：截至 `b9699b0`，Task 7 实现、四轮复审、两个最终 Minor 修复与当时验收门禁全部完成
 - [x] 2026-07-14 后续回归关系梳理：plain page bottom 由 `verticalScrollView` 提供原生物理，但共享 `viewportView` transform 同时上移 Header/bar/page；真实 child bottom 由 child owner 处理所以不受影响；首次 automatic Header required `height == 0` 中立布局会触发非空内容约束冲突
 - [x] 2026-07-14 专项设计确认：container top 仍整体移动，plain bottom 只移动 Paging adapter 内 Pageboy 页面 surface；Header 首次先取 bootstrap fitting seed，再执行中立正式测量；Public API、Pageboy containment、child scroll ownership 不变
+- [x] 2026-07-14 专项实施计划：拆为 Paging surface、ViewController 分层、Header bootstrap、Example UI 探针、全量验收与复审五个 RED→GREEN 任务
 - [ ] 为 plain bottom bar 安全区、页面 presentation、回稳清理与 Header 非零首次布局编写并运行 RED
 - [ ] 实施 Paging adapter 页面 presentation surface 与 Header bootstrap measurement 最小修复
 - [ ] 运行聚焦 GREEN、完整 Framework/Example/UI、generic build、静态门禁和 `git diff --check`
