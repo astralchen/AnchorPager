@@ -252,6 +252,11 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
             AnchorPagerLogger.log(.debug, category: .paging, event: "paging.setSelectedIndex.outOfRange")
             return false
         }
+        guard pendingProgrammaticSelection == nil,
+              !isProgrammaticTransitionCompletionPending else {
+            AnchorPagerLogger.log(.debug, category: .paging, event: "paging.selection.reject")
+            return false
+        }
 
         AnchorPagerLogger.log(.info, category: .paging, event: "paging.setSelectedIndex.request")
         let previousProgrammaticSelection = pendingProgrammaticSelection

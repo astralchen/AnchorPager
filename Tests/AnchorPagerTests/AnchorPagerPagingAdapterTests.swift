@@ -311,6 +311,40 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
     }
 
     @MainActor
+    func testSameCallStackNonanimatedRequestsRejectSecondBeforePageboyFalseAcceptanceWindow() {
+        let adapter = AnchorPagerPagingAdapter()
+        let delegate = RecordingPagingDelegate()
+        adapter.eventDelegate = delegate
+        var logEvents: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { logEvents.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+        adapter.loadViewIfNeeded()
+        reload(
+            adapter,
+            titles: ["First", "Second", "Third"],
+            viewControllers: [UIViewController(), UIViewController(), UIViewController()],
+            selectedIndex: 0
+        )
+
+        let didAcceptFirstRequest = adapter.setSelectedIndex(1, animated: false)
+        let didAcceptSecondRequest = adapter.setSelectedIndex(2, animated: false)
+
+        XCTAssertTrue(didAcceptFirstRequest)
+        XCTAssertFalse(didAcceptSecondRequest)
+        XCTAssertTrue(logEvents.contains(
+            .init(category: .paging, level: .debug, event: "paging.selection.reject")
+        ))
+        XCTAssertTrue(delegate.events.contains(.willSelect(1, false)))
+        XCTAssertFalse(delegate.events.contains(.willSelect(2, false)))
+
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.1))
+
+        XCTAssertTrue(delegate.events.contains(.didSelect(1, false)))
+        XCTAssertFalse(delegate.events.contains(.didSelect(2, false)))
+        XCTAssertTrue(adapter.isReadyForReload)
+    }
+
+    @MainActor
     func testAdapterLogsMissingDuplicateAndOutOfOrderPageboyCallbacks() {
         let adapter = AnchorPagerPagingAdapter()
         reload(

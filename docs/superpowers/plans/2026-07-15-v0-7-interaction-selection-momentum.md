@@ -90,11 +90,11 @@ AGENTS.md
 - 保留现有 `setSelectedIndex(_:animated:) -> Bool`，仅在已有 programmatic execution 未完成时同步拒绝第二次直接 Adapter 调用。
 - 该 guard 是第三方 executor 安全边界；Task 2 改名为 identifier-aware execute 后继续保留。
 
-- [ ] **Step 1：用真实 Pageboy 写连续非动画 RED**
+- [x] **Step 1：用真实 Pageboy 写连续非动画 RED**
 
 新增 `testSameCallStackNonanimatedRequestsRejectSecondBeforePageboyFalseAcceptanceWindow()`：加载三页真实 Adapter，在同一 MainActor 调用栈连续请求 `0 -> 1` 与 `0 -> 2`、均为 `animated: false`；断言第一笔为 true、第二笔必须为 false、第二笔不能替换第一笔 execution，第一笔 terminal 后 reload readiness 能恢复。
 
-- [ ] **Step 2：运行 RED**
+- [x] **Step 2：运行 RED**
 
 ```bash
 xcodebuild -quiet -scheme AnchorPager \
@@ -104,11 +104,11 @@ xcodebuild -quiet -scheme AnchorPager \
 
 预期：当前实现第二笔错误返回 true，或第一笔完成后仍因第二笔悬空而 busy；失败必须精确落在该 Pageboy 5.0.2 窗口。
 
-- [ ] **Step 3：最小实现 executor busy guard**
+- [x] **Step 3：最小实现 executor busy guard**
 
 在任何 `pendingProgrammaticSelection` 写入之前检查现有 programmatic semantic/completion 状态；busy 时记录 `paging.selection.reject` 并返回 false，不调用 `scrollToPage`、不覆盖第一笔 context。
 
-- [ ] **Step 4：运行聚焦 Adapter 回归**
+- [x] **Step 4：运行聚焦 Adapter 回归**
 
 ```bash
 xcodebuild -quiet -scheme AnchorPager \
@@ -118,7 +118,7 @@ xcodebuild -quiet -scheme AnchorPager \
 
 预期：全部 Adapter tests 通过，连续动画拒绝、reload readiness、empty teardown 与 appearance tests 无回归。
 
-- [ ] **Step 5：自审与提交**
+- [x] **Step 5：自审与提交**
 
 检查没有修改 Pageboy 源码、没有异步 delay、没有扩大 Public API；运行 `git diff --check`。
 
