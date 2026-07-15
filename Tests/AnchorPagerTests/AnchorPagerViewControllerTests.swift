@@ -892,6 +892,146 @@ final class AnchorPagerViewControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testHeaderLayoutDuringVerticalInteractionKeepsOnlyLatestAdjustment() {
+        var configuration = AnchorPagerConfiguration.default
+        configuration.header.heightMode = .automatic(min: 20, max: nil)
+        let pager = AnchorPagerViewController(configuration: configuration)
+        pager.view.frame = CGRect(x: 0, y: 0, width: 320, height: 640)
+        let headerView = DynamicFittingView(height: 100)
+        let dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [ScrollChildViewController()],
+            headerContent: .view(headerView)
+        )
+        pager.dataSource = dataSource
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+        pager.view.layoutIfNeeded()
+        setContainerLogicalOffset(40, in: pager)
+        XCTAssertTrue(
+            pager.beginInteractionForTesting(.verticalDragging(identifier: 41))
+        )
+
+        headerView.measuredHeight = 180
+        pager.reloadHeaderLayout(offsetAdjustment: .resetToExpanded)
+        pager.reloadHeaderLayout(offsetAdjustment: .resetToCollapsed)
+        pager.view.layoutIfNeeded()
+
+        XCTAssertEqual(containerLogicalOffset(in: pager), 40, accuracy: 0.001)
+        XCTAssertTrue(pager.hasPendingHeaderLayoutRequestForTesting)
+
+        XCTAssertTrue(
+            pager.finishInteractionForTesting(.verticalDragging(identifier: 41))
+        )
+
+        XCTAssertEqual(containerLogicalOffset(in: pager), 160, accuracy: 0.001)
+        XCTAssertFalse(pager.hasPendingHeaderLayoutRequestForTesting)
+    }
+
+    @MainActor
+    func testHeaderConfigurationChangeDefersGeometryUntilVerticalInteractionFinishes() throws {
+        var configuration = AnchorPagerConfiguration.default
+        configuration.header.heightMode = .fixed(max: 100, min: 20)
+        let pager = AnchorPagerViewController(configuration: configuration)
+        let delegate = StubDelegate()
+        pager.delegate = delegate
+        let dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [ScrollChildViewController()],
+            headerContent: .view(FixedFittingView(height: 100))
+        )
+        pager.dataSource = dataSource
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+        pager.view.layoutIfNeeded()
+        let initialHeight = try XCTUnwrap(delegate.layoutContexts.last).headerFrame.height
+        XCTAssertTrue(
+            pager.beginInteractionForTesting(.verticalDragging(identifier: 42))
+        )
+        XCTAssertTrue(
+            pager.updateBoundaryInteractionForTesting(
+                .topOverscrolling(identifier: 42)
+            )
+        )
+
+        pager.configuration.header.heightMode = .fixed(max: 180, min: 20)
+        pager.view.layoutIfNeeded()
+
+        XCTAssertEqual(pager.configuration.header.heightMode, .fixed(max: 180, min: 20))
+        XCTAssertEqual(delegate.layoutContexts.last?.headerFrame.height, initialHeight)
+
+        XCTAssertTrue(
+            pager.cancelInteractionForTesting(.topOverscrolling(identifier: 42))
+        )
+
+        XCTAssertEqual(delegate.layoutContexts.last?.headerFrame.height, 180)
+    }
+
+    @MainActor
+    func testHeaderLayoutCancelsSyntheticDecelerationBeforeExecuting() {
+        var configuration = AnchorPagerConfiguration.default
+        configuration.header.heightMode = .automatic(min: 20, max: nil)
+        let pager = AnchorPagerViewController(configuration: configuration)
+        let headerView = DynamicFittingView(height: 100)
+        let dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [ScrollChildViewController()],
+            headerContent: .view(headerView)
+        )
+        pager.dataSource = dataSource
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+        pager.view.layoutIfNeeded()
+        setContainerLogicalOffset(40, in: pager)
+        XCTAssertTrue(
+            pager.beginInteractionForTesting(.verticalDragging(identifier: 43))
+        )
+        XCTAssertTrue(
+            pager.beginInteractionForTesting(.verticalDecelerating(identifier: 43))
+        )
+
+        headerView.measuredHeight = 180
+        pager.reloadHeaderLayout(offsetAdjustment: .resetToExpanded)
+
+        XCTAssertEqual(pager.interactionStateForTesting, .idle)
+        XCTAssertEqual(containerLogicalOffset(in: pager), 0, accuracy: 0.001)
+    }
+
+    @MainActor
+    func testHeaderLayoutCallbackReentryRunsInNextDrainRound() {
+        var configuration = AnchorPagerConfiguration.default
+        configuration.header.heightMode = .automatic(min: 20, max: nil)
+        let pager = AnchorPagerViewController(configuration: configuration)
+        let headerView = DynamicFittingView(height: 100)
+        let dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [ScrollChildViewController()],
+            headerContent: .view(headerView)
+        )
+        let delegate = StubDelegate()
+        pager.dataSource = dataSource
+        pager.delegate = delegate
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+        pager.view.layoutIfNeeded()
+        var didReenter = false
+        delegate.onLayout = { _ in
+            guard !didReenter else { return }
+            didReenter = true
+            headerView.measuredHeight = 180
+            pager.reloadHeaderLayout(offsetAdjustment: .resetToCollapsed)
+        }
+
+        headerView.measuredHeight = 140
+        pager.reloadHeaderLayout(offsetAdjustment: .resetToExpanded)
+
+        XCTAssertTrue(didReenter)
+        XCTAssertEqual(pager.interactionStateForTesting, .idle)
+        XCTAssertFalse(pager.hasPendingHeaderLayoutRequestForTesting)
+        XCTAssertEqual(containerLogicalOffset(in: pager), 160, accuracy: 0.001)
+    }
+
+    @MainActor
     func testAutomaticHeaderBootstrapNeverLaysOutConstrainedContentAtRequiredZeroHeight() throws {
         var configuration = AnchorPagerConfiguration.default
         configuration.header.heightMode = .automatic(min: 0, max: nil)
@@ -2872,20 +3012,88 @@ final class AnchorPagerViewControllerTests: XCTestCase {
     }
 
     @MainActor
-    func testReloadDataSynchronouslyCancelsActiveContainerPresentationBeforeReadingDataSource() throws {
+    func testReloadDataSynchronouslyCollectsMetadataButDefersMatchingReloadUntilIdle() throws {
         let fixture = try TopOverscrollPresentationFixture()
         defer { fixture.window.isHidden = true }
         fixture.activateContainerPresentation()
-        var observedCanonicalState = false
+        XCTAssertTrue(
+            fixture.pager.beginInteractionForTesting(
+                .verticalDragging(identifier: 51)
+            )
+        )
+        XCTAssertTrue(
+            fixture.pager.updateBoundaryInteractionForTesting(
+                .topOverscrolling(identifier: 51)
+            )
+        )
+        var observedActivePresentation = false
         fixture.dataSource.onNumberOfViewControllers = {
-            fixture.assertCanonicalPresentationRestored()
-            observedCanonicalState = true
+            fixture.assertContainerPresentationIsActive()
+            observedActivePresentation = true
         }
+        fixture.replaceDataSourcePages(with: [ScrollChildViewController()])
 
         fixture.pager.reloadData()
 
-        XCTAssertTrue(observedCanonicalState)
+        XCTAssertTrue(observedActivePresentation)
+        fixture.assertContainerPresentationIsActive()
+        XCTAssertEqual(fixture.host.activeAdapter?.numberOfViewControllers(
+            in: try XCTUnwrap(fixture.host.activeAdapter)
+        ), 2)
+
+        XCTAssertTrue(
+            fixture.pager.cancelInteractionForTesting(
+                .topOverscrolling(identifier: 51)
+            )
+        )
+
         fixture.assertCanonicalPresentationRestored()
+        XCTAssertEqual(fixture.host.activeAdapter?.numberOfViewControllers(
+            in: try XCTUnwrap(fixture.host.activeAdapter)
+        ), 1)
+    }
+
+    @MainActor
+    func testDeferredReloadKeepsOnlyLatestMetadataSnapshotUntilIdle() throws {
+        let pager = AnchorPagerViewController()
+        let dataSource = StubDataSource(
+            count: 3,
+            titles: ["A", "B", "C"],
+            viewControllers: [
+                ScrollChildViewController(),
+                ScrollChildViewController(),
+                ScrollChildViewController()
+            ]
+        )
+        pager.dataSource = dataSource
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+        let host = try XCTUnwrap(installedPagingHost(in: pager))
+        let adapter = try XCTUnwrap(host.activeAdapter)
+        XCTAssertTrue(
+            pager.beginInteractionForTesting(.verticalDragging(identifier: 52))
+        )
+
+        dataSource.count = 2
+        dataSource.titles = ["Old 0", "Old 1"]
+        dataSource.viewControllers = [
+            ScrollChildViewController(),
+            ScrollChildViewController()
+        ]
+        pager.reloadData()
+        dataSource.count = 1
+        dataSource.titles = ["Latest"]
+        dataSource.viewControllers = [ScrollChildViewController()]
+        pager.reloadData()
+
+        XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 3)
+        XCTAssertEqual(dataSource.numberOfViewControllersCallCount, 3)
+        XCTAssertTrue(
+            pager.finishInteractionForTesting(.verticalDragging(identifier: 52))
+        )
+
+        XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 1)
+        XCTAssertEqual(adapter.barItem(for: TMBarView.ButtonBar(), at: 0).title, "Latest")
     }
 
     @MainActor
@@ -2966,6 +3174,145 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         )
 
         fixture.assertCanonicalPresentationRestored()
+    }
+
+    @MainActor
+    func testSizeTransitionPausesDeferredWorkUntilCompletion() throws {
+        let fixture = try TopOverscrollPresentationFixture()
+        defer { fixture.window.isHidden = true }
+        let coordinator = ControllableTransitionCoordinator()
+        let replacements = [
+            ScrollChildViewController(),
+            ScrollChildViewController()
+        ]
+        fixture.replaceDataSourcePages(with: replacements)
+
+        fixture.pager.viewWillTransition(
+            to: CGSize(width: 844, height: 390),
+            with: coordinator
+        )
+        fixture.pager.reloadData()
+        fixture.pager.reloadHeaderLayout(offsetAdjustment: .resetToCollapsed)
+
+        guard case .transitioningSize = fixture.pager.interactionStateForTesting else {
+            return XCTFail("尺寸切换开始后应进入 transitioningSize。")
+        }
+        XCTAssertEqual(try XCTUnwrap(fixture.host.activeAdapter).numberOfViewControllers(
+            in: try XCTUnwrap(fixture.host.activeAdapter)
+        ), 2)
+        XCTAssertTrue(fixture.pager.hasPendingHeaderLayoutRequestForTesting)
+
+        coordinator.completeTransition()
+
+        XCTAssertEqual(fixture.pager.interactionStateForTesting, .idle)
+        XCTAssertEqual(try XCTUnwrap(fixture.host.activeAdapter).numberOfViewControllers(
+            in: try XCTUnwrap(fixture.host.activeAdapter)
+        ), 2)
+        XCTAssertTrue(
+            try XCTUnwrap(fixture.host.activeAdapter).viewController(
+                for: try XCTUnwrap(fixture.host.activeAdapter),
+                at: 0
+            ) === replacements[0]
+        )
+        XCTAssertEqual(fixture.pager.selectedIndex, 0)
+        XCTAssertFalse(fixture.pager.hasPendingHeaderLayoutRequestForTesting)
+    }
+
+    @MainActor
+    func testSizeTransitionDrainsHeaderLayoutBeforeDeferredSelection() throws {
+        let fixture = try TopOverscrollPresentationFixture()
+        defer { fixture.window.isHidden = true }
+        let coordinator = ControllableTransitionCoordinator()
+
+        fixture.pager.viewWillTransition(
+            to: CGSize(width: 844, height: 390),
+            with: coordinator
+        )
+        fixture.pager.reloadHeaderLayout(offsetAdjustment: .resetToCollapsed)
+        fixture.pager.setSelectedIndex(1, animated: false)
+
+        XCTAssertTrue(fixture.pager.hasPendingHeaderLayoutRequestForTesting)
+        XCTAssertEqual(
+            fixture.host.pendingExplicitSelectionRequestForTesting?.targetIndex,
+            1
+        )
+
+        coordinator.completeTransition()
+
+        XCTAssertFalse(fixture.pager.hasPendingHeaderLayoutRequestForTesting)
+        XCTAssertEqual(
+            fixture.host.activeSelectionRequestForTesting?.targetIndex,
+            1
+        )
+        XCTAssertEqual(fixture.pager.selectedIndex, 0)
+        XCTAssertEqual(containerLogicalOffset(in: fixture.pager), 100, accuracy: 0.5)
+    }
+
+    @MainActor
+    func testSizeTransitionDoesNotForgeActivePageboySelectionTerminal() throws {
+        let pager = AnchorPagerViewController()
+        let dataSource = StubDataSource(
+            count: 2,
+            viewControllers: [
+                ScrollChildViewController(),
+                ScrollChildViewController()
+            ]
+        )
+        pager.dataSource = dataSource
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+        let host = try XCTUnwrap(installedPagingHost(in: pager))
+        pager.setSelectedIndex(1, animated: true)
+        let activeIdentifier = try XCTUnwrap(
+            host.activeSelectionRequestForTesting?.identifier
+        )
+        let coordinator = ControllableTransitionCoordinator()
+
+        pager.viewWillTransition(
+            to: CGSize(width: 844, height: 390),
+            with: coordinator
+        )
+
+        XCTAssertEqual(
+            host.activeSelectionRequestForTesting?.identifier,
+            activeIdentifier
+        )
+        XCTAssertEqual(pager.selectedIndex, 0)
+
+        coordinator.completeTransition()
+
+        XCTAssertEqual(pager.interactionStateForTesting, .idle)
+        XCTAssertEqual(
+            host.activeSelectionRequestForTesting?.identifier,
+            activeIdentifier
+        )
+        XCTAssertEqual(pager.selectedIndex, 0)
+    }
+
+    @MainActor
+    func testRequestingCommittedIndexDuringActiveSelectionQueuesReturnSelection() throws {
+        let pager = AnchorPagerViewController()
+        let dataSource = StubDataSource(
+            count: 3,
+            viewControllers: [
+                ScrollChildViewController(),
+                ScrollChildViewController(),
+                ScrollChildViewController()
+            ]
+        )
+        pager.dataSource = dataSource
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+        let host = try XCTUnwrap(installedPagingHost(in: pager))
+        XCTAssertEqual(pager.effectiveSelectedIndex, 0)
+
+        AnchorPagerAssertions.$isEnabled.withValue(false) {
+            pager.setSelectedIndex(1, animated: true)
+            pager.setSelectedIndex(0, animated: false)
+        }
+
+        XCTAssertEqual(host.activeSelectionRequestForTesting?.targetIndex, 1)
+        XCTAssertEqual(host.pendingExplicitSelectionRequestForTesting?.targetIndex, 0)
     }
 
     @MainActor
@@ -3511,6 +3858,70 @@ private final class ImmediateTransitionCoordinator: NSObject,
         _ handler: @escaping (any UIViewControllerTransitionCoordinatorContext) -> Void
     ) {
         handler(self)
+    }
+}
+
+@MainActor
+private final class ControllableTransitionCoordinator: NSObject,
+    UIViewControllerTransitionCoordinator {
+    let isAnimated = true
+    let presentationStyle: UIModalPresentationStyle = .none
+    let initiallyInteractive = false
+    let isInterruptible = true
+    let isInteractive = false
+    private(set) var isCancelled = false
+    let transitionDuration: TimeInterval = 0.25
+    let percentComplete: CGFloat = 0
+    let completionVelocity: CGFloat = 1
+    let completionCurve: UIView.AnimationCurve = .easeInOut
+    let containerView = UIView()
+    let targetTransform = CGAffineTransform.identity
+    private var completion: ((any UIViewControllerTransitionCoordinatorContext) -> Void)?
+
+    func viewController(
+        forKey key: UITransitionContextViewControllerKey
+    ) -> UIViewController? {
+        nil
+    }
+
+    func view(forKey key: UITransitionContextViewKey) -> UIView? {
+        nil
+    }
+
+    func animate(
+        alongsideTransition animation: (
+            (any UIViewControllerTransitionCoordinatorContext) -> Void
+        )?,
+        completion: ((any UIViewControllerTransitionCoordinatorContext) -> Void)?
+    ) -> Bool {
+        animation?(self)
+        self.completion = completion
+        return true
+    }
+
+    func animateAlongsideTransition(
+        in view: UIView?,
+        animation: ((any UIViewControllerTransitionCoordinatorContext) -> Void)?,
+        completion: ((any UIViewControllerTransitionCoordinatorContext) -> Void)?
+    ) -> Bool {
+        animation?(self)
+        self.completion = completion
+        return true
+    }
+
+    func notifyWhenInteractionEnds(
+        _ handler: @escaping (any UIViewControllerTransitionCoordinatorContext) -> Void
+    ) {}
+
+    func notifyWhenInteractionChanges(
+        _ handler: @escaping (any UIViewControllerTransitionCoordinatorContext) -> Void
+    ) {}
+
+    func completeTransition(cancelled: Bool = false) {
+        isCancelled = cancelled
+        let completion = completion
+        self.completion = nil
+        completion?(self)
     }
 }
 

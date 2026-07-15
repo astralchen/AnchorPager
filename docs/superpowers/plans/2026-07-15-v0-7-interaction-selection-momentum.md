@@ -8,7 +8,7 @@
 
 **Tech Stack:** Swift 6.2、Swift 6 language mode、UIKit、iOS 14+、Swift Package Manager、Tabman 4.0.1、Pageboy 5.0.2、XCTest/XCUITest、Xcode 26.6、iPhone 17 Pro / iOS 26.5 Simulator。
 
-**当前状态：** 专项设计与 Pageboy executor-ready 补充契约已确认；用户已复核并授权实施。Task 0–5 已完成，正在继续装配 reload/layout/selection/size 统一 drain。
+**当前状态：** 专项设计与 Pageboy executor-ready 补充契约已确认；用户已复核并授权实施。Task 0–6 已完成，下一步建立可撤销 Pageboy paging surface/pan observation。
 
 ## Global Constraints
 
@@ -495,27 +495,27 @@ git commit -m "建立统一交互状态机"
 - Interaction Coordinator 只保存状态。
 - ViewController 的 `drainDeferredWorkIfPossible()` 仅按顺序调用 owner，不复制 payload：active Pageboy/size 阻塞 → Host reload → Header layout → Host selection → idle。
 
-- [ ] **Step 1：写 latest Header layout RED**
+- [x] **Step 1：写 latest Header layout RED**
 
 verticalDragging/topOverscrolling/transitioningSize 期间连续请求不同 adjustment，只保存最后一笔；回 idle 后只执行一次最后策略。verticalDecelerating 时同步取消 synthetic 状态后执行。现有四种 offset adjustment 结果不变。`configuration.didSet` 的 Header 配置变化也走同一 layout admission；配置值立即更新，但 geometry/presentation transaction 不得绕开非 idle 仲裁。
 
-- [ ] **Step 2：写 deferred reload RED**
+- [x] **Step 2：写 deferred reload RED**
 
 真实 pan/top overscroll 期间 `reloadData()` 仍同步采集最新 metadata snapshot，但不取消仍按下的手势、不调用 Adapter reload；idle 后只执行 latest Host reload。更新旧 `testReloadDataSynchronouslyCancelsActiveContainerPresentationBeforeReadingDataSource`，使其区分“采集 metadata”与 matching `willPerformReloadRequest` 的 canonical reset。
 
-- [ ] **Step 3：写 size transition RED**
+- [x] **Step 3：写 size transition RED**
 
 使用可控 `UIViewControllerTransitionCoordinator`：size begin 同步取消 boundary/synthetic presentation并暂停 drain；active Pageboy transaction 不伪造 cancel；transition completion 后恢复 transaction 或执行 reload/layout/selection 顺序。
 
-- [ ] **Step 4：写选择 no-op 迁移 RED**
+- [x] **Step 4：写选择 no-op 迁移 RED**
 
 移除 ViewController 的 `selectedIndex == target` 过早返回；没有 active 时 Host 对 committed target no-op，active B 时请求 committed A 进入 latest pending 并在 B terminal 后返回 A。
 
-- [ ] **Step 5：实现装配与重入 guard**
+- [x] **Step 5：实现装配与重入 guard**
 
 `drainDeferredWorkIfPossible()` 使用同步重入 guard；Host/Interaction terminal 只请求 drain，不直接跨层执行 Header layout。layout begin/finish 必须成对，finish callback 内的新请求进入下一轮 drain，不递归重复提交。
 
-- [ ] **Step 6：运行 ViewController/Host 回归**
+- [x] **Step 6：运行 ViewController/Host 回归**
 
 ```bash
 xcodebuild -quiet -scheme AnchorPager \
@@ -524,12 +524,14 @@ xcodebuild -quiet -scheme AnchorPager \
   -only-testing:AnchorPagerTests/AnchorPagerPagingHostViewControllerTests test
 ```
 
-- [ ] **Step 7：自审并提交**
+- [x] **Step 7：自审并提交**
 
 ```bash
 git add Sources/AnchorPager/Paging/AnchorPagerPagingHostViewController.swift Sources/AnchorPager/Public/AnchorPagerViewController.swift Tests/AnchorPagerTests/AnchorPagerPagingHostViewControllerTests.swift Tests/AnchorPagerTests/AnchorPagerViewControllerTests.swift
 git commit -m "统一交互事务排空顺序"
 ```
+
+验收记录：RED 因 Host 缺少 deferred execution suspension/显式 drain 入口、ViewController 缺少 Interaction admission 与 pending Header layout owner 而编译失败。GREEN 覆盖 vertical dragging/top overscrolling/vertical decelerating/transitioning size 的 latest Header adjustment、Header 配置即时更新但 geometry 延后、layout callback 重入下一轮、reload metadata 同步采集但 matching Adapter reload 延后、连续 reload latest-wins、size 内 active Pageboy 不伪造 terminal、reload→layout 与 layout→selection 两条合法优先路径，以及 active B 时请求 committed A 仍进入 Host latest pending。自审追加的 pending-only selection RED 精确证明同目标会错误换 identifier、返回 committed 不会撤销旧 pending；GREEN 后改为同目标去重、不同目标 latest 替换、committed 目标撤销未启动 pending。Host + ViewController 聚焦 146/146、0 fail、0 skip，结果包为 `/private/tmp/AnchorPagerV07Task6HostViewControllerFinal-20260715-1733.xcresult`；Framework 全量 364/364、0 fail、0 skip，结果包为 `/private/tmp/AnchorPagerV07Task6FrameworkFull-20260715-1735.xcresult`。全量初跑的 Public 源码隔离扫描发现 internal 属性调用名含 `Pageboy`，已改为领域内 `hasActivePagingTransaction` 并完成聚焦/全量复验。自审确认 Host 仍独占 reload/selection payload，ViewController 只保存 Header layout payload，Interaction Coordinator 只保存 state；reload pending/active 继续拒绝跨 generation selection；未修改 Public API、Pageboy containment、Store generation、业务 child delegate/pan/bounce/isScrollEnabled 或纵向 offset owner。真实 vertical/paging/boundary lifecycle 接线仍留在 Task 11。
 
 ---
 

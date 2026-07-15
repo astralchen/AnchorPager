@@ -84,6 +84,9 @@ final class AnchorPagerPagingHostViewController: UIViewController {
     private var activeSelectionTransaction: AnchorPagerPagingSelectionTransaction?
     private var pendingExplicitSelectionRequest: AnchorPagerPagingSelectionRequest?
     private var forwardedWillSelectRequestIdentifier: AnchorPagerPagingSelectionRequestIdentifier?
+    private var isDeferredWorkExecutionSuspended = false
+
+    var deferredWorkDrainHandler: (() -> Void)?
 
     var activeSelectionRequestForTesting: AnchorPagerPagingSelectionRequest? {
         activeSelectionTransaction?.request
@@ -95,6 +98,22 @@ final class AnchorPagerPagingHostViewController: UIViewController {
 
     var committedSelectionIndexForTesting: Int? {
         committedSelectionIndex
+    }
+
+    var pendingReloadRequestIdentifierForTesting: AnchorPagerPagingReloadRequestIdentifier? {
+        pendingReloadRequest?.identifier
+    }
+
+    var hasActivePagingTransaction: Bool {
+        activeReloadRequest != nil || isStartingReloadRequest || activeSelectionTransaction != nil
+    }
+
+    var hasPendingReloadForDeferredWork: Bool {
+        pendingReloadRequest != nil
+    }
+
+    var hasPendingSelectionForDeferredWork: Bool {
+        pendingExplicitSelectionRequest != nil
     }
 
     override func loadView() {
@@ -116,7 +135,8 @@ final class AnchorPagerPagingHostViewController: UIViewController {
             selectedIndex: selectedIndex
         )
         pendingExplicitSelectionRequest = nil
-        if activeReloadRequest != nil ||
+        if isDeferredWorkExecutionSuspended ||
+            activeReloadRequest != nil ||
             isStartingReloadRequest ||
             activeAdapter?.isReadyForReload == false ||
             shouldWaitForActiveSelection(before: request) {
@@ -140,7 +160,7 @@ final class AnchorPagerPagingHostViewController: UIViewController {
 
         guard shouldPerform else {
             AnchorPagerLogger.log(.debug, category: .paging, event: "paging.reload.stale")
-            _ = performPendingReloadIfNeeded()
+            requestDeferredWorkDrain()
             return false
         }
 
@@ -151,6 +171,7 @@ final class AnchorPagerPagingHostViewController: UIViewController {
             guard removeActiveAdapterIfNeeded(pendingRequestOnFailure: request) else {
                 activeReloadRequest = nil
                 activeReloadFinalBarInsets = nil
+                requestDeferredWorkDrain()
                 return false
             }
             activeReloadFinalBarInsets = .zero
@@ -173,6 +194,10 @@ final class AnchorPagerPagingHostViewController: UIViewController {
     func setBarHeight(_ height: CGFloat?) {
         requestedBarHeight = height
         activeAdapter?.setBarHeight(height)
+    }
+
+    func setDeferredWorkExecutionSuspended(_ isSuspended: Bool) {
+        isDeferredWorkExecutionSuspended = isSuspended
     }
 
     @discardableResult
@@ -229,6 +254,29 @@ final class AnchorPagerPagingHostViewController: UIViewController {
             animated: animated,
             source: source
         )
+        if activeSelectionTransaction == nil,
+           let pendingRequest = pendingExplicitSelectionRequest {
+            if request.targetIndex == pendingRequest.targetIndex {
+                return false
+            }
+            if request.targetIndex == committedSelectionIndex {
+                pendingExplicitSelectionRequest = nil
+                AnchorPagerLogger.log(
+                    .debug,
+                    category: .paging,
+                    event: "paging.selection.replacePending"
+                )
+                return true
+            }
+            nextSelectionRequestIdentifier += 1
+            pendingExplicitSelectionRequest = request
+            AnchorPagerLogger.log(
+                .debug,
+                category: .paging,
+                event: "paging.selection.replacePending"
+            )
+            return true
+        }
         let admission = AnchorPagerPagingExplicitSelectionAdmission.resolve(
             request: request,
             committedIndex: committedSelectionIndex,
@@ -239,6 +287,10 @@ final class AnchorPagerPagingHostViewController: UIViewController {
         case .start:
             nextSelectionRequestIdentifier += 1
             AnchorPagerLogger.log(.debug, category: .paging, event: "paging.selection.enqueue")
+            if isDeferredWorkExecutionSuspended {
+                pendingExplicitSelectionRequest = request
+                return true
+            }
             return startSelection(request, on: activeAdapter)
         case .replaceLatest:
             nextSelectionRequestIdentifier += 1
@@ -259,7 +311,8 @@ final class AnchorPagerPagingHostViewController: UIViewController {
 
     @discardableResult
     func performPendingSelectionIfPossible() -> Bool {
-        guard activeSelectionTransaction == nil,
+        guard !isDeferredWorkExecutionSuspended,
+              activeSelectionTransaction == nil,
               pendingReloadRequest == nil,
               activeReloadRequest == nil,
               !isStartingReloadRequest,
@@ -300,9 +353,7 @@ final class AnchorPagerPagingHostViewController: UIViewController {
                 forwardedWillSelectRequestIdentifier = nil
             }
             AnchorPagerLogger.log(.debug, category: .paging, event: "paging.selection.reject")
-            if !performPendingReloadIfNeeded() {
-                _ = performPendingSelectionIfPossible()
-            }
+            requestDeferredWorkDrain()
             return false
         }
         return true
@@ -364,8 +415,9 @@ final class AnchorPagerPagingHostViewController: UIViewController {
     }
 
     @discardableResult
-    private func performPendingReloadIfNeeded() -> Bool {
+    func performPendingReloadIfPossible() -> Bool {
         guard let request = pendingReloadRequest else { return false }
+        guard !isDeferredWorkExecutionSuspended else { return true }
         guard activeReloadRequest == nil, !isStartingReloadRequest else { return true }
         guard activeAdapter?.isReadyForReload != false else { return true }
         guard !shouldWaitForActiveSelection(before: request) else { return true }
@@ -376,6 +428,9 @@ final class AnchorPagerPagingHostViewController: UIViewController {
 
     private func shouldWaitForActiveSelection(before request: ReloadRequest) -> Bool {
         guard activeSelectionTransaction != nil else { return false }
+        if deferredWorkDrainHandler != nil {
+            return true
+        }
         let canStructurallyTeardown = request.pageCount == 0 &&
             activeAdapter?.isReadyForReload == true
         return !canStructurallyTeardown
@@ -434,7 +489,17 @@ final class AnchorPagerPagingHostViewController: UIViewController {
             }
         }
         finishingReloadRequestIdentifier = nil
-        _ = performPendingReloadIfNeeded()
+        requestDeferredWorkDrain()
+    }
+
+    private func requestDeferredWorkDrain() {
+        if let deferredWorkDrainHandler {
+            deferredWorkDrainHandler()
+            return
+        }
+        if !performPendingReloadIfPossible() {
+            _ = performPendingSelectionIfPossible()
+        }
     }
 
 }
@@ -684,9 +749,7 @@ extension AnchorPagerPagingHostViewController: AnchorPagerPagingAdapterDelegate 
 
     func pagingAdapterDidBecomeReadyForReload(_ adapter: AnchorPagerPagingAdapter) {
         guard adapter === activeAdapter else { return }
-        if !performPendingReloadIfNeeded() {
-            _ = performPendingSelectionIfPossible()
-        }
+        requestDeferredWorkDrain()
     }
 
     private func matchesActiveSelectionAdapter(_ adapter: AnchorPagerPagingAdapter) -> Bool {
@@ -744,9 +807,7 @@ extension AnchorPagerPagingHostViewController: AnchorPagerPagingAdapterDelegate 
         guard activeSelectionTransaction?.isReadyToFinish == true else { return }
         activeSelectionTransaction = nil
         forwardedWillSelectRequestIdentifier = nil
-        if !performPendingReloadIfNeeded() {
-            _ = performPendingSelectionIfPossible()
-        }
+        requestDeferredWorkDrain()
     }
 
     private func logStaleSelectionTerminal() {

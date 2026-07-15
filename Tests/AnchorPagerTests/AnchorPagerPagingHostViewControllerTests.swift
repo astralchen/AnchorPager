@@ -27,6 +27,63 @@ final class AnchorPagerPagingHostViewControllerTests: XCTestCase {
         XCTAssertEqual(host.children.count, 1)
     }
 
+    func testSuspendedReloadKeepsOnlyLatestPayloadUntilExternalDrain() throws {
+        let host = makeHost()
+        let delegate = RecordingRequestPagingHostDelegate()
+        host.eventDelegate = delegate
+        host.reload(requestIdentifier: 1, titles: ["A", "B"], pageCount: 2, selectedIndex: 0)
+        let adapter = try XCTUnwrap(host.activeAdapter)
+        delegate.events.removeAll()
+        host.setDeferredWorkExecutionSuspended(true)
+
+        host.reload(requestIdentifier: 2, titles: ["Old"], pageCount: 1, selectedIndex: 0)
+        host.reload(
+            requestIdentifier: 3,
+            titles: ["Latest A", "Latest B", "Latest C"],
+            pageCount: 3,
+            selectedIndex: 2
+        )
+
+        XCTAssertEqual(host.pendingReloadRequestIdentifierForTesting, 3)
+        XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 2)
+        XCTAssertTrue(delegate.events.isEmpty)
+
+        host.setDeferredWorkExecutionSuspended(false)
+        XCTAssertTrue(host.performPendingReloadIfPossible())
+
+        XCTAssertEqual(delegate.events, [.willPerform(3), .reload(3, .page(index: 2))])
+        XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 3)
+        XCTAssertNil(host.pendingReloadRequestIdentifierForTesting)
+    }
+
+    func testSuspendedSelectionKeepsLatestExplicitRequestUntilExternalDrain() throws {
+        let host = makeHost()
+        host.reload(titles: ["A", "B", "C"], pageCount: 3, selectedIndex: 0)
+        host.setDeferredWorkExecutionSuspended(true)
+
+        XCTAssertTrue(host.setSelectedIndex(1, animated: true))
+        let firstIdentifier = host.pendingExplicitSelectionRequestForTesting?.identifier
+        XCTAssertFalse(host.setSelectedIndex(1, animated: false))
+        XCTAssertEqual(
+            host.pendingExplicitSelectionRequestForTesting?.identifier,
+            firstIdentifier
+        )
+        XCTAssertTrue(host.setSelectedIndex(0, animated: false))
+        XCTAssertNil(host.pendingExplicitSelectionRequestForTesting)
+
+        XCTAssertTrue(host.setSelectedIndex(1, animated: true))
+        XCTAssertTrue(host.setSelectedIndex(2, animated: false))
+
+        XCTAssertNil(host.activeSelectionRequestForTesting)
+        XCTAssertEqual(host.pendingExplicitSelectionRequestForTesting?.targetIndex, 2)
+
+        host.setDeferredWorkExecutionSuspended(false)
+        XCTAssertTrue(host.performPendingSelectionIfPossible())
+
+        XCTAssertEqual(host.activeSelectionRequestForTesting?.targetIndex, 2)
+        XCTAssertNil(host.pendingExplicitSelectionRequestForTesting)
+    }
+
     func testNonemptyReloadEmitsOnePageTerminalWithoutSelectionCallbacks() {
         let host = makeHost()
         let delegate = RecordingPagingHostDelegate()

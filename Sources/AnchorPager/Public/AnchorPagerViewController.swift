@@ -12,6 +12,10 @@ open class AnchorPagerViewController: UIViewController {
         var providerGenerationIsActive: Bool
     }
 
+    private struct PendingHeaderLayoutRequest {
+        let offsetAdjustment: AnchorPagerHeaderOffsetAdjustment?
+    }
+
     private struct ContainerPresentation {
         let chromeTranslationY: CGFloat
         let pageSurfaceTranslationY: CGFloat
@@ -32,10 +36,6 @@ open class AnchorPagerViewController: UIViewController {
         didSet {
             guard isViewLoaded else { return }
             let didChangeHeader = oldValue.header != configuration.header
-            if didChangeHeader {
-                scrollCoordinator?.cancelBoundaryHandling()
-                resetPresentationSurfaces()
-            }
             scrollCoordinator?.updateTopOverscrollHandlingMode(
                 configuration.topOverscrollHandlingMode
             )
@@ -47,8 +47,8 @@ open class AnchorPagerViewController: UIViewController {
                 logsChanges: false
             )
             view.setNeedsLayout()
-            if didChangeHeader, !isApplyingLayout {
-                updateVisibleLayout(forceNotify: true)
+            if didChangeHeader {
+                enqueueHeaderLayout(offsetAdjustment: nil)
             }
         }
     }
@@ -73,6 +73,7 @@ open class AnchorPagerViewController: UIViewController {
     private let headerViewHost = AnchorPagerHeaderViewHost()
     private let layoutEngine = AnchorPagerLayoutEngine()
     private let pagingHost = AnchorPagerPagingHostViewController()
+    private let interactionCoordinator = AnchorPagerInteractionCoordinator()
     private let managedInsetCoordinator = AnchorPagerManagedInsetCoordinator()
     private var scrollRangeHeightConstraint: NSLayoutConstraint?
     private var headerHeightConstraint: NSLayoutConstraint?
@@ -93,6 +94,10 @@ open class AnchorPagerViewController: UIViewController {
     private var nextReloadRequestIdentifier = 0
     private var stagedReloadSnapshot: ReloadSnapshot?
     private var activeReloadRequestIdentifier: AnchorPagerPagingReloadRequestIdentifier?
+    private var pendingHeaderLayoutRequest: PendingHeaderLayoutRequest?
+    private var nextInteractionIdentifier = 0
+    private var isDrainingDeferredWork = false
+    private var deferredWorkDrainWasRequested = false
     private var lastLayoutContext: AnchorPagerLayoutContext?
     private var lastLayoutOutput: AnchorPagerLayoutEngine.Output?
     private var lastLoggedResolvedHeaderHeight: AnchorPagerLayoutEngine.ResolvedHeaderHeight?
@@ -139,15 +144,20 @@ open class AnchorPagerViewController: UIViewController {
         installVisibleContentIfNeeded()
         submitStagedReloadIfNeeded()
         reconcileCommittedScrollBinding()
+        requestDeferredWorkDrain()
     }
 
     open override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        guard pendingHeaderLayoutRequest == nil
+            || interactionCoordinator.isReadyForDeferredWorkDrain else { return }
         updateVisibleLayout()
     }
 
     open override func viewSafeAreaInsetsDidChange() {
         super.viewSafeAreaInsetsDidChange()
+        guard pendingHeaderLayoutRequest == nil
+            || interactionCoordinator.isReadyForDeferredWorkDrain else { return }
         updateVisibleLayout()
     }
 
@@ -157,11 +167,30 @@ open class AnchorPagerViewController: UIViewController {
     ) {
         cancelBoundaryHandlingAndRestoreCanonicalPresentation()
         super.viewWillTransition(to: size, with: coordinator)
+        nextInteractionIdentifier &+= 1
+        let identifier = nextInteractionIdentifier
+        let state = AnchorPagerInteractionState.transitioningSize(
+            identifier: identifier
+        )
+        guard interactionCoordinator.begin(state) else { return }
+        updatePagingHostExecutionSuspension()
+        let didRegisterCompletion = coordinator.animate(
+            alongsideTransition: nil
+        ) { [weak self] _ in
+            guard let self else { return }
+            _ = interactionCoordinator.finish(state)
+            updatePagingHostExecutionSuspension()
+            requestDeferredWorkDrain()
+        }
+        if !didRegisterCompletion {
+            _ = interactionCoordinator.finish(state)
+            updatePagingHostExecutionSuspension()
+            requestDeferredWorkDrain()
+        }
     }
 
     /// 重新加载页面、标题和 Header 数据。
     public func reloadData() {
-        cancelBoundaryHandlingAndRestoreCanonicalPresentation()
         reloadTransactionIdentifier &+= 1
         let transactionIdentifier = reloadTransactionIdentifier
         let reloadDataSource = dataSource
@@ -246,9 +275,8 @@ open class AnchorPagerViewController: UIViewController {
             return
         }
 
-        guard selectedIndex != self.selectedIndex else { return }
-
         if !isViewLoaded || pagingHost.activeAdapter == nil {
+            guard selectedIndex != self.selectedIndex else { return }
             if stagedReloadSnapshot != nil {
                 stagedReloadSnapshot?.selectedIndex = selectedIndex
             }
@@ -258,20 +286,69 @@ open class AnchorPagerViewController: UIViewController {
             return
         }
 
+        updatePagingHostExecutionSuspension()
         let didAcceptRequest = pagingHost.setSelectedIndex(selectedIndex, animated: animated)
         if !didAcceptRequest {
             AnchorPagerLogger.log(.debug, category: .paging, event: "setSelectedIndex.rejected")
         }
+        requestDeferredWorkDrain()
     }
 
     /// 重新测量并布局 Header。
     public func reloadHeaderLayout(
         offsetAdjustment: AnchorPagerHeaderOffsetAdjustment = .preserveVisualPosition
     ) {
-        cancelBoundaryHandlingAndRestoreCanonicalPresentation()
         AnchorPagerLogger.log(.info, category: .layout, event: "reloadHeaderLayout")
-        updateVisibleLayout(forceNotify: true, offsetAdjustment: offsetAdjustment)
+        enqueueHeaderLayout(offsetAdjustment: offsetAdjustment)
         view.setNeedsLayout()
+    }
+
+    var interactionStateForTesting: AnchorPagerInteractionState {
+        interactionCoordinator.state
+    }
+
+    var hasPendingHeaderLayoutRequestForTesting: Bool {
+        pendingHeaderLayoutRequest != nil
+    }
+
+    @discardableResult
+    func beginInteractionForTesting(_ state: AnchorPagerInteractionState) -> Bool {
+        let didBegin = interactionCoordinator.begin(state)
+        if didBegin {
+            updatePagingHostExecutionSuspension()
+        }
+        return didBegin
+    }
+
+    @discardableResult
+    func updateBoundaryInteractionForTesting(
+        _ state: AnchorPagerInteractionState
+    ) -> Bool {
+        let didUpdate = interactionCoordinator.updateBoundary(to: state)
+        if didUpdate {
+            updatePagingHostExecutionSuspension()
+        }
+        return didUpdate
+    }
+
+    @discardableResult
+    func finishInteractionForTesting(_ state: AnchorPagerInteractionState) -> Bool {
+        let didFinish = interactionCoordinator.finish(state)
+        if didFinish {
+            updatePagingHostExecutionSuspension()
+            requestDeferredWorkDrain()
+        }
+        return didFinish
+    }
+
+    @discardableResult
+    func cancelInteractionForTesting(_ state: AnchorPagerInteractionState) -> Bool {
+        let didCancel = interactionCoordinator.cancel(state)
+        if didCancel {
+            updatePagingHostExecutionSuspension()
+            requestDeferredWorkDrain()
+        }
+        return didCancel
     }
 
     private func installVerticalScrollViewIfNeeded() {
@@ -336,6 +413,9 @@ open class AnchorPagerViewController: UIViewController {
     private func configurePagingHost() {
         pagingHost.eventDelegate = self
         pagingHost.pageProvider = self
+        pagingHost.deferredWorkDrainHandler = { [weak self] in
+            self?.requestDeferredWorkDrain()
+        }
     }
 
     private func installVisibleContentIfNeeded() {
@@ -349,12 +429,82 @@ open class AnchorPagerViewController: UIViewController {
 
     private func submitStagedReloadIfNeeded() {
         guard isViewLoaded, let snapshot = stagedReloadSnapshot else { return }
+        updatePagingHostExecutionSuspension()
         pagingHost.reload(
             requestIdentifier: snapshot.requestIdentifier,
             titles: snapshot.titles,
             pageCount: snapshot.pageCount,
             selectedIndex: snapshot.selectedIndex
         )
+        requestDeferredWorkDrain()
+    }
+
+    private func enqueueHeaderLayout(
+        offsetAdjustment: AnchorPagerHeaderOffsetAdjustment?
+    ) {
+        pendingHeaderLayoutRequest = PendingHeaderLayoutRequest(
+            offsetAdjustment: offsetAdjustment
+        )
+        if case .verticalDecelerating = interactionCoordinator.state {
+            _ = interactionCoordinator.cancel(interactionCoordinator.state)
+        }
+        updatePagingHostExecutionSuspension()
+        requestDeferredWorkDrain()
+    }
+
+    private func updatePagingHostExecutionSuspension() {
+        pagingHost.setDeferredWorkExecutionSuspended(
+            !interactionCoordinator.isReadyForDeferredWorkDrain
+        )
+    }
+
+    private func requestDeferredWorkDrain() {
+        deferredWorkDrainWasRequested = true
+        drainDeferredWorkIfPossible()
+    }
+
+    private func drainDeferredWorkIfPossible() {
+        guard !isDrainingDeferredWork else { return }
+        isDrainingDeferredWork = true
+        defer { isDrainingDeferredWork = false }
+
+        while deferredWorkDrainWasRequested {
+            deferredWorkDrainWasRequested = false
+            updatePagingHostExecutionSuspension()
+            guard interactionCoordinator.isReadyForDeferredWorkDrain else { return }
+            guard !pagingHost.hasActivePagingTransaction else { return }
+
+            if pagingHost.hasPendingReloadForDeferredWork {
+                _ = pagingHost.performPendingReloadIfPossible()
+                continue
+            }
+
+            if let request = pendingHeaderLayoutRequest {
+                pendingHeaderLayoutRequest = nil
+                nextInteractionIdentifier &+= 1
+                let state = AnchorPagerInteractionState.layoutReloading(
+                    identifier: nextInteractionIdentifier
+                )
+                guard interactionCoordinator.begin(state) else {
+                    pendingHeaderLayoutRequest = request
+                    return
+                }
+                updatePagingHostExecutionSuspension()
+                cancelBoundaryHandlingAndRestoreCanonicalPresentation()
+                updateVisibleLayout(
+                    forceNotify: true,
+                    offsetAdjustment: request.offsetAdjustment
+                )
+                _ = interactionCoordinator.finish(state)
+                updatePagingHostExecutionSuspension()
+                deferredWorkDrainWasRequested = true
+                continue
+            }
+
+            if pagingHost.hasPendingSelectionForDeferredWork {
+                _ = pagingHost.performPendingSelectionIfPossible()
+            }
+        }
     }
 
     private func activateProviderGeneration(

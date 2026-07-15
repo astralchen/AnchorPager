@@ -555,8 +555,11 @@
 - [x] 非相邻页面切换使用 source/target 过渡语义
 - [x] 快速连续 setSelectedIndex/bar 点击使用 active + latest pending，旧 completion/executor-ready 不清除新请求
 - [x] active 期间请求 committed source index 仍作为有效 latest intent
-- [ ] reloadData 非 idle 时执行 cancel 或延迟合并
-- [ ] reloadHeaderLayout 非 idle 时执行 cancel 或延迟合并
+- [x] reloadData 非 idle 时同步采集 metadata、由 Host 只保存 latest payload，并在 matching 执行前保持现有手势/presentation
+- [x] reloadHeaderLayout 非 idle 时只保存 latest adjustment；回到安全点后在 selection 前执行，回调重入进入下一轮 drain
+- [x] ViewController 以同步重入 guard 按 active Pageboy/size → reload → Header layout → selection 排空，不复制 Host payload
+- [x] transitioningSize 同步暂停 drain 并恢复 canonical presentation，completion 后恢复 active Pageboy 或继续排空，不伪造 selection cancel
+- [x] 移除 ViewController 对 visible committed target 的过早 no-op，由 Host 区分无 active no-op 与 active 返回意图
 - [ ] container/child pan 结束时记录 velocity 和 deceleration rate，不占用业务 delegate
 - [ ] 创建纯衰减计算与 `CADisplayLink` 驱动的 internal vertical deceleration driver
 - [ ] container-to-child 跨 owner 剩余 velocity 合成
@@ -565,10 +568,10 @@
 - [ ] 系统返回手势优先级明确
 - [ ] child 横向 content scroll 手势优先级明确
 - [ ] Pageboy paging pan 对 interactive-pop 和具备横向范围的 committed current child pan 建立失败依赖
-- [ ] 为 interaction state begin 加入 gesture 日志
-- [ ] 为重要 update 边界加入 gesture 日志
-- [ ] 为 finish 和 cancel 加入 gesture 日志
-- [ ] 为非法 transition 忽略加入 gesture 日志
+- [x] 为 interaction state begin 加入 gesture 日志
+- [x] 为重要 update 边界加入 gesture 日志
+- [x] 为 finish 和 cancel 加入 gesture 日志
+- [x] 为非法 transition 忽略加入 gesture 日志并对连续相同非法转换去重
 - [ ] 测试 paging cancel 不提交 selectedIndex
 - [ ] 测试快速连续 setSelectedIndex
 - [ ] 测试连续 bar 点击与 API/bar 混合 latest pending
