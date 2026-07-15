@@ -170,11 +170,11 @@ struct AnchorPagerPagingSelectionTransaction: Equatable {
 }
 ```
 
-- [ ] **Step 1：写纯值语义 RED**
+- [x] **Step 1：写纯值语义 RED**
 
 覆盖：interactive transaction 只需 semantic terminal；非动画 explicit completion 同时确认 completion/ready；动画 explicit 必须三项齐全；stale identifier、target mismatch、adapter identity mismatch 不改变 transaction；同 target duplicate 与 latest replacement admission 结果可区分。`interactive` 只能由 Host 的 interactive-begin 入口创建，不能通过 explicit enqueue 排队。
 
-- [ ] **Step 2：运行 RED**
+- [x] **Step 2：运行 RED**
 
 ```bash
 xcodebuild -quiet -scheme AnchorPager \
@@ -184,11 +184,11 @@ xcodebuild -quiet -scheme AnchorPager \
 
 预期：编译失败，缺少 selection request/transaction 类型。
 
-- [ ] **Step 3：实现最小值类型与 matching helper**
+- [x] **Step 3：实现最小值类型与 matching helper**
 
 所有类型保持 internal、`Equatable`、无 UIKit page/provider/offset；`ObjectIdentifier` 只用于 active adapter identity，不进入日志正文。
 
-- [ ] **Step 4：运行 GREEN、自审并提交**
+- [x] **Step 4：运行 GREEN、自审并提交**
 
 ```bash
 git add Sources/AnchorPager/Paging/AnchorPagerPagingSelectionRequest.swift Tests/AnchorPagerTests/AnchorPagerPagingSelectionRequestTests.swift
