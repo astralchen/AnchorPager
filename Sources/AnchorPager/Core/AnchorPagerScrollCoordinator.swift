@@ -1,11 +1,24 @@
 import UIKit
 
+enum AnchorPagerVerticalPanSource: Hashable, Sendable {
+    case container
+    case child(token: Int)
+}
+
 @MainActor
 final class AnchorPagerScrollCoordinator {
     enum Owner: Equatable {
         case container
         case child
     }
+
+    enum DecelerationPhase: Equatable {
+        case monitoringNative
+        case synthetic
+    }
+
+    typealias DecelerationDriverFactory = () -> AnchorPagerVerticalDecelerationDriving
+    typealias DecelerationRateProvider = (UIScrollView) -> CGFloat
 
     private enum ActiveBoundaryEnforcementResult {
         case inactive
@@ -15,26 +28,56 @@ final class AnchorPagerScrollCoordinator {
 
     private let containerScrollView: AnchorPagerContainerScrollView
     private let overscrollCoordinator: AnchorPagerOverscrollCoordinator
+    private let decelerationDriverFactory: DecelerationDriverFactory
+    private let decelerationRateProvider: DecelerationRateProvider
     private var childBinding: AnchorPagerChildScrollBinding?
     private weak var committedChildScrollView: UIScrollView?
     private var bindingToken = 0
     private var containerGeometry: AnchorPagerContainerScrollGeometry = .zero
     private var gestureStartTotal: CGFloat?
     private var gestureStartTranslationY: CGFloat = 0
+    private var activePanSources: Set<AnchorPagerVerticalPanSource> = []
+    private var primaryPanSource: AnchorPagerVerticalPanSource?
+    private var nextVerticalInteractionIdentifier = 0
+    private var verticalInteractionIdentifier: Int?
+    private var didAttemptDecelerationForInteraction = false
     private var isApplyingGuardedOffsets = false
     private var isInvalidated = false
+    private var decelerationDriver: AnchorPagerVerticalDecelerationDriving?
+    private var decelerationContext: DecelerationContext?
     private(set) var owner: Owner = .container
+
+    private struct DecelerationContext {
+        let interactionIdentifier: Int
+        let nativeOwner: Owner
+        let initialCanonicalTotal: CGFloat
+        var accumulatedModelDelta: CGFloat
+        var canonicalTotal: CGFloat
+        var phase: DecelerationPhase
+        var nativeBoundaryReached: Bool
+    }
 
     var bindingTokenForTesting: Int { bindingToken }
     var activeBoundaryForTesting: AnchorPagerOverscrollCoordinator.ActiveOwner? {
         overscrollCoordinator.activeOwner
     }
+    var decelerationPhaseForTesting: DecelerationPhase? {
+        decelerationContext?.phase
+    }
 
     init(
         containerScrollView: AnchorPagerContainerScrollView,
-        topOverscrollHandlingMode: AnchorPagerTopOverscrollHandlingMode = .container
+        topOverscrollHandlingMode: AnchorPagerTopOverscrollHandlingMode = .container,
+        decelerationDriverFactory: @escaping DecelerationDriverFactory = {
+            AnchorPagerVerticalDecelerationDriver()
+        },
+        decelerationRateProvider: @escaping DecelerationRateProvider = {
+            $0.decelerationRate.rawValue
+        }
     ) {
         self.containerScrollView = containerScrollView
+        self.decelerationDriverFactory = decelerationDriverFactory
+        self.decelerationRateProvider = decelerationRateProvider
         self.overscrollCoordinator = AnchorPagerOverscrollCoordinator(
             topMode: topOverscrollHandlingMode
         )
@@ -44,7 +87,14 @@ final class AnchorPagerScrollCoordinator {
         )
     }
 
+    deinit {
+        MainActor.assumeIsolated {
+            cancelSyntheticDeceleration()
+        }
+    }
+
     func updateTopOverscrollHandlingMode(_ mode: AnchorPagerTopOverscrollHandlingMode) {
+        cancelSyntheticDeceleration()
         let hadActiveOwner = overscrollCoordinator.activeOwner != nil
         overscrollCoordinator.updateTopMode(mode)
         if hadActiveOwner {
@@ -58,6 +108,7 @@ final class AnchorPagerScrollCoordinator {
     ) {
         let previous = currentStablePosition()
         if containerGeometry != geometry {
+            cancelSyntheticDeceleration()
             overscrollCoordinator.cancel()
         }
         containerGeometry = geometry
@@ -80,6 +131,7 @@ final class AnchorPagerScrollCoordinator {
     func bindCommittedChild(_ scrollView: UIScrollView?) {
         guard !isInvalidated, committedChildScrollView !== scrollView else { return }
 
+        cancelSyntheticDeceleration()
         overscrollCoordinator.cancel()
         endCurrentBindingIfNeeded()
         committedChildScrollView = scrollView
@@ -100,10 +152,15 @@ final class AnchorPagerScrollCoordinator {
                 self?.childDidChange(token: token)
             },
             onContentSizeChanged: { [weak self] _ in
-                self?.childDidChange(token: token)
+                self?.childGeometryDidChange(token: token)
             },
-            onPan: { [weak self] state, _ in
-                self?.childPanStateDidChange(state: state, token: token)
+            onPan: { [weak self] state, translationY, velocityY in
+                self?.handlePan(
+                    source: .child(token: token),
+                    state: state,
+                    translationY: translationY,
+                    velocityY: velocityY
+                )
             }
         )
         settleStableOffsets()
@@ -112,6 +169,9 @@ final class AnchorPagerScrollCoordinator {
     func containerDidScroll() {
         guard !isInvalidated else { return }
         guard !isApplyingGuardedOffsets else { return }
+        if handleDecelerationNativeCallback(source: .container) {
+            return
+        }
         if handleObservedBoundaryIfNeeded() {
             return
         }
@@ -119,13 +179,35 @@ final class AnchorPagerScrollCoordinator {
     }
 
     func handlePan(state: UIGestureRecognizer.State, translationY: CGFloat) {
+        handlePan(
+            source: .container,
+            state: state,
+            translationY: translationY,
+            velocityY: 0
+        )
+    }
+
+    func handlePan(
+        source: AnchorPagerVerticalPanSource,
+        state: UIGestureRecognizer.State,
+        translationY: CGFloat,
+        velocityY: CGFloat
+    ) {
         guard !isInvalidated else { return }
+        guard isCurrentPanSource(source) else {
+            AnchorPagerLogger.log(
+                .debug,
+                category: .scroll,
+                event: "scroll.binding.stale"
+            )
+            return
+        }
         switch state {
         case .began:
-            gestureStartTotal = currentCanonicalTotal()
-            gestureStartTranslationY = translationY
+            beginVerticalPanIfNeeded(source: source, translationY: translationY)
         case .changed:
-            guard let gestureStartTotal else { return }
+            guard primaryPanSource == source,
+                  let gestureStartTotal else { return }
             let input = AnchorPagerScrollPositionResolver.Input(
                 gestureStartTotal: gestureStartTotal,
                 gestureStartTranslationY: gestureStartTranslationY,
@@ -161,12 +243,11 @@ final class AnchorPagerScrollCoordinator {
                 }
             }
         case .ended, .cancelled, .failed:
-            gestureStartTotal = nil
-            if overscrollCoordinator.endInteraction() {
-                settleStableOffsets()
-            } else if overscrollCoordinator.activeOwner == nil {
-                settleStableOffsets()
-            }
+            finishVerticalPanSource(
+                source,
+                state: state,
+                velocityY: velocityY
+            )
         default:
             break
         }
@@ -177,6 +258,7 @@ final class AnchorPagerScrollCoordinator {
     }
 
     func cancelBoundaryHandling() {
+        cancelSyntheticDeceleration()
         let didCancel = overscrollCoordinator.cancel()
         if didCancel {
             apply(currentStablePosition())
@@ -186,6 +268,7 @@ final class AnchorPagerScrollCoordinator {
     func invalidate() {
         guard !isInvalidated else { return }
         isInvalidated = true
+        cancelSyntheticDeceleration()
         overscrollCoordinator.cancel()
         bindingToken &+= 1
         endCurrentBindingIfNeeded()
@@ -196,6 +279,17 @@ final class AnchorPagerScrollCoordinator {
             action: #selector(handleContainerPan(_:))
         )
         gestureStartTotal = nil
+        activePanSources.removeAll()
+        primaryPanSource = nil
+        verticalInteractionIdentifier = nil
+    }
+
+    func cancelSyntheticDeceleration() {
+        guard decelerationContext != nil else { return }
+        decelerationContext = nil
+        let driver = decelerationDriver
+        decelerationDriver = nil
+        driver?.cancel()
     }
 }
 
@@ -216,6 +310,317 @@ private extension AnchorPagerScrollCoordinator {
             boundsHeight: child.bounds.height,
             contentInsetTop: child.contentInset.top,
             contentInsetBottom: child.contentInset.bottom
+        )
+    }
+
+    func isCurrentPanSource(_ source: AnchorPagerVerticalPanSource) -> Bool {
+        switch source {
+        case .container:
+            return true
+        case let .child(token):
+            return token == bindingToken && committedChildScrollView != nil
+        }
+    }
+
+    func beginVerticalPanIfNeeded(
+        source: AnchorPagerVerticalPanSource,
+        translationY: CGFloat
+    ) {
+        if verticalInteractionIdentifier == nil {
+            cancelSyntheticDeceleration()
+            nextVerticalInteractionIdentifier &+= 1
+            verticalInteractionIdentifier = nextVerticalInteractionIdentifier
+            gestureStartTotal = currentCanonicalTotal()
+            gestureStartTranslationY = translationY
+            primaryPanSource = source
+            didAttemptDecelerationForInteraction = false
+        }
+        activePanSources.insert(source)
+    }
+
+    func finishVerticalPanSource(
+        _ source: AnchorPagerVerticalPanSource,
+        state: UIGestureRecognizer.State,
+        velocityY: CGFloat
+    ) {
+        guard verticalInteractionIdentifier != nil else {
+            settleStableOffsets()
+            return
+        }
+
+        if state == .ended {
+            startDecelerationIfPossible(source: source, velocityY: velocityY)
+        } else {
+            cancelSyntheticDeceleration()
+        }
+        activePanSources.remove(source)
+        guard activePanSources.isEmpty else { return }
+
+        gestureStartTotal = nil
+        primaryPanSource = nil
+        verticalInteractionIdentifier = nil
+        didAttemptDecelerationForInteraction = false
+        if overscrollCoordinator.endInteraction() {
+            settleStableOffsets()
+        } else if overscrollCoordinator.activeOwner == nil {
+            settleStableOffsets()
+        }
+    }
+
+    func startDecelerationIfPossible(
+        source: AnchorPagerVerticalPanSource,
+        velocityY: CGFloat
+    ) {
+        guard !didAttemptDecelerationForInteraction,
+              sourceMatchesCurrentOwner(source),
+              let interactionIdentifier = verticalInteractionIdentifier else {
+            return
+        }
+        didAttemptDecelerationForInteraction = true
+
+        let canonicalVelocity = -velocityY
+        let rate = decelerationRate(for: owner)
+        let initialTotal = currentCanonicalTotal()
+        guard canonicalVelocity.isFinite,
+              abs(canonicalVelocity) > 5,
+              rate.isFinite,
+              rate > 0,
+              rate < 1,
+              canHandoff(
+                from: owner,
+                canonicalVelocity: canonicalVelocity,
+                initialTotal: initialTotal
+              ) else {
+            logRejectedDeceleration()
+            return
+        }
+
+        let nativeOwner = owner
+        let driver = decelerationDriverFactory()
+        decelerationDriver = driver
+        decelerationContext = DecelerationContext(
+            interactionIdentifier: interactionIdentifier,
+            nativeOwner: nativeOwner,
+            initialCanonicalTotal: initialTotal,
+            accumulatedModelDelta: 0,
+            canonicalTotal: initialTotal,
+            phase: .monitoringNative,
+            nativeBoundaryReached: nativeOwnerBoundaryReached(nativeOwner)
+        )
+        driver.onTick = { [weak self] sample in
+            self?.consumeDecelerationSample(
+                sample,
+                interactionIdentifier: interactionIdentifier
+            )
+        }
+        driver.onCancel = { [weak self] in
+            self?.decelerationDriverDidCancel(
+                interactionIdentifier: interactionIdentifier
+            )
+        }
+        driver.start(
+            initialVelocity: canonicalVelocity,
+            decelerationRate: rate,
+            elapsedTime: 0
+        )
+    }
+
+    func sourceMatchesCurrentOwner(_ source: AnchorPagerVerticalPanSource) -> Bool {
+        switch (owner, source) {
+        case (.container, .container), (.child, .child):
+            return true
+        default:
+            return false
+        }
+    }
+
+    func decelerationRate(for owner: Owner) -> CGFloat {
+        switch owner {
+        case .container:
+            return decelerationRateProvider(containerScrollView)
+        case .child:
+            guard let committedChildScrollView else { return .nan }
+            return decelerationRateProvider(committedChildScrollView)
+        }
+    }
+
+    func canHandoff(
+        from owner: Owner,
+        canonicalVelocity: CGFloat,
+        initialTotal: CGFloat
+    ) -> Bool {
+        switch owner {
+        case .container:
+            return canonicalVelocity > 5
+                && committedChildScrollView != nil
+                && childMaximumDistance > epsilon
+                && initialTotal
+                    < containerGeometry.collapsibleDistance + childMaximumDistance - epsilon
+        case .child:
+            return canonicalVelocity < -5
+                && containerGeometry.collapsibleDistance > epsilon
+                && initialTotal > epsilon
+        }
+    }
+
+    func nativeOwnerBoundaryReached(_ owner: Owner) -> Bool {
+        switch owner {
+        case .container:
+            let logicalOffset = containerGeometry.logicalOffset(
+                forRawOffset: containerScrollView.contentOffset.y
+            )
+            return logicalOffset
+                >= containerGeometry.collapsibleDistance - boundaryEpsilon
+        case .child:
+            let distance = (committedChildScrollView?.contentOffset.y ?? childTopOffset)
+                - childTopOffset
+            return distance <= boundaryEpsilon
+        }
+    }
+
+    func handleDecelerationNativeCallback(
+        source: AnchorPagerVerticalPanSource
+    ) -> Bool {
+        guard var context = decelerationContext,
+              sourceMatchesNativeOwner(source, context.nativeOwner) else {
+            return false
+        }
+
+        if context.phase == .synthetic {
+            lockLateNativeOwnerAtHandoffBoundary(context.nativeOwner)
+            return true
+        }
+        guard context.nativeBoundaryReached
+            || nativeOwnerBoundaryReached(context.nativeOwner) else {
+            return false
+        }
+
+        context.nativeBoundaryReached = true
+        decelerationContext = context
+        lockNativeOwnerAtHandoffBoundary(context.nativeOwner)
+        return true
+    }
+
+    func sourceMatchesNativeOwner(
+        _ source: AnchorPagerVerticalPanSource,
+        _ nativeOwner: Owner
+    ) -> Bool {
+        switch (nativeOwner, source) {
+        case (.container, .container), (.child, .child):
+            return true
+        default:
+            return false
+        }
+    }
+
+    func lockNativeOwnerAtHandoffBoundary(_ nativeOwner: Owner) {
+        switch nativeOwner {
+        case .container:
+            writeContainerBoundary(containerGeometry.collapsibleDistance)
+            pinChildToTop()
+        case .child:
+            pinChildToTop()
+            writeContainerBoundary(containerGeometry.collapsibleDistance)
+        }
+    }
+
+    func lockLateNativeOwnerAtHandoffBoundary(_ nativeOwner: Owner) {
+        switch nativeOwner {
+        case .container:
+            writeContainerBoundary(containerGeometry.collapsibleDistance)
+        case .child:
+            pinChildToTop()
+        }
+    }
+
+    func consumeDecelerationSample(
+        _ sample: AnchorPagerVerticalDecelerationModel.Sample,
+        interactionIdentifier: Int
+    ) {
+        guard var context = decelerationContext else { return }
+        guard context.interactionIdentifier == interactionIdentifier else { return }
+        guard sample.delta.isFinite, sample.velocity.isFinite else {
+            cancelSyntheticDeceleration()
+            return
+        }
+
+        context.accumulatedModelDelta += sample.delta
+        switch context.phase {
+        case .monitoringNative:
+            guard context.nativeBoundaryReached else {
+                if sample.isFinished {
+                    decelerationContext = nil
+                } else {
+                    decelerationContext = context
+                }
+                return
+            }
+            context.phase = .synthetic
+            let boundaryTotal = containerGeometry.collapsibleDistance
+            let projectedTotal = context.initialCanonicalTotal
+                + context.accumulatedModelDelta
+            switch context.nativeOwner {
+            case .container:
+                context.canonicalTotal = boundaryTotal
+                    + max(0, projectedTotal - boundaryTotal)
+            case .child:
+                context.canonicalTotal = boundaryTotal
+                    + min(0, projectedTotal - boundaryTotal)
+            }
+            AnchorPagerLogger.log(
+                .info,
+                category: .scroll,
+                event: "scroll.deceleration.handoff"
+            )
+        case .synthetic:
+            context.canonicalTotal += sample.delta
+        }
+
+        let didReachTerminalBoundary = applySyntheticPosition(&context)
+        if didReachTerminalBoundary {
+            decelerationContext = context
+            cancelSyntheticDeceleration()
+        } else if sample.isFinished {
+            decelerationContext = nil
+        } else {
+            decelerationContext = context
+        }
+    }
+
+    private func applySyntheticPosition(
+        _ context: inout DecelerationContext
+    ) -> Bool {
+        let maximumTotal = containerGeometry.collapsibleDistance + childMaximumDistance
+        let desiredTotal = context.canonicalTotal
+        let clampedTotal = min(max(0, desiredTotal), maximumTotal)
+        context.canonicalTotal = clampedTotal
+        apply(AnchorPagerScrollPositionResolver.resolveCanonicalTotal(
+            clampedTotal,
+            containerCollapsedOffset: containerGeometry.collapsibleDistance,
+            childMaximumDistance: childMaximumDistance,
+            fallback: currentStablePosition()
+        ))
+
+        switch context.nativeOwner {
+        case .container:
+            return desiredTotal >= maximumTotal
+        case .child:
+            return desiredTotal <= 0
+        }
+    }
+
+    func decelerationDriverDidCancel(interactionIdentifier: Int) {
+        guard decelerationContext?.interactionIdentifier == interactionIdentifier else {
+            return
+        }
+        decelerationContext = nil
+    }
+
+    func logRejectedDeceleration() {
+        AnchorPagerLogger.log(
+            .debug,
+            category: .scroll,
+            event: "scroll.deceleration.cancel"
         )
     }
 
@@ -475,6 +880,9 @@ private extension AnchorPagerScrollCoordinator {
             return
         }
         guard !isApplyingGuardedOffsets else { return }
+        if handleDecelerationNativeCallback(source: .child(token: token)) {
+            return
+        }
         if handleObservedBoundaryIfNeeded() {
             return
         }
@@ -488,10 +896,7 @@ private extension AnchorPagerScrollCoordinator {
         settleStableOffsets()
     }
 
-    func childPanStateDidChange(
-        state: UIGestureRecognizer.State,
-        token: Int
-    ) {
+    func childGeometryDidChange(token: Int) {
         guard token == bindingToken else {
             AnchorPagerLogger.log(
                 .debug,
@@ -500,9 +905,8 @@ private extension AnchorPagerScrollCoordinator {
             )
             return
         }
-        guard gestureStartTotal == nil,
-              state == .ended || state == .cancelled || state == .failed else { return }
-        settleStableOffsets()
+        cancelSyntheticDeceleration()
+        childDidChange(token: token)
     }
 
     func endCurrentBindingIfNeeded() {
@@ -568,8 +972,10 @@ private extension AnchorPagerScrollCoordinator {
 
     @objc func handleContainerPan(_ pan: UIPanGestureRecognizer) {
         handlePan(
+            source: .container,
             state: pan.state,
-            translationY: pan.translation(in: pan.view).y
+            translationY: pan.translation(in: pan.view).y,
+            velocityY: pan.velocity(in: pan.view).y
         )
     }
 }

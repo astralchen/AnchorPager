@@ -525,7 +525,7 @@
 - [x] 确认 v0.7 专项设计：Host 统一 active/latest pending selection request，Adapter 只执行第三方分页，Interaction Coordinator 只做跨域仲裁，Scroll/Overscroll 保持唯一 offset/policy owner
 - [x] 完成 v0.7 详细实施计划，覆盖逐任务 RED/GREEN、任务级提交、真实 UI、全量门禁与 fresh-pass
 - [x] 用户复核并确认 v0.7 详细实施计划
-- [ ] 复用 v0.5 已建立的 current container/current child 最小纵向 simultaneous recognition，不重复建立第二套纵向 handoff
+- [x] 复用 v0.5 已建立的 current container/current child 最小纵向 simultaneous recognition，不重复建立第二套纵向 handoff
 - [x] 先以 RED 覆盖同一调用栈连续 `animated: false` 的 Pageboy 假接受/无 completion 窗口
 - [x] PagingHost 建立一笔 active + 一笔 latest pending selection request，不建立第二套 generation owner 或旁路 terminal
 - [x] selection request 使用 Host 单调 identifier，并区分 api、bar、interactive source
@@ -560,11 +560,11 @@
 - [x] ViewController 以同步重入 guard 按 active Pageboy/size → reload → Header layout → selection 排空，不复制 Host payload
 - [x] transitioningSize 同步暂停 drain 并恢复 canonical presentation，completion 后恢复 active Pageboy 或继续排空，不伪造 selection cancel
 - [x] 移除 ViewController 对 visible committed target 的过早 no-op，由 Host 区分无 active no-op 与 active 返回意图
-- [ ] container/child pan 结束时记录 velocity 和 deceleration rate，不占用业务 delegate
+- [x] container/child pan 结束时记录 velocity 和 current owner deceleration rate，不占用业务 delegate；stale binding 与非 current owner 样本不启动 driver
 - [x] 创建纯衰减计算与唯一 `CADisplayLink` 驱动的 internal vertical deceleration driver；模型、替换、finish/cancel、析构与固定日志均已自动化覆盖
-- [ ] container-to-child 跨 owner 剩余 velocity 合成
-- [ ] child-to-container 跨 owner 剩余 velocity 合成
-- [ ] 新手势、selection、reload、layout、尺寸变化和 identity 变化同步取消 synthetic deceleration
+- [x] container-to-child 使用唯一 driver 合成跨 owner 边界后的剩余 delta，native 监控阶段不写 offset
+- [x] child-to-container 使用同一 driver 合成跨 owner 边界后的剩余 delta，稳定端点停止且不创建 overscroll owner
+- [x] 新手势、selection、reload、layout、尺寸变化、geometry、identity、mode 与 teardown 同步取消 synthetic deceleration；旧 driver tick 不能取消替换后的事务
 - [x] 系统返回手势优先级明确：Pageboy paging pan 让 navigation interactive-pop gesture 优先
 - [x] child 横向 content scroll 手势优先级明确：只消费 Store committed current 的真实水平范围
 - [x] Pageboy paging pan 对 interactive-pop 和具备横向范围的 committed current child pan 建立公开失败依赖，不设置任何 delegate
@@ -577,7 +577,7 @@
 - [ ] 测试连续 bar 点击与 API/bar 混合 latest pending
 - [ ] 测试动画 completion 返回前不启动 latest，Pageboy interaction hook 恢复后才推进
 - [ ] 测试非相邻页面切换
-- [ ] 测试双向跨 owner 惯性连续且保持唯一 offset writer/owner
+- [x] 测试双向跨 owner 惯性连续、旧 owner 晚到 callback 锁边界且保持 ScrollCoordinator 唯一 synthetic offset writer
 - [ ] 测试横向分页与纵向拖拽竞争
 - [ ] 测试系统返回手势与横向分页手势优先级
 - [ ] 使用真实横向业务 scroll child 验证 child/Pageboy 优先级和 delegate 身份不变

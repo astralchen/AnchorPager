@@ -916,6 +916,339 @@ final class AnchorPagerScrollCoordinatorTests: XCTestCase {
         )
     }
 
+    func testEndedSampleStartsNativeMonitorWithCurrentOwnerRateWithoutWritingOffsets() throws {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        fixture.container.decelerationRate = .normal
+        fixture.container.contentOffset.y = 40
+
+        fixture.coordinator.handlePan(
+            source: .container,
+            state: .began,
+            translationY: 0,
+            velocityY: 0
+        )
+        fixture.coordinator.handlePan(
+            source: .container,
+            state: .ended,
+            translationY: 0,
+            velocityY: -1_000
+        )
+        let driver = try XCTUnwrap(fixture.decelerationDrivers.drivers.first)
+
+        XCTAssertEqual(driver.starts.count, 1)
+        XCTAssertEqual(driver.starts[0].initialVelocity, 1_000)
+        XCTAssertEqual(
+            driver.starts[0].decelerationRate,
+            fixture.container.decelerationRate.rawValue
+        )
+        XCTAssertEqual(
+            fixture.coordinator.decelerationPhaseForTesting,
+            .monitoringNative
+        )
+
+        driver.emit(.init(delta: 12, velocity: 900, isFinished: false))
+
+        XCTAssertEqual(fixture.container.contentOffset.y, 40, accuracy: 0.001)
+        XCTAssertEqual(fixture.childDistance, 0, accuracy: 0.001)
+    }
+
+    func testOnlyCurrentOwnerAndMatchingBindingCanStartOncePerInteraction() throws {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        let token = fixture.coordinator.bindingTokenForTesting
+
+        fixture.coordinator.handlePan(
+            source: .container,
+            state: .began,
+            translationY: 0,
+            velocityY: 0
+        )
+        fixture.coordinator.handlePan(
+            source: .child(token: token),
+            state: .began,
+            translationY: 0,
+            velocityY: 0
+        )
+        fixture.coordinator.handlePan(
+            source: .child(token: token),
+            state: .ended,
+            translationY: 0,
+            velocityY: -1_000
+        )
+        XCTAssertTrue(fixture.decelerationDrivers.drivers.isEmpty)
+
+        fixture.coordinator.handlePan(
+            source: .container,
+            state: .ended,
+            translationY: 0,
+            velocityY: -1_000
+        )
+        fixture.coordinator.handlePan(
+            source: .child(token: token),
+            state: .ended,
+            translationY: 0,
+            velocityY: -1_000
+        )
+
+        XCTAssertEqual(fixture.decelerationDrivers.drivers.count, 1)
+
+        fixture.coordinator.handlePan(
+            source: .child(token: token - 1),
+            state: .ended,
+            translationY: 0,
+            velocityY: -1_000
+        )
+        XCTAssertEqual(fixture.decelerationDrivers.drivers.count, 1)
+    }
+
+    func testContainerToChildDecelerationConsumesOnlyModelOverflowPastBoundary() throws {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        fixture.container.contentOffset.y = 80
+        fixture.startDeceleration(source: .container, velocityY: -1_000)
+        let driver = try XCTUnwrap(fixture.decelerationDrivers.drivers.first)
+
+        driver.emit(.init(delta: 15, velocity: 900, isFinished: false))
+        XCTAssertEqual(fixture.container.contentOffset.y, 80, accuracy: 0.001)
+        XCTAssertEqual(fixture.childDistance, 0, accuracy: 0.001)
+
+        fixture.container.contentOffset.y = 100
+        fixture.coordinator.containerDidScroll()
+        driver.emit(.init(delta: 10, velocity: 800, isFinished: false))
+
+        XCTAssertEqual(
+            fixture.coordinator.decelerationPhaseForTesting,
+            .synthetic
+        )
+        XCTAssertEqual(fixture.container.contentOffset.y, 100, accuracy: 0.001)
+        XCTAssertEqual(fixture.childDistance, 5, accuracy: 0.001)
+
+        driver.emit(.init(delta: 10, velocity: 700, isFinished: false))
+        XCTAssertEqual(fixture.childDistance, 15, accuracy: 0.001)
+        XCTAssertEqual(fixture.decelerationDrivers.drivers.count, 1)
+
+        fixture.container.contentOffset.y = 90
+        fixture.coordinator.containerDidScroll()
+
+        XCTAssertEqual(fixture.container.contentOffset.y, 100, accuracy: 0.001)
+        XCTAssertEqual(fixture.childDistance, 15, accuracy: 0.001)
+        XCTAssertNil(fixture.coordinator.activeBoundaryForTesting)
+    }
+
+    func testChildToContainerDecelerationConsumesOnlyModelOverflowPastBoundary() throws {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        fixture.container.contentOffset.y = 100
+        fixture.child.contentOffset.y = -fixture.child.contentInset.top + 50
+        XCTAssertEqual(fixture.coordinator.owner, .child)
+        let token = fixture.coordinator.bindingTokenForTesting
+        fixture.child.decelerationRate = .fast
+        fixture.startDeceleration(
+            source: .child(token: token),
+            velocityY: 1_000
+        )
+        let driver = try XCTUnwrap(fixture.decelerationDrivers.drivers.first)
+        XCTAssertEqual(
+            driver.starts[0].decelerationRate,
+            fixture.child.decelerationRate.rawValue
+        )
+
+        driver.emit(.init(delta: -30, velocity: -900, isFinished: false))
+        XCTAssertEqual(fixture.container.contentOffset.y, 100, accuracy: 0.001)
+        XCTAssertEqual(fixture.childDistance, 50, accuracy: 0.001)
+
+        fixture.child.contentOffset.y = -fixture.child.contentInset.top
+        driver.emit(.init(delta: -30, velocity: -800, isFinished: false))
+
+        XCTAssertEqual(
+            fixture.coordinator.decelerationPhaseForTesting,
+            .synthetic
+        )
+        XCTAssertEqual(fixture.childDistance, 0, accuracy: 0.001)
+        XCTAssertEqual(fixture.container.contentOffset.y, 90, accuracy: 0.001)
+
+        driver.emit(.init(delta: -20, velocity: -700, isFinished: false))
+        XCTAssertEqual(fixture.container.contentOffset.y, 70, accuracy: 0.001)
+
+        fixture.child.contentOffset.y = -fixture.child.contentInset.top + 10
+        XCTAssertEqual(fixture.childDistance, 0, accuracy: 0.001)
+        XCTAssertEqual(fixture.container.contentOffset.y, 70, accuracy: 0.001)
+        XCTAssertNil(fixture.coordinator.activeBoundaryForTesting)
+    }
+
+    func testMonitorFinishesBelowVelocityThresholdWithoutWritingOffsets() throws {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        fixture.container.contentOffset.y = 40
+        fixture.startDeceleration(source: .container, velocityY: -1_000)
+        let driver = try XCTUnwrap(fixture.decelerationDrivers.drivers.first)
+
+        driver.emit(.init(delta: 8, velocity: 5, isFinished: true))
+
+        XCTAssertNil(fixture.coordinator.decelerationPhaseForTesting)
+        XCTAssertEqual(fixture.container.contentOffset.y, 40, accuracy: 0.001)
+        XCTAssertEqual(fixture.childDistance, 0, accuracy: 0.001)
+        XCTAssertEqual(driver.cancelCount, 0)
+    }
+
+    func testNewPanAndStructuralChangesCancelSyntheticDecelerationOnce() throws {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        fixture.container.contentOffset.y = 40
+        fixture.startDeceleration(source: .container, velocityY: -1_000)
+        let firstDriver = try XCTUnwrap(fixture.decelerationDrivers.drivers.first)
+
+        fixture.coordinator.handlePan(
+            source: .container,
+            state: .began,
+            translationY: 0,
+            velocityY: 0
+        )
+        fixture.coordinator.cancelSyntheticDeceleration()
+        XCTAssertEqual(firstDriver.cancelCount, 1)
+
+        fixture.coordinator.handlePan(
+            source: .container,
+            state: .cancelled,
+            translationY: 0,
+            velocityY: 0
+        )
+        fixture.startDeceleration(source: .container, velocityY: -1_000)
+        let geometryDriver = try XCTUnwrap(fixture.decelerationDrivers.drivers.last)
+        fixture.coordinator.updateGeometry(
+            .init(topInset: 0, collapsibleDistance: 120)
+        )
+        XCTAssertEqual(geometryDriver.cancelCount, 1)
+
+        fixture.startDeceleration(source: .container, velocityY: -1_000)
+        let identityDriver = try XCTUnwrap(fixture.decelerationDrivers.drivers.last)
+        fixture.coordinator.bindCommittedChild(
+            fixture.makeChild(maximumDistance: 300)
+        )
+        XCTAssertEqual(identityDriver.cancelCount, 1)
+
+        fixture.container.contentOffset.y = 40
+        fixture.startDeceleration(source: .container, velocityY: -1_000)
+        let modeDriver = try XCTUnwrap(fixture.decelerationDrivers.drivers.last)
+        fixture.coordinator.updateTopOverscrollHandlingMode(.none)
+        XCTAssertEqual(modeDriver.cancelCount, 1)
+
+        fixture.container.contentOffset.y = 40
+        fixture.startDeceleration(source: .container, velocityY: -1_000)
+        let boundaryDriver = try XCTUnwrap(fixture.decelerationDrivers.drivers.last)
+        fixture.coordinator.cancelBoundaryHandling()
+        XCTAssertEqual(boundaryDriver.cancelCount, 1)
+
+        fixture.container.contentOffset.y = 40
+        fixture.startDeceleration(source: .container, velocityY: -1_000)
+        let invalidationDriver = try XCTUnwrap(
+            fixture.decelerationDrivers.drivers.last
+        )
+        fixture.coordinator.invalidate()
+        XCTAssertEqual(invalidationDriver.cancelCount, 1)
+    }
+
+    func testChildContentGeometryChangeCancelsActiveDeceleration() throws {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        fixture.container.contentOffset.y = 40
+        fixture.startDeceleration(source: .container, velocityY: -1_000)
+        let driver = try XCTUnwrap(fixture.decelerationDrivers.drivers.first)
+
+        fixture.child.contentSize.height += 20
+
+        XCTAssertEqual(driver.cancelCount, 1)
+        XCTAssertNil(fixture.coordinator.decelerationPhaseForTesting)
+    }
+
+    func testSyntheticDecelerationStopsAtStableEndpointWithoutOverscrollOwner() throws {
+        let upward = Fixture(collapsedOffset: 100, childMaximumDistance: 20)
+        upward.container.contentOffset.y = 90
+        upward.startDeceleration(source: .container, velocityY: -1_000)
+        let upwardDriver = try XCTUnwrap(upward.decelerationDrivers.drivers.first)
+        upwardDriver.emit(.init(delta: 15, velocity: 900, isFinished: false))
+        upward.container.contentOffset.y = 100
+        upward.coordinator.containerDidScroll()
+        upwardDriver.emit(.init(delta: 20, velocity: 800, isFinished: false))
+
+        XCTAssertEqual(upward.container.contentOffset.y, 100, accuracy: 0.001)
+        XCTAssertEqual(upward.childDistance, 20, accuracy: 0.001)
+        XCTAssertEqual(upwardDriver.cancelCount, 1)
+        XCTAssertNil(upward.coordinator.activeBoundaryForTesting)
+
+        let downward = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        downward.container.contentOffset.y = 100
+        downward.child.contentOffset.y = -downward.child.contentInset.top + 10
+        let token = downward.coordinator.bindingTokenForTesting
+        downward.startDeceleration(
+            source: .child(token: token),
+            velocityY: 1_000
+        )
+        let downwardDriver = try XCTUnwrap(
+            downward.decelerationDrivers.drivers.first
+        )
+        downwardDriver.emit(.init(delta: -15, velocity: -900, isFinished: false))
+        downward.child.contentOffset.y = -downward.child.contentInset.top
+        downwardDriver.emit(.init(delta: -100, velocity: -800, isFinished: false))
+
+        XCTAssertEqual(downward.container.contentOffset.y, 0, accuracy: 0.001)
+        XCTAssertEqual(downward.childDistance, 0, accuracy: 0.001)
+        XCTAssertEqual(downwardDriver.cancelCount, 1)
+        XCTAssertNil(downward.coordinator.activeBoundaryForTesting)
+    }
+
+    func testStaleCancelledDriverTickCannotCancelReplacementInteraction() throws {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        fixture.container.contentOffset.y = 40
+        fixture.startDeceleration(source: .container, velocityY: -1_000)
+        let staleDriver = try XCTUnwrap(fixture.decelerationDrivers.drivers.first)
+        fixture.coordinator.cancelSyntheticDeceleration()
+
+        fixture.startDeceleration(source: .container, velocityY: -1_000)
+        let currentDriver = try XCTUnwrap(fixture.decelerationDrivers.drivers.last)
+        staleDriver.emitIgnoringCancellation(
+            .init(delta: 20, velocity: 800, isFinished: false)
+        )
+
+        XCTAssertEqual(
+            fixture.coordinator.decelerationPhaseForTesting,
+            .monitoringNative
+        )
+        XCTAssertEqual(currentDriver.cancelCount, 0)
+        currentDriver.emit(.init(delta: 10, velocity: 700, isFinished: false))
+        XCTAssertEqual(fixture.container.contentOffset.y, 40, accuracy: 0.001)
+    }
+
+    func testInvalidReverseLowSpeedAndUntraversableSamplesDoNotStartDriver() {
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+
+        let invalidRate = Fixture(
+            collapsedOffset: 100,
+            childMaximumDistance: 500,
+            decelerationRateProvider: { _ in 1 }
+        )
+        invalidRate.container.contentOffset.y = 40
+        invalidRate.startDeceleration(source: .container, velocityY: -1_000)
+
+        let reverse = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        reverse.container.contentOffset.y = 40
+        reverse.startDeceleration(source: .container, velocityY: 1_000)
+
+        let lowSpeed = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        lowSpeed.container.contentOffset.y = 40
+        lowSpeed.startDeceleration(source: .container, velocityY: -5)
+
+        let plain = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        plain.coordinator.bindCommittedChild(nil)
+        plain.container.contentOffset.y = 40
+        plain.startDeceleration(source: .container, velocityY: -1_000)
+
+        XCTAssertTrue(invalidRate.decelerationDrivers.drivers.isEmpty)
+        XCTAssertTrue(reverse.decelerationDrivers.drivers.isEmpty)
+        XCTAssertTrue(lowSpeed.decelerationDrivers.drivers.isEmpty)
+        XCTAssertTrue(plain.decelerationDrivers.drivers.isEmpty)
+        XCTAssertEqual(
+            events.filter { $0.event == "scroll.deceleration.cancel" }.count,
+            4
+        )
+    }
+
     func testInvalidateEmitsOneBindingAndResourceReleaseEvent() {
         let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
         var events: [AnchorPagerLogger.Event] = []
@@ -938,12 +1271,16 @@ private final class Fixture {
     let container = AnchorPagerContainerScrollView()
     let child: UIScrollView
     let coordinator: AnchorPagerScrollCoordinator
+    let decelerationDrivers: RecordingDecelerationDriverFactory
 
     init(
         collapsedOffset: CGFloat = 100,
         childMaximumDistance: CGFloat = 500,
-        topInset: CGFloat = 0
+        topInset: CGFloat = 0,
+        decelerationRateProvider: AnchorPagerScrollCoordinator.DecelerationRateProvider? = nil
     ) {
+        let decelerationDrivers = RecordingDecelerationDriverFactory()
+        self.decelerationDrivers = decelerationDrivers
         child = UIScrollView()
         container.bounds = CGRect(x: 0, y: 0, width: 320, height: 640)
         container.contentInset.top = topInset
@@ -955,7 +1292,14 @@ private final class Fixture {
             height: 600 + childMaximumDistance - child.contentInset.top
         )
         child.contentOffset.y = -child.contentInset.top
-        coordinator = AnchorPagerScrollCoordinator(containerScrollView: container)
+        coordinator = AnchorPagerScrollCoordinator(
+            containerScrollView: container,
+            decelerationDriverFactory: {
+                decelerationDrivers.makeDriver()
+            },
+            decelerationRateProvider: decelerationRateProvider
+                ?? { $0.decelerationRate.rawValue }
+        )
         coordinator.updateGeometry(
             AnchorPagerContainerScrollGeometry(
                 topInset: topInset,
@@ -972,5 +1316,87 @@ private final class Fixture {
         scrollView.contentSize = CGSize(width: 320, height: 550 + maximumDistance)
         scrollView.contentOffset.y = -scrollView.contentInset.top
         return scrollView
+    }
+
+    var childDistance: CGFloat {
+        child.contentOffset.y + child.contentInset.top
+    }
+
+    func startDeceleration(
+        source: AnchorPagerVerticalPanSource,
+        velocityY: CGFloat
+    ) {
+        coordinator.handlePan(
+            source: source,
+            state: .began,
+            translationY: 0,
+            velocityY: 0
+        )
+        coordinator.handlePan(
+            source: source,
+            state: .ended,
+            translationY: 0,
+            velocityY: velocityY
+        )
+    }
+}
+
+@MainActor
+private final class RecordingDecelerationDriverFactory {
+    private(set) var drivers: [RecordingDecelerationDriver] = []
+
+    func makeDriver() -> AnchorPagerVerticalDecelerationDriving {
+        let driver = RecordingDecelerationDriver()
+        drivers.append(driver)
+        return driver
+    }
+}
+
+@MainActor
+private final class RecordingDecelerationDriver: AnchorPagerVerticalDecelerationDriving {
+    struct Start: Equatable {
+        let initialVelocity: CGFloat
+        let decelerationRate: CGFloat
+        let elapsedTime: TimeInterval
+    }
+
+    var onTick: ((AnchorPagerVerticalDecelerationModel.Sample) -> Void)?
+    var onCancel: (() -> Void)?
+    private(set) var starts: [Start] = []
+    private(set) var cancelCount = 0
+    private var isRunning = false
+
+    func start(
+        initialVelocity: CGFloat,
+        decelerationRate: CGFloat,
+        elapsedTime: TimeInterval
+    ) {
+        starts.append(.init(
+            initialVelocity: initialVelocity,
+            decelerationRate: decelerationRate,
+            elapsedTime: elapsedTime
+        ))
+        isRunning = true
+    }
+
+    func cancel() {
+        guard isRunning else { return }
+        isRunning = false
+        cancelCount += 1
+        onCancel?()
+    }
+
+    func emit(_ sample: AnchorPagerVerticalDecelerationModel.Sample) {
+        guard isRunning else { return }
+        onTick?(sample)
+        if sample.isFinished {
+            isRunning = false
+        }
+    }
+
+    func emitIgnoringCancellation(
+        _ sample: AnchorPagerVerticalDecelerationModel.Sample
+    ) {
+        onTick?(sample)
     }
 }

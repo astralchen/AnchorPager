@@ -43,7 +43,7 @@ final class AnchorPagerChildScrollBindingTests: XCTestCase {
             token: 7,
             onContentOffsetChanged: { offsets.append($0) },
             onContentSizeChanged: { sizes.append($0) },
-            onPan: { _, _ in }
+            onPan: { _, _, _ in }
         )
 
         scrollView.contentOffset = CGPoint(x: 0, y: 20)
@@ -62,7 +62,7 @@ final class AnchorPagerChildScrollBindingTests: XCTestCase {
             token: 2,
             onContentOffsetChanged: { _ in callbackCount += 1 },
             onContentSizeChanged: { _ in callbackCount += 1 },
-            onPan: { _, _ in callbackCount += 1 }
+            onPan: { _, _, _ in callbackCount += 1 }
         )
         binding.invalidate()
 
@@ -70,6 +70,35 @@ final class AnchorPagerChildScrollBindingTests: XCTestCase {
         scrollView.contentSize.height = 800
 
         XCTAssertEqual(callbackCount, 0)
+    }
+
+    func testBindingReportsPanStateTranslationAndVelocityFromSameTargetAction() {
+        let scrollView = UIScrollView()
+        var samples: [AnchorPagerChildScrollBinding.PanSample] = []
+        let binding = AnchorPagerChildScrollBinding(
+            scrollView: scrollView,
+            token: 8,
+            onContentOffsetChanged: { _ in },
+            onContentSizeChanged: { _ in },
+            onPan: { state, translationY, velocityY in
+                samples.append(.init(
+                    state: state,
+                    translationY: translationY,
+                    velocityY: velocityY
+                ))
+            },
+            panSampleProvider: { _ in
+                .init(state: .ended, translationY: 24, velocityY: -900)
+            }
+        )
+
+        binding.handlePanForTesting(scrollView.panGestureRecognizer)
+
+        XCTAssertEqual(
+            samples,
+            [.init(state: .ended, translationY: 24, velocityY: -900)]
+        )
+        binding.invalidate()
     }
 
     func testInvalidateLogsResourceReleaseOnlyOnce() {
@@ -104,6 +133,7 @@ final class AnchorPagerChildScrollBindingTests: XCTestCase {
         XCTAssertFalse(normalized.contains("panGestureRecognizer.delegate ="))
         XCTAssertFalse(normalized.contains("originalScrollDelegate"))
         XCTAssertFalse(normalized.contains("savedScrollDelegate"))
+        XCTAssertTrue(normalized.contains("pan.velocity(in: pan.view).y"))
     }
 
     func testBindingSourceDoesNotStoreOrAssignBounceConfiguration() throws {
@@ -129,7 +159,7 @@ final class AnchorPagerChildScrollBindingTests: XCTestCase {
             token: 1,
             onContentOffsetChanged: { _ in },
             onContentSizeChanged: { _ in },
-            onPan: { _, _ in }
+            onPan: { _, _, _ in }
         )
     }
 }

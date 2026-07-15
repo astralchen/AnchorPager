@@ -760,27 +760,27 @@ func handlePan(
 )
 ```
 
-- [ ] **Step 1：写 velocity capture 与原生监控阶段 RED**
+- [x] **Step 1：写 velocity capture 与原生监控阶段 RED**
 
 container/child pan ended 都传入 `velocity(in:)`；canonical velocity 等于 `-panVelocityY`；deceleration rate 只读取 ended 时 current owner scroll view 的 `decelerationRate.rawValue`；只接受当前 owner 的 ended 样本；同一 interaction 的另一 recognizer ended 不重复启动 context；binding token stale 不启动 driver。有效样本立即启动唯一 driver 进入 monitor-native phase，tick 在触边前不得写 container/child offset；模型速度低于阈值且未触边时结束 `verticalDecelerating`。
 
-- [ ] **Step 2：写 container-to-child RED**
+- [x] **Step 2：写 container-to-child RED**
 
 container 在部分折叠位置以向上 velocity 结束，driver 先 monitor；原生 callback 到 fully collapsed 后，用同一 driver 当前 sample 的剩余速度切换为 synthetic phase，只消费边界之后的 delta。container 固定 collapsed、child distance 单调增加，无 delta 丢失/反跳，不创建第二个 driver。
 
-- [ ] **Step 3：写 child-to-container RED**
+- [x] **Step 3：写 child-to-container RED**
 
 child 在正 distance 以向下 velocity 结束，driver 先 monitor；原生 callback 到 child top 后切换同一 driver 为 synthetic phase。child 固定 top、container logical offset 单调下降，Header 展开；到 expanded stable boundary 停止，不创建 plain child owner。
 
-- [ ] **Step 4：写 native callback 竞争 RED**
+- [x] **Step 4：写 native callback 竞争 RED**
 
 synthetic handoff 期间旧 owner 的迟到 native offset/bounce callback 被 guarded writer 锁回 handoff boundary，不触发第二个 overscroll owner、不覆盖 driver canonical total；driver 始终是唯一 synthetic writer。
 
-- [ ] **Step 5：写取消矩阵 RED**
+- [x] **Step 5：写取消矩阵 RED**
 
 新 pan、selection、reload、Header layout、size、geometry、committed child identity、mode change、teardown/deinit、无效 rate、反向/低速、不可穿越边界都同步 cancel；每次只记录一次 `scroll.deceleration.cancel`。
 
-- [ ] **Step 6：运行 RED/GREEN**
+- [x] **Step 6：运行 RED/GREEN**
 
 ```bash
 xcodebuild -quiet -scheme AnchorPager \
@@ -789,7 +789,7 @@ xcodebuild -quiet -scheme AnchorPager \
   -only-testing:AnchorPagerTests/AnchorPagerScrollCoordinatorTests test
 ```
 
-- [ ] **Step 7：运行 boundary/ownership 相邻回归**
+- [x] **Step 7：运行 boundary/ownership 相邻回归**
 
 ```bash
 xcodebuild -quiet -scheme AnchorPager \
@@ -800,12 +800,14 @@ xcodebuild -quiet -scheme AnchorPager \
   -only-testing:AnchorPagerTests/AnchorPagerScrollCoordinatorTests test
 ```
 
-- [ ] **Step 8：自审并提交**
+- [x] **Step 8：自审并提交**
 
 ```bash
 git add Sources/AnchorPager/Children/AnchorPagerChildScrollBinding.swift Sources/AnchorPager/Core/AnchorPagerScrollCoordinator.swift Tests/AnchorPagerTests/AnchorPagerChildScrollBindingTests.swift Tests/AnchorPagerTests/AnchorPagerScrollCoordinatorTests.swift
 git commit -m "合成纵向跨所有者惯性"
 ```
+
+验收记录：RED 首先证明 child binding 未传 velocity、ScrollCoordinator 未区分 pan source/current owner，且缺少 monitor-native/synthetic context。GREEN 后 container/child ended 都以 `-velocityY` 形成 canonical velocity，只读取 ended 时 current owner rate；同一 interaction 只启动一个 driver，stale binding、非 owner、非法 rate、反向/低速和不可穿越边界均被拒绝。driver 在 native 触边前只累计模型 delta、零 offset 写入；触边后仅消费边界外 overflow，双向 handoff 均使用同一 driver，旧 owner 晚到 callback 只锁回自身边界，稳定端点停止且不创建 overscroll owner。取消矩阵覆盖新 pan、geometry/contentSize、committed identity、mode、boundary 与 invalidate；上层 selection/reload/Header/size 通过既有结构入口触发这些同步取消点，Task 11 再接入 matching interaction lifecycle。自审追加的 stale-driver RED 证明旧 tick 曾会误取消替换事务，修复后 interaction identifier 不匹配时静默丢弃。最终聚焦 71/71、boundary/ownership 相邻回归 86/86、Framework 全量 399/399，均 0 fail、0 skip；结果包分别为 `/private/tmp/AnchorPagerV07Task10FocusedFinal-20260715-1910.xcresult`、`/private/tmp/AnchorPagerV07Task10BoundaryFinal-20260715-1920.xcresult` 与 `/private/tmp/AnchorPagerV07Task10FrameworkFinal-20260715-1922.xcresult`，全量结果为 0 error、0 warning、0 analyzer warning。自审确认未扩大 Public API，未改变 Tabman/Pageboy containment、Host/Store generation、业务 child delegate/pan delegate/bounce/isScrollEnabled、现有 simultaneous pair 或 Overscroll policy ownership；ScrollCoordinator 仍是唯一 synthetic offset writer。
 
 ---
 
