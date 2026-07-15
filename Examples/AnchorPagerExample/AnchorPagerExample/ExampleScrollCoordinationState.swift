@@ -20,6 +20,8 @@ struct ExampleScrollCoordinationState: Equatable {
     var maximumChildTopOverflow: CGFloat
     var childBottomOverflow: CGFloat
     var maximumChildBottomOverflow: CGFloat
+    var headerContentTopDistance: CGFloat = 0
+    var maximumHeaderContentTopDistanceDelta: CGFloat = 0
 
     var accessibilityValue: String {
         [
@@ -40,7 +42,9 @@ struct ExampleScrollCoordinationState: Equatable {
             "childTopCurrent=\(formatted(childTopOverflow))",
             "childTopMax=\(formatted(maximumChildTopOverflow))",
             "childBottomCurrent=\(formatted(childBottomOverflow))",
-            "childBottomMax=\(formatted(maximumChildBottomOverflow))"
+            "childBottomMax=\(formatted(maximumChildBottomOverflow))",
+            "headerContentTop=\(formatted(headerContentTopDistance))",
+            "headerContentTopDeltaMax=\(formatted(maximumHeaderContentTopDistanceDelta))"
         ].joined(separator: ";")
     }
 
@@ -56,6 +60,7 @@ struct ExampleScrollCoordinationState: Equatable {
         maximumChildTopOverflow = 0
         childBottomOverflow = 0
         maximumChildBottomOverflow = 0
+        maximumHeaderContentTopDistanceDelta = 0
     }
 
     mutating func recordHeaderGeometry(
@@ -70,6 +75,17 @@ struct ExampleScrollCoordinationState: Equatable {
             abs(currentHeight - baselineHeight)
         )
         headerCollapseTranslation = max(0, baselineMinY - currentMinY)
+    }
+
+    mutating func recordHeaderContentTopDistance(
+        current: CGFloat,
+        baseline: CGFloat
+    ) {
+        headerContentTopDistance = current
+        maximumHeaderContentTopDistanceDelta = max(
+            maximumHeaderContentTopDistanceDelta,
+            abs(current - baseline)
+        )
     }
 
     private func formatted(_ value: CGFloat) -> String {

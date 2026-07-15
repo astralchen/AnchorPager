@@ -24,12 +24,14 @@ struct AnchorPagerExampleTests {
             childTopOverflow: 2,
             maximumChildTopOverflow: 5,
             childBottomOverflow: 4,
-            maximumChildBottomOverflow: 7
+            maximumChildBottomOverflow: 7,
+            headerContentTopDistance: 88,
+            maximumHeaderContentTopDistanceDelta: 0.4
         )
 
         #expect(
             state.accessibilityValue
-                == "page=long;hasScrollTarget=1;mode=container;collapse=1.00;containerTopInset=59.00;headerHeight=100.00;headerHeightDeltaMax=0.25;headerCollapse=80.00;distance=42.00;containerCurrent=1.25;containerTopMax=12.50;containerBottomMax=8.00;barCurrent=-0.25;barMax=0.75;childTopCurrent=2.00;childTopMax=5.00;childBottomCurrent=4.00;childBottomMax=7.00"
+                == "page=long;hasScrollTarget=1;mode=container;collapse=1.00;containerTopInset=59.00;headerHeight=100.00;headerHeightDeltaMax=0.25;headerCollapse=80.00;distance=42.00;containerCurrent=1.25;containerTopMax=12.50;containerBottomMax=8.00;barCurrent=-0.25;barMax=0.75;childTopCurrent=2.00;childTopMax=5.00;childBottomCurrent=4.00;childBottomMax=7.00;headerContentTop=88.00;headerContentTopDeltaMax=0.40"
         )
     }
 
@@ -57,7 +59,7 @@ struct AnchorPagerExampleTests {
 
         #expect(
             state.accessibilityValue
-                == "page=plain;hasScrollTarget=0;mode=container;collapse=1.00;containerTopInset=0.00;headerHeight=100.00;headerHeightDeltaMax=0.00;headerCollapse=80.00;distance=0.00;containerCurrent=0.00;containerTopMax=0.00;containerBottomMax=0.00;barCurrent=0.00;barMax=0.00;childTopCurrent=0.00;childTopMax=0.00;childBottomCurrent=0.00;childBottomMax=0.00"
+                == "page=plain;hasScrollTarget=0;mode=container;collapse=1.00;containerTopInset=0.00;headerHeight=100.00;headerHeightDeltaMax=0.00;headerCollapse=80.00;distance=0.00;containerCurrent=0.00;containerTopMax=0.00;containerBottomMax=0.00;barCurrent=0.00;barMax=0.00;childTopCurrent=0.00;childTopMax=0.00;childBottomCurrent=0.00;childBottomMax=0.00;headerContentTop=0.00;headerContentTopDeltaMax=0.00"
         )
     }
 
@@ -80,7 +82,9 @@ struct AnchorPagerExampleTests {
             childTopOverflow: 2,
             maximumChildTopOverflow: 5,
             childBottomOverflow: 4,
-            maximumChildBottomOverflow: 7
+            maximumChildBottomOverflow: 7,
+            headerContentTopDistance: 88,
+            maximumHeaderContentTopDistanceDelta: 4
         )
 
         state.resetPresentationMetrics()
@@ -98,6 +102,8 @@ struct AnchorPagerExampleTests {
         #expect(state.maximumChildTopOverflow == 0)
         #expect(state.childBottomOverflow == 0)
         #expect(state.maximumChildBottomOverflow == 0)
+        #expect(state.headerContentTopDistance == 88)
+        #expect(state.maximumHeaderContentTopDistanceDelta == 0)
     }
 
     @Test func scrollCoordinationStateRecordsStableHeaderGeometry() {
@@ -138,6 +144,12 @@ struct AnchorPagerExampleTests {
         #expect(abs(state.headerHeight - 100.3) < 0.001)
         #expect(abs(state.maximumHeaderHeightDelta - 0.3) < 0.001)
         #expect(abs(state.headerCollapseTranslation - 40) < 0.001)
+
+        state.recordHeaderContentTopDistance(current: 87.8, baseline: 88)
+        state.recordHeaderContentTopDistance(current: 88.4, baseline: 88)
+
+        #expect(abs(state.headerContentTopDistance - 88.4) < 0.001)
+        #expect(abs(state.maximumHeaderContentTopDistanceDelta - 0.4) < 0.001)
     }
 
     @Test func rootControllerInstallsAnchorPager() {
@@ -356,7 +368,7 @@ struct AnchorPagerExampleTests {
                 window.layoutIfNeeded()
 
                 let safeAreaFrame = headerView.safeAreaLayoutGuide.layoutFrame
-                #expect(abs(stackView.frame.minY - (safeAreaFrame.minY + 20)) < 0.5)
+                #expect(stackView.frame.minY >= safeAreaFrame.minY + 20 - 0.5)
                 let titleIntrinsicHeight = titleLabel.intrinsicContentSize.height
                 let subtitleFittingHeight = subtitleLabel.systemLayoutSizeFitting(
                     CGSize(
@@ -369,21 +381,57 @@ struct AnchorPagerExampleTests {
                 #expect(abs(titleLabel.bounds.height - titleIntrinsicHeight) < 0.5)
                 #expect(abs(subtitleLabel.bounds.height - subtitleFittingHeight) < 0.5)
                 #expect(abs(subtitleLabel.frame.minY - titleLabel.frame.maxY - 8) < 0.5)
-                #expect(stackView.frame.maxY <= safeAreaFrame.maxY - 20 + 0.5)
+                #expect(abs(stackView.frame.maxY - (safeAreaFrame.maxY - 20)) < 0.5)
 
                 if behavior == .extendsUnderTopSafeArea {
-                    let context = try #require(layoutProbe.layoutContexts.last)
-                    #expect(abs(context.headerFrame.minY) < 0.5)
-                    let titleFrameBeforeBounce = titleLabel.frame
-                    let subtitleFrameBeforeBounce = subtitleLabel.frame
-                    pagerViewController.verticalScrollView.contentOffset = CGPoint(x: 0, y: -24)
-                    window.layoutIfNeeded()
-                    #expect(abs(titleLabel.frame.minY - titleFrameBeforeBounce.minY) < 0.5)
-                    #expect(abs(titleLabel.frame.height - titleFrameBeforeBounce.height) < 0.5)
-                    #expect(abs(subtitleLabel.frame.minY - subtitleFrameBeforeBounce.minY) < 0.5)
-                    #expect(abs(subtitleLabel.frame.height - subtitleFrameBeforeBounce.height) < 0.5)
-                    #expect(abs(subtitleLabel.frame.minY - titleLabel.frame.maxY - 8) < 0.5)
+                    let initialHeaderHeight = headerView.bounds.height
+                    let initialStackFrame = stackView.frame
+                    let initialTitleFrame = titleLabel.frame
+                    let initialSubtitleFrame = subtitleLabel.frame
+                    let initialContext = try #require(layoutProbe.layoutContexts.last)
+                    #expect(abs(initialContext.headerFrame.minY) < 0.5)
+                    let topObstruction = max(
+                        headerView.safeAreaInsets.top,
+                        safeAreaFrame.minY - headerView.bounds.minY
+                    )
+                    let overflowSamples = [
+                        max(24, topObstruction * 0.5),
+                        max(48, topObstruction + 24)
+                    ]
+
+                    for overflow in overflowSamples {
+                        pagerViewController.verticalScrollView.contentOffset = CGPoint(
+                            x: 0,
+                            y: -overflow
+                        )
+                        await Task.yield()
+                        window.layoutIfNeeded()
+                        let bouncedContext = try #require(layoutProbe.layoutContexts.last)
+                        #expect(abs(headerView.bounds.height - initialHeaderHeight) < 0.5)
+                        #expect(abs(stackView.frame.minY - initialStackFrame.minY) < 0.5)
+                        #expect(abs(stackView.frame.maxY - initialStackFrame.maxY) < 0.5)
+                        #expect(abs(titleLabel.frame.minY - initialTitleFrame.minY) < 0.5)
+                        #expect(abs(titleLabel.frame.height - initialTitleFrame.height) < 0.5)
+                        #expect(abs(subtitleLabel.frame.minY - initialSubtitleFrame.minY) < 0.5)
+                        #expect(abs(subtitleLabel.frame.height - initialSubtitleFrame.height) < 0.5)
+                        #expect(abs(subtitleLabel.frame.minY - titleLabel.frame.maxY - 8) < 0.5)
+                        #expect(
+                            bouncedContext.headerFrame.minY
+                                > initialContext.headerFrame.minY + 1
+                        )
+                        #expect(
+                            abs(
+                                (bouncedContext.barFrame.minY - initialContext.barFrame.minY)
+                                    - (bouncedContext.headerFrame.minY
+                                        - initialContext.headerFrame.minY)
+                            ) < 0.5
+                        )
+                    }
                     pagerViewController.verticalScrollView.contentOffset = .zero
+                    await Task.yield()
+                    window.layoutIfNeeded()
+                    #expect(abs(stackView.frame.minY - initialStackFrame.minY) < 0.5)
+                    #expect(abs(headerView.bounds.height - initialHeaderHeight) < 0.5)
                 }
             }
         }

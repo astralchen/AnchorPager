@@ -100,6 +100,10 @@ final class AnchorPagerExampleUITests: XCTestCase {
     func testPlainContainerTopBounceIsVisible() throws {
         let app = launchPage(index: 3, mode: "container")
         let probe = scrollCoordinationStateProbe(in: app)
+        XCTAssertNotNil(waitForScrollState(from: probe) {
+            $0.headerContentTop > 1 && $0.headerContentTopDeltaMax < 0.5
+        })
+        probe.tap()
 
         drag(in: app, from: 0.30, to: 0.72)
 
@@ -109,6 +113,9 @@ final class AnchorPagerExampleUITests: XCTestCase {
         XCTAssertFalse(state.hasScrollTarget)
         XCTAssertEqual(state.mode, "container")
         XCTAssertEqual(state.childTopMax, 0, accuracy: 0.5)
+        XCTAssertGreaterThan(state.containerTopMax, 1)
+        XCTAssertLessThan(state.headerHeightDeltaMax, 0.5)
+        XCTAssertLessThan(state.headerContentTopDeltaMax, 0.5)
     }
 
     @MainActor
@@ -736,6 +743,8 @@ private struct ScrollCoordinationState {
     let childTopMax: CGFloat
     let childBottomCurrent: CGFloat
     let childBottomMax: CGFloat
+    let headerContentTop: CGFloat
+    let headerContentTopDeltaMax: CGFloat
 
     var hasZeroPresentationMetrics: Bool {
         abs(containerCurrent) < 0.5
@@ -747,6 +756,7 @@ private struct ScrollCoordinationState {
             && childTopMax < 0.5
             && abs(childBottomCurrent) < 0.5
             && childBottomMax < 0.5
+            && headerContentTopDeltaMax < 0.5
     }
 
     init?(value: String?) {
@@ -791,7 +801,11 @@ private struct ScrollCoordinationState {
               let childBottomCurrentValue = fields["childBottomCurrent"],
               let childBottomCurrent = Double(childBottomCurrentValue),
               let childBottomMaxValue = fields["childBottomMax"],
-              let childBottomMax = Double(childBottomMaxValue) else {
+              let childBottomMax = Double(childBottomMaxValue),
+              let headerContentTopValue = fields["headerContentTop"],
+              let headerContentTop = Double(headerContentTopValue),
+              let headerContentTopDeltaMaxValue = fields["headerContentTopDeltaMax"],
+              let headerContentTopDeltaMax = Double(headerContentTopDeltaMaxValue) else {
             return nil
         }
         self.page = page
@@ -812,5 +826,7 @@ private struct ScrollCoordinationState {
         self.childTopMax = CGFloat(childTopMax)
         self.childBottomCurrent = CGFloat(childBottomCurrent)
         self.childBottomMax = CGFloat(childBottomMax)
+        self.headerContentTop = CGFloat(headerContentTop)
+        self.headerContentTopDeltaMax = CGFloat(headerContentTopDeltaMax)
     }
 }

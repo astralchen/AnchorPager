@@ -15,8 +15,10 @@ final class ExamplePagerViewController: UIViewController {
     private var pageGeneration = 1
     private lazy var pages = makePages()
     private var didApplyInitialContainerState = false
+    private weak var exampleHeaderView: ExampleHeaderView?
     private var expandedHeaderBaselineY: CGFloat?
     private var expandedHeaderBaselineHeight: CGFloat?
+    private var expandedHeaderContentTopDistance: CGFloat?
     private var expandedBarBaselineY: CGFloat?
     private var collapsedBarBaselineY: CGFloat?
     private var collapsedContentBaselineY: CGFloat?
@@ -346,6 +348,8 @@ final class ExamplePagerViewController: UIViewController {
             scrollCoordinationState.headerHeight = context.headerFrame.height
         }
 
+        recordHeaderContentGeometry(isStable: isStable)
+
         if topOverflow > 0.5,
            let headerBaseline = expandedHeaderBaselineY,
            let barBaseline = expandedBarBaselineY {
@@ -380,9 +384,29 @@ final class ExamplePagerViewController: UIViewController {
         updateScrollCoordinationStateControl()
     }
 
+    private func recordHeaderContentGeometry(isStable: Bool) {
+        guard let exampleHeaderView else { return }
+        let currentTopDistance = exampleHeaderView.contentTopDistance
+
+        if isStable && scrollCoordinationState.collapseProgress <= 0.01 {
+            expandedHeaderContentTopDistance = currentTopDistance
+        }
+
+        guard let baseline = expandedHeaderContentTopDistance else {
+            scrollCoordinationState.headerContentTopDistance = currentTopDistance
+            return
+        }
+
+        scrollCoordinationState.recordHeaderContentTopDistance(
+            current: currentTopDistance,
+            baseline: baseline
+        )
+    }
+
     private func resetHeaderGeometryBaseline() {
         expandedHeaderBaselineY = nil
         expandedHeaderBaselineHeight = nil
+        expandedHeaderContentTopDistance = nil
         expandedBarBaselineY = nil
         collapsedBarBaselineY = nil
         collapsedContentBaselineY = nil
@@ -559,7 +583,9 @@ extension ExamplePagerViewController: AnchorPagerViewControllerDataSource {
     }
 
     func headerContent(in pagerViewController: AnchorPagerViewController) -> AnchorPagerHeaderContent {
-        .view(ExampleHeaderView())
+        let headerView = ExampleHeaderView()
+        exampleHeaderView = headerView
+        return .view(headerView)
     }
 }
 
@@ -588,6 +614,13 @@ extension ExamplePagerViewController: AnchorPagerViewControllerDelegate {
 }
 
 private final class ExampleHeaderView: UIView {
+    private let stackView = UIStackView()
+
+    var contentTopDistance: CGFloat {
+        layoutIfNeeded()
+        return stackView.frame.minY - bounds.minY
+    }
+
     override init(frame: CGRect) {
         super.init(frame: frame)
         configure()
@@ -612,7 +645,8 @@ private final class ExampleHeaderView: UIView {
         subtitleLabel.textColor = .white
         subtitleLabel.numberOfLines = 0
 
-        let stackView = UIStackView(arrangedSubviews: [titleLabel, subtitleLabel])
+        stackView.addArrangedSubview(titleLabel)
+        stackView.addArrangedSubview(subtitleLabel)
         stackView.axis = .vertical
         stackView.spacing = 8
         stackView.translatesAutoresizingMaskIntoConstraints = false
@@ -621,9 +655,9 @@ private final class ExampleHeaderView: UIView {
         NSLayoutConstraint.activate([
             stackView.leadingAnchor.constraint(equalTo: layoutMarginsGuide.leadingAnchor),
             stackView.trailingAnchor.constraint(equalTo: layoutMarginsGuide.trailingAnchor),
-            stackView.topAnchor.constraint(equalTo: safeAreaLayoutGuide.topAnchor, constant: 20),
+            stackView.topAnchor.constraint(greaterThanOrEqualTo: safeAreaLayoutGuide.topAnchor, constant: 20),
             stackView.bottomAnchor.constraint(
-                lessThanOrEqualTo: safeAreaLayoutGuide.bottomAnchor,
+                equalTo: safeAreaLayoutGuide.bottomAnchor,
                 constant: -20
             )
         ])
