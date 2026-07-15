@@ -8,7 +8,7 @@
 
 **Tech Stack:** Swift 6.2、Swift 6 language mode、UIKit、iOS 14+、Swift Package Manager、Tabman 4.0.1、Pageboy 5.0.2、XCTest/XCUITest、Xcode 26.6、iPhone 17 Pro / iOS 26.5 Simulator。
 
-**当前状态：** 专项设计与 Pageboy executor-ready 补充契约已确认；用户已复核并授权实施。Task 0–8 已完成，下一步实现纯衰减模型与唯一 `CADisplayLink` driver。
+**当前状态：** 专项设计与 Pageboy executor-ready 补充契约已确认；用户已复核并授权实施。Task 0–9 已完成，下一步把 pan velocity 接入 ScrollCoordinator 并完成双向跨 owner 合成。
 
 ## Global Constraints
 
@@ -697,15 +697,15 @@ final class AnchorPagerVerticalDecelerationDriver: AnchorPagerVerticalDecelerati
 }
 ```
 
-- [ ] **Step 1：写纯数学 RED**
+- [x] **Step 1：写纯数学 RED**
 
 固定 `v0 = 1000 pt/s`、`d = 0.998`、`t = 0.1s`，断言 velocity 约 `818.567`、delta 约 `90.626`；负 velocity 保持符号；分段积分等于整段；绝对速度不大于 5 时 finish；非有限值、`d <= 0`、`d >= 1`、倒退时间返回 nil。
 
-- [ ] **Step 2：写 driver 生命周期 RED**
+- [x] **Step 2：写 driver 生命周期 RED**
 
 start replacement 只保留最新 identity；cancel 幂等并释放 display link/target；deinit 无残留；tick 热路径不写普通日志，begin/finish/cancel 各一次。
 
-- [ ] **Step 3：运行 RED/GREEN**
+- [x] **Step 3：运行 RED/GREEN**
 
 ```bash
 xcodebuild -quiet -scheme AnchorPager \
@@ -714,7 +714,7 @@ xcodebuild -quiet -scheme AnchorPager \
   -only-testing:AnchorPagerTests/AnchorPagerLoggerTests test
 ```
 
-- [ ] **Step 4：自审并提交**
+- [x] **Step 4：自审并提交**
 
 确认纯模型不 import UIKit；driver 不持有 UIScrollView/page/provider；只在 MainActor 操作 CADisplayLink。
 
@@ -722,6 +722,8 @@ xcodebuild -quiet -scheme AnchorPager \
 git add Sources/AnchorPager/Core/AnchorPagerVerticalDecelerationDriver.swift Tests/AnchorPagerTests/AnchorPagerVerticalDecelerationDriverTests.swift Tests/AnchorPagerTests/AnchorPagerLoggerTests.swift
 git commit -m "实现纵向惯性衰减驱动"
 ```
+
+验收记录：RED 因 `AnchorPagerVerticalDecelerationModel`、`AnchorPagerVerticalDecelerationDriving`、display-link 抽象与生产 driver 缺失而编译失败。GREEN 的纯模型对 `v0 = 1000`、`d = 0.998`、`t = 0.1s` 得到 velocity `818.567`、delta `90.626`，覆盖负号保持、分段积分等于整段、`5 pt/s` finish，以及非有限值、非法 rate、倒退时间拒绝。Driver 使用唯一 `CADisplayLink` 和弱 owner target proxy；start replacement 只保留最新 run，cancel 幂等，finish 不发送 cancel callback，deinit 同步 invalidate，tick 无普通日志，begin/finish/cancel 各只记录固定事件。测试仅注入 display-link 生命周期和单调时钟，不创建第二套 timer。Driver + Logger 最终聚焦 15/15、0 fail、0 skip，结果包 `/private/tmp/AnchorPagerV07Task9FocusedFinal-20260715-1840.xcresult`；Framework 全量 388/388、0 fail、0 skip，结果包 `/private/tmp/AnchorPagerV07Task9FrameworkFinal-20260715-1841.xcresult`；两份 xcresult 均为 0 error、0 warning、0 analyzer warning。自审与源码隔离确认模型不 import UIKit，driver 不持有 UIScrollView、UIViewController、page/provider，不使用 Timer、delay、并发 unsafe 标记，也不直接写任何 offset；ScrollCoordinator 消费仍留在 Task 10。
 
 ---
 

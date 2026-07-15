@@ -138,4 +138,25 @@ final class AnchorPagerLoggerTests: XCTestCase {
         XCTAssertFalse(events.contains { $0.event.contains("9876") })
         XCTAssertTrue(events.allSatisfy { $0.category == .gesture })
     }
+
+    func testVerticalDecelerationDriverUsesOnlyFixedLifecycleEvents() throws {
+        let testFileURL = URL(fileURLWithPath: #filePath)
+        let packageRootURL = testFileURL
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: packageRootURL.appendingPathComponent(
+                "Sources/AnchorPager/Core/AnchorPagerVerticalDecelerationDriver.swift"
+            ),
+            encoding: .utf8
+        )
+
+        XCTAssertTrue(source.contains("scroll.deceleration.begin"))
+        XCTAssertTrue(source.contains("scroll.deceleration.finish"))
+        XCTAssertTrue(source.contains("scroll.deceleration.cancel"))
+        XCTAssertFalse(source.contains("scroll.deceleration.tick"))
+        XCTAssertFalse(source.contains("\\(initialVelocity)"))
+        XCTAssertFalse(source.contains("\\(decelerationRate)"))
+    }
 }

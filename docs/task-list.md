@@ -561,7 +561,7 @@
 - [x] transitioningSize 同步暂停 drain 并恢复 canonical presentation，completion 后恢复 active Pageboy 或继续排空，不伪造 selection cancel
 - [x] 移除 ViewController 对 visible committed target 的过早 no-op，由 Host 区分无 active no-op 与 active 返回意图
 - [ ] container/child pan 结束时记录 velocity 和 deceleration rate，不占用业务 delegate
-- [ ] 创建纯衰减计算与 `CADisplayLink` 驱动的 internal vertical deceleration driver
+- [x] 创建纯衰减计算与唯一 `CADisplayLink` 驱动的 internal vertical deceleration driver；模型、替换、finish/cancel、析构与固定日志均已自动化覆盖
 - [ ] container-to-child 跨 owner 剩余 velocity 合成
 - [ ] child-to-container 跨 owner 剩余 velocity 合成
 - [ ] 新手势、selection、reload、layout、尺寸变化和 identity 变化同步取消 synthetic deceleration
