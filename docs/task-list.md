@@ -577,11 +577,11 @@
 - [x] ViewController 作为唯一跨域装配点执行 vertical/paging/layout/size 仲裁与统一 drain，不复制 Host payload 或 Scroll offset 状态
 - [x] 单元/集成测试覆盖 paging cancel 不提交、快速 API/bar latest、executor-ready 顺序、vertical/paging conflict admission 与 size suspended terminal；真实 UI 验收保留给 Task 13–14
 - [x] Example 在既有四页之后追加真实横向业务页，并提供 selection、业务 delegate/configuration 与双向惯性数值探针；探针复用既有可见页采样时钟且不扩大框架 Public API
-- [ ] 测试 paging cancel 不提交 selectedIndex
-- [ ] 测试快速连续 setSelectedIndex
-- [ ] 测试连续 bar 点击与 API/bar 混合 latest pending
-- [ ] 测试动画 completion 返回前不启动 latest，Pageboy interaction hook 恢复后才推进
-- [ ] 测试非相邻页面切换
+- [x] 测试 paging cancel 不提交 selectedIndex，取消后立即 explicit request 仍只形成 matching public terminal 与 appearance
+- [x] 测试快速连续 setSelectedIndex，真实中间目标完成后只执行 latest pending
+- [x] 测试连续 bar action 与 API/bar 混合同栈 latest pending，复用实际 bar touch-up-inside action 且无悬空 transaction
+- [x] 测试动画 completion/executor-ready 收齐后才推进 latest，并由真实页面、public trace 与 appearance 三方一致性验收
+- [x] 测试非相邻页面只形成 source/target appearance 与单次 public didSelect
 - [x] 测试双向跨 owner 惯性连续、旧 owner 晚到 callback 锁边界且保持 ScrollCoordinator 唯一 synthetic offset writer
 - [ ] 测试横向分页与纵向拖拽竞争
 - [ ] 测试系统返回手势与横向分页手势优先级

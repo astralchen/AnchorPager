@@ -468,6 +468,200 @@ final class AnchorPagerExampleUITests: XCTestCase {
     }
 
     @MainActor
+    func testRapidPublicSelectionsCommitRealIntermediateThenLatestTarget() throws {
+        let app = launchInteractionPage(
+            initialIndex: 1,
+            rapidTargets: "2,3,0",
+            recordsAppearance: true
+        )
+        let trace = selectionTraceProbe(in: app)
+        let appearance = appearanceEventsProbe(in: app)
+        let trigger = rapidSelectionTrigger(in: app)
+        reset(trace: trace)
+        reset(trace: appearance)
+
+        trigger.tap()
+
+        XCTAssertTrue(app.staticTexts["page-generation-1-empty"].waitForExistence(timeout: 5))
+        let committed = waitForSelectionTrace(from: trace, matching: [2, 0])
+        XCTAssertEqual(
+            committed,
+            [2, 0],
+            "实际 trace：\(selectionEventSequence(from: trace))"
+        )
+        let events = appearanceEventSequence(from: appearance)
+        XCTAssertTrue(events.contains("long.viewDidAppear"), "事件：\(events)")
+        XCTAssertTrue(events.contains("long.viewDidDisappear"), "事件：\(events)")
+        XCTAssertTrue(events.contains("empty.viewDidAppear"), "事件：\(events)")
+        XCTAssertFalse(events.contains("plain.viewDidAppear"), "事件：\(events)")
+    }
+
+    @MainActor
+    func testRapidBarSelectionsUseLatestPendingWithoutHanging() throws {
+        let app = launchInteractionPage(
+            initialIndex: 1,
+            rapidBarTargets: "2,3,0",
+            recordsAppearance: true
+        )
+        let trace = selectionTraceProbe(in: app)
+        let appearance = appearanceEventsProbe(in: app)
+        reset(trace: trace)
+        reset(trace: appearance)
+
+        rapidSelectionTrigger(in: app).tap()
+
+        XCTAssertTrue(app.staticTexts["page-generation-1-empty"].waitForExistence(timeout: 5))
+        let committed = waitForSelectionTrace(from: trace, matching: [2, 0])
+        XCTAssertEqual(
+            committed,
+            [2, 0],
+            "实际 trace：\(selectionEventSequence(from: trace))"
+        )
+        let events = appearanceEventSequence(from: appearance)
+        XCTAssertTrue(events.contains("long.viewDidAppear"), "事件：\(events)")
+        XCTAssertTrue(events.contains("long.viewDidDisappear"), "事件：\(events)")
+        XCTAssertTrue(events.contains("empty.viewDidAppear"), "事件：\(events)")
+        XCTAssertFalse(events.contains("plain.viewDidAppear"), "事件：\(events)")
+    }
+
+    @MainActor
+    func testMixedAPIAndBarSelectionsShareOneLatestPendingQueue() throws {
+        let app = launchInteractionPage(
+            initialIndex: 1,
+            rapidTargets: "2",
+            rapidBarTargets: "3,0",
+            recordsAppearance: true
+        )
+        let trace = selectionTraceProbe(in: app)
+        let appearance = appearanceEventsProbe(in: app)
+        reset(trace: trace)
+        reset(trace: appearance)
+
+        rapidSelectionTrigger(in: app).tap()
+
+        XCTAssertTrue(app.staticTexts["page-generation-1-empty"].waitForExistence(timeout: 5))
+        let committed = waitForSelectionTrace(from: trace, matching: [2, 0])
+        XCTAssertEqual(
+            committed,
+            [2, 0],
+            "实际 trace：\(selectionEventSequence(from: trace))"
+        )
+        let events = appearanceEventSequence(from: appearance)
+        XCTAssertTrue(events.contains("long.viewDidAppear"), "事件：\(events)")
+        XCTAssertTrue(events.contains("long.viewDidDisappear"), "事件：\(events)")
+        XCTAssertTrue(events.contains("empty.viewDidAppear"), "事件：\(events)")
+        XCTAssertFalse(events.contains("plain.viewDidAppear"), "事件：\(events)")
+    }
+
+    @MainActor
+    func testNonadjacentSelectionUsesSingleSourceTargetTransition() throws {
+        let app = launchInteractionPage(
+            initialIndex: 1,
+            rapidTargets: "4",
+            recordsAppearance: true
+        )
+        let trace = selectionTraceProbe(in: app)
+        let appearance = appearanceEventsProbe(in: app)
+        reset(trace: trace)
+        reset(trace: appearance)
+
+        rapidSelectionTrigger(in: app).tap()
+
+        XCTAssertTrue(app.staticTexts["横向业务内容 1"].waitForExistence(timeout: 5))
+        XCTAssertEqual(waitForSelectionTrace(from: trace, matching: [4]), [4])
+        let events = appearanceEventSequence(from: appearance)
+        XCTAssertEqual(events.filter { $0 == "short.viewDidDisappear" }.count, 1)
+        XCTAssertEqual(events.filter { $0 == "horizontal.viewDidAppear" }.count, 1)
+        XCTAssertFalse(events.contains("long.viewDidAppear"), "事件：\(events)")
+        XCTAssertFalse(events.contains("plain.viewDidAppear"), "事件：\(events)")
+    }
+
+    @MainActor
+    func testCompletedInteractivePagingAcceptsImmediateExplicitRequest() throws {
+        let app = launchInteractionPage(
+            initialIndex: 1,
+            rapidTargets: "3",
+            recordsAppearance: true
+        )
+        let trace = selectionTraceProbe(in: app)
+        let appearance = appearanceEventsProbe(in: app)
+        reset(trace: trace)
+        reset(trace: appearance)
+
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.62))
+        let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.15, dy: 0.62))
+        start.press(forDuration: 0.1, thenDragTo: end)
+        rapidSelectionTrigger(in: app).tap()
+
+        XCTAssertTrue(app.staticTexts["plain-page-content"].waitForExistence(timeout: 5))
+        XCTAssertEqual(waitForSelectionTrace(from: trace, matching: [2, 3]), [2, 3])
+        let events = appearanceEventSequence(from: appearance)
+        XCTAssertEqual(events.filter { $0 == "long.viewDidAppear" }.count, 1)
+        XCTAssertEqual(events.filter { $0 == "long.viewDidDisappear" }.count, 1)
+        XCTAssertEqual(events.filter { $0 == "plain.viewDidAppear" }.count, 1)
+    }
+
+    @MainActor
+    func testTrackedScrollReloadAndLayoutWaitForInteractionTerminal() throws {
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "--anchorPagerInitialIndex", "2",
+            "--anchorPagerTopOverscrollMode", "container",
+            "--anchorPagerTrackedScrollCompetition", "reload-layout"
+        ]
+        app.launch()
+        let oldGeneration = app.staticTexts["page-generation-1-long"]
+        let probe = scrollCoordinationStateProbe(in: app)
+        let competition = app.otherElements["tracked-competition-trace"]
+        XCTAssertTrue(oldGeneration.waitForExistence(timeout: 3))
+        XCTAssertTrue(competition.waitForExistence(timeout: 3))
+
+        drag(in: app, from: 0.76, to: 0.24)
+
+        XCTAssertEqual(
+            (competition.value as? String) ?? "",
+            "triggered=1;tracking=1;oldVisibleAfterPublic=1"
+        )
+        XCTAssertTrue(app.staticTexts["page-generation-2-long"].waitForExistence(timeout: 5))
+        XCTAssertFalse(oldGeneration.exists)
+        let settled = waitForScrollState(from: probe) {
+            $0.page == "long" && $0.hasScrollTarget
+                && $0.hasZeroPresentationMetrics
+        }
+        XCTAssertNotNil(settled, "实际 probe：\((probe.value as? String) ?? "nil")")
+    }
+
+    @MainActor
+    func testSizeTransitionKeepsLatestSelectionAndSingleTerminal() throws {
+        let app = launchInteractionPage(
+            initialIndex: 1,
+            sizeTransitionTargets: "4,3",
+            recordsAppearance: true
+        )
+        let trace = selectionTraceProbe(in: app)
+        let appearance = appearanceEventsProbe(in: app)
+        let stateProbe = scrollCoordinationStateProbe(in: app)
+        reset(trace: trace)
+        reset(trace: appearance)
+        addTeardownBlock {
+            XCUIDevice.shared.orientation = .portrait
+        }
+
+        XCUIDevice.shared.orientation = .landscapeLeft
+
+        XCTAssertTrue(app.staticTexts["plain-page-content"].waitForExistence(timeout: 5))
+        XCTAssertEqual(waitForSelectionTrace(from: trace, matching: [3]), [3])
+        let events = appearanceEventSequence(from: appearance)
+        XCTAssertEqual(events.filter { $0 == "short.viewDidDisappear" }.count, 1)
+        XCTAssertEqual(events.filter { $0 == "plain.viewDidAppear" }.count, 1)
+        XCTAssertFalse(events.contains("horizontal.viewDidAppear"), "事件：\(events)")
+        XCTAssertNotNil(waitForScrollState(from: stateProbe) {
+            $0.page == "plain" && !$0.hasScrollTarget
+                && $0.hasZeroPresentationMetrics
+        })
+    }
+
+    @MainActor
     func testLaunchArgumentSelectsPageThroughPublicAPI() throws {
         let app = XCUIApplication()
         app.launchArguments = ["--anchorPagerInitialIndex", "3"]
@@ -578,11 +772,13 @@ final class AnchorPagerExampleUITests: XCTestCase {
 
         let longPage = app.staticTexts["长页 - 1"]
         let appearanceEvents = app.buttons["page-appearance-events"]
+        let selectionTrace = selectionTraceProbe(in: app)
         XCTAssertTrue(longPage.waitForExistence(timeout: 3))
         XCTAssertTrue(appearanceEvents.waitForExistence(timeout: 3))
 
         XCTAssertTrue(appearanceEvents.isHittable)
         appearanceEvents.tap()
+        reset(trace: selectionTrace)
         XCTAssertEqual((appearanceEvents.value as? String) ?? "", "")
 
         let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.35, dy: 0.62))
@@ -617,11 +813,13 @@ final class AnchorPagerExampleUITests: XCTestCase {
         )
         XCTAssertFalse(cancelledEvents.contains("short.viewDidAppear"))
         XCTAssertFalse(cancelledEvents.contains("long.viewDidDisappear"))
+        XCTAssertEqual(selectionEventSequence(from: selectionTrace), [])
         XCTAssertTrue(longPage.exists)
         XCTAssertTrue(app.frame.intersects(longPage.frame))
 
         app.descendants(matching: .any)["短页"].tap()
         XCTAssertTrue(app.staticTexts["短页 - 1"].waitForExistence(timeout: 3))
+        XCTAssertEqual(waitForSelectionTrace(from: selectionTrace, matching: [1]), [1])
 
         let completedEvents = appearanceEventSequence(from: appearanceEvents)
         XCTAssertEqual(completedEvents.filter { $0 == "long.viewDidAppear" }.count, 1)
@@ -665,6 +863,93 @@ final class AnchorPagerExampleUITests: XCTestCase {
         ((element.value as? String) ?? "")
             .split(separator: "|")
             .map(String.init)
+    }
+
+    @MainActor
+    private func selectionEventSequence(from element: XCUIElement) -> [Int] {
+        ((element.value as? String) ?? "")
+            .split(separator: ",")
+            .compactMap { Int($0) }
+    }
+
+    @MainActor
+    private func waitForSelectionTrace(
+        from probe: XCUIElement,
+        matching expected: [Int]
+    ) -> [Int]? {
+        let expectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in
+                self.selectionEventSequence(from: probe) == expected
+            },
+            object: nil
+        )
+        guard XCTWaiter.wait(for: [expectation], timeout: 5) == .completed else {
+            return nil
+        }
+        return selectionEventSequence(from: probe)
+    }
+
+    @MainActor
+    private func reset(trace: XCUIElement) {
+        XCTAssertTrue(trace.waitForExistence(timeout: 3))
+        XCTAssertTrue(trace.isHittable)
+        trace.tap()
+    }
+
+    @MainActor
+    private func selectionTraceProbe(in app: XCUIApplication) -> XCUIElement {
+        let probe = app.buttons["selection-event-trace"]
+        XCTAssertTrue(probe.waitForExistence(timeout: 3))
+        return probe
+    }
+
+    @MainActor
+    private func appearanceEventsProbe(in app: XCUIApplication) -> XCUIElement {
+        let probe = app.buttons["page-appearance-events"]
+        XCTAssertTrue(probe.waitForExistence(timeout: 3))
+        return probe
+    }
+
+    @MainActor
+    private func rapidSelectionTrigger(in app: XCUIApplication) -> XCUIElement {
+        let trigger = app.buttons["rapid-selection-trigger"]
+        XCTAssertTrue(trigger.waitForExistence(timeout: 3))
+        XCTAssertTrue(trigger.isEnabled)
+        return trigger
+    }
+
+    @MainActor
+    private func launchInteractionPage(
+        initialIndex: Int,
+        rapidTargets: String? = nil,
+        rapidBarTargets: String? = nil,
+        sizeTransitionTargets: String? = nil,
+        recordsAppearance: Bool = false
+    ) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = ["--anchorPagerInitialIndex", "\(initialIndex)"]
+        if let rapidTargets {
+            app.launchArguments += [
+                "--anchorPagerRapidSelectionTargets", rapidTargets
+            ]
+        }
+        if let rapidBarTargets {
+            app.launchArguments += [
+                "--anchorPagerRapidBarSelectionTargets", rapidBarTargets
+            ]
+        }
+        if let sizeTransitionTargets {
+            app.launchArguments += [
+                "--anchorPagerSizeTransitionSelectionTargets",
+                sizeTransitionTargets
+            ]
+        }
+        if recordsAppearance {
+            app.launchArguments.append("--anchorPagerAppearanceRecorder")
+        }
+        app.launch()
+        XCTAssertTrue(selectionTraceProbe(in: app).exists)
+        return app
     }
 
     @MainActor

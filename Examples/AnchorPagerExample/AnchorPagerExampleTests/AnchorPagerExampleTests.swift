@@ -226,6 +226,11 @@ struct AnchorPagerExampleTests {
             "1,3,2",
         ])
         enabled.loadViewIfNeeded()
+        let barEnabled = ExamplePagerViewController(arguments: [
+            "--anchorPagerRapidBarSelectionTargets",
+            "2,0",
+        ])
+        barEnabled.loadViewIfNeeded()
 
         #expect(
             firstSubview(in: normal.view, as: UIButton.self) {
@@ -236,6 +241,34 @@ struct AnchorPagerExampleTests {
             firstSubview(in: enabled.view, as: UIButton.self) {
                 $0.accessibilityIdentifier == "rapid-selection-trigger"
             } != nil
+        )
+        #expect(
+            firstSubview(in: barEnabled.view, as: UIButton.self) {
+                $0.accessibilityIdentifier == "rapid-selection-trigger"
+            } != nil
+        )
+    }
+
+    @Test func trackedCompetitionProbeOnlyInstallsForLaunchArgument() {
+        let normal = ExamplePagerViewController(arguments: [])
+        normal.loadViewIfNeeded()
+        let enabled = ExamplePagerViewController(arguments: [
+            "--anchorPagerTrackedScrollCompetition",
+            "reload-layout",
+        ])
+        enabled.loadViewIfNeeded()
+
+        #expect(
+            firstSubview(in: normal.view, as: UIView.self) {
+                $0.accessibilityIdentifier == "tracked-competition-trace"
+            } == nil
+        )
+        let probe = firstSubview(in: enabled.view, as: UIView.self) {
+            $0.accessibilityIdentifier == "tracked-competition-trace"
+        }
+        #expect(
+            probe?.accessibilityValue
+                == "triggered=0;tracking=0;oldVisibleAfterPublic=0"
         )
     }
 

@@ -921,7 +921,7 @@ git commit -m "扩展示例交互验收探针"
 - Modify: `Examples/AnchorPagerExample/AnchorPagerExampleUITests/AnchorPagerExampleUITests.swift`
 - Modify: `Examples/AnchorPagerExample/AnchorPagerExample/ExamplePagerViewController.swift`（仅测试装配缺口）
 
-- [ ] **Step 1：写快速 API 与 bar RED**
+- [x] **Step 1：写快速 API 与 bar RED**
 
 新增 UI tests：
 
@@ -934,15 +934,15 @@ testNonadjacentSelectionUsesSingleSourceTargetTransition()
 
 断言 public selection trace、真实页面内容、appearance count 一致，无第二笔悬空。
 
-- [ ] **Step 2：写真实 interactive completion/cancel RED**
+- [x] **Step 2：写真实 interactive completion/cancel RED**
 
 保留既有 cancel appearance 测试并增加完成/取消后立刻发新 explicit request；断言 Store/public/visible 页面一致，旧 callback 不覆盖新 intent。
 
-- [ ] **Step 3：写 reload/layout/size 竞争 RED**
+- [x] **Step 3：写 reload/layout/size 竞争 RED**
 
 真实按住纵向 drag 时触发 public reload/layout 测试入口，断言触摸结束前不结构性切换；latest request 在 idle 执行。横向 paging/size transition 场景使用 Example 测试入口触发，断言不伪造 cancel、不重复 didSelect、不遗留 presentation。
 
-- [ ] **Step 4：运行新增 UI tests 并修到 GREEN**
+- [x] **Step 4：运行新增 UI tests 并修到 GREEN**
 
 ```bash
 xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj \
@@ -955,16 +955,20 @@ xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj \
   -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testNonadjacentSelectionUsesSingleSourceTargetTransition test
 ```
 
-- [ ] **Step 5：运行 paging/lifecycle 相邻 UI 回归**
+- [x] **Step 5：运行 paging/lifecycle 相邻 UI 回归**
 
 至少包含 `testTappingTabBarSelectsPageContent`、`testHorizontalSwipeSelectsNextPageContent`、`testReloadReplacesOldPageGenerationAndKeepsPageInteractive`、`testCompletedPageSwitchProducesOneAdditionalDidAppear`、`testCancelledInteractivePagingKeepsAppearanceAndSelectionConsistent`。
 
-- [ ] **Step 6：自审并提交**
+- [x] **Step 6：自审并提交**
 
 ```bash
-git add Examples/AnchorPagerExample/AnchorPagerExample/ExamplePagerViewController.swift Examples/AnchorPagerExample/AnchorPagerExampleUITests/AnchorPagerExampleUITests.swift
+git add Examples/AnchorPagerExample/AnchorPagerExample/ExamplePagerViewController.swift Examples/AnchorPagerExample/AnchorPagerExampleTests/AnchorPagerExampleTests.swift Examples/AnchorPagerExample/AnchorPagerExampleUITests/AnchorPagerExampleUITests.swift docs/architecture.md docs/task-list.md docs/superpowers/plans/2026-07-15-v0-7-interaction-selection-momentum.md
 git commit -m "验收分页选择与事务竞争"
 ```
+
+验收记录：首轮四条 selection UI RED 为 2/4；同栈 public latest 与非相邻 source→target 已直接通过，bar-only 与 API/bar 混合的实际 trace 均为 `[2,3,0]`。诊断证明 XCUITest 会等待每笔 Pageboy 动画静止，原来的三个物理 `.tap()` 并未形成竞争；测试入口因此改为仅由 launch argument 安装的同栈 trigger，通过实际 bar `UIControl` 既有 `.touchUpInside` action 路径发请求，不导入/强转 Tabman 类型，也不调用 AnchorPager internal API，随后 bar-only 与 API/bar 均得到 `[2,0]`，中间 `3` 未 appearance。tracked-scroll RED 先精确失败于新页面代际未建立；Example 入口改为在真实 `scrollViewDidScroll` 且 `isTracking == true` 的同步回调内先建立新业务页面数组，再调用公开 reload/layout。第二轮实际 probe 证明框架 container/bar/child presentation 全为零，但 Example 旧 Header identity 基线造成 `headerContentTopDeltaMax=164`；按正常 reload 顺序重置探针基线后 GREEN。自审又把 size 用例从“旋转完成后点击”收紧为真实 `viewWillTransition` 回调内同栈公开请求 `4,3`，RED 后最终只提交 `[3]`，被替换的横向页没有 appearance，plain presentation 清零；tracked competition 追加同步 probe，证明公开 API 返回时 `triggered=1;tracking=1;oldVisibleAfterPublic=1`，旧可见代际没有在触摸结束前被结构替换。
+
+最终 Example unit 16/16、Task 13 新增/增强及 paging/reload/lifecycle 相邻 UI 12/12，均 0 fail、0 skip；结果包分别为 `/private/tmp/AnchorPagerV07Task13UnitFinal3-20260715-2800.xcresult` 与 `/private/tmp/AnchorPagerV07Task13FocusedFinal3-20260715-2730.xcresult`。generic Simulator build 成功，结果包 `/private/tmp/AnchorPagerV07Task13BuildFinal2-20260715-2750.xcresult`；三份均为 0 error、0 warning、0 analyzer warning。自审确认所有测试入口只在明确 launch argument 下安装，正常 Example 行为不变；selection trace 只读取 public `didSelect`，size/reload/layout/API 只调用 Public API；实际 page containment、Host payload/queue、Adapter execution、Store generation、child scroll delegate/bounce/inset ownership 与框架 Public API 均未修改。
 
 ---
 

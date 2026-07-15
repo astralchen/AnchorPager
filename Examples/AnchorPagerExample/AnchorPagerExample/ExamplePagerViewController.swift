@@ -19,9 +19,11 @@ final class ExamplePagerViewController: UIViewController {
     private weak var scrollCoordinationStateControl: UIButton?
     private weak var selectionTraceControl: UIButton?
     private weak var rapidSelectionControl: UIButton?
+    private weak var trackedCompetitionTraceView: UIView?
     private var selectionTrace = ExampleSelectionTrace()
     private var hasVisibleSelectionTerminal = false
     private var didTriggerTrackedScrollCompetition = false
+    private var didTriggerSizeTransitionSelection = false
     private var scrollCoordinationState = ExampleScrollCoordinationState(
         page: "short",
         hasScrollTarget: true,
@@ -83,6 +85,7 @@ final class ExamplePagerViewController: UIViewController {
         installScrollCoordinationStateControl()
         installSelectionTraceControl()
         installRapidSelectionControlIfNeeded()
+        installTrackedCompetitionTraceIfNeeded()
         if appearanceRecorder != nil {
             installAppearanceRecorderControl()
         }
@@ -98,6 +101,21 @@ final class ExamplePagerViewController: UIViewController {
         didApplyInitialContainerState = true
         if launchArguments.contains("--anchorPagerInitialContainerCollapsed") {
             pagerViewController.reloadHeaderLayout(offsetAdjustment: .resetToCollapsed)
+        }
+    }
+
+    override func viewWillTransition(
+        to size: CGSize,
+        with coordinator: UIViewControllerTransitionCoordinator
+    ) {
+        super.viewWillTransition(to: size, with: coordinator)
+        guard !didTriggerSizeTransitionSelection,
+              !sizeTransitionSelectionTargets.isEmpty else {
+            return
+        }
+        didTriggerSizeTransitionSelection = true
+        for index in sizeTransitionSelectionTargets {
+            pagerViewController.setSelectedIndex(index, animated: true)
         }
     }
 
@@ -325,10 +343,12 @@ final class ExamplePagerViewController: UIViewController {
     }
 
     private func installRapidSelectionControlIfNeeded() {
-        guard !rapidSelectionTargets.isEmpty else { return }
+        guard !rapidSelectionTargets.isEmpty || !rapidBarSelectionTargets.isEmpty else {
+            return
+        }
         let control = UIButton(type: .custom)
         control.accessibilityIdentifier = "rapid-selection-trigger"
-        control.accessibilityLabel = "连续公开选择"
+        control.accessibilityLabel = "连续页面选择"
         control.addTarget(
             self,
             action: #selector(performRapidSelections),
@@ -347,6 +367,35 @@ final class ExamplePagerViewController: UIViewController {
         ])
     }
 
+    private func installTrackedCompetitionTraceIfNeeded() {
+        guard argumentValue(after: "--anchorPagerTrackedScrollCompetition") != nil else {
+            return
+        }
+        let traceView = UIView()
+        traceView.accessibilityIdentifier = "tracked-competition-trace"
+        traceView.accessibilityLabel = "跟踪滚动竞争状态"
+        traceView.accessibilityValue = trackedCompetitionTraceValue(
+            triggered: false,
+            tracking: false,
+            oldVisibleAfterPublic: false
+        )
+        traceView.isAccessibilityElement = true
+        traceView.isUserInteractionEnabled = false
+        traceView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(traceView)
+        trackedCompetitionTraceView = traceView
+
+        NSLayoutConstraint.activate([
+            traceView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 4),
+            traceView.topAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.topAnchor,
+                constant: 4
+            ),
+            traceView.widthAnchor.constraint(equalToConstant: 1),
+            traceView.heightAnchor.constraint(equalToConstant: 1)
+        ])
+    }
+
     @objc private func resetSelectionTrace() {
         selectionTrace.reset()
         updateSelectionTraceControl()
@@ -356,6 +405,9 @@ final class ExamplePagerViewController: UIViewController {
         guard hasVisibleSelectionTerminal else { return }
         for index in rapidSelectionTargets {
             pagerViewController.setSelectedIndex(index, animated: true)
+        }
+        for index in rapidBarSelectionTargets {
+            activateBarItem(at: index)
         }
     }
 
@@ -367,7 +419,8 @@ final class ExamplePagerViewController: UIViewController {
         rapidSelectionControl?.isEnabled = hasVisibleSelectionTerminal
         rapidSelectionControl?.accessibilityValue = [
             "ready=\(hasVisibleSelectionTerminal ? 1 : 0)",
-            "targets=\(rapidSelectionTargets.map(String.init).joined(separator: ","))"
+            "apiTargets=\(rapidSelectionTargets.map(String.init).joined(separator: ","))",
+            "barTargets=\(rapidBarSelectionTargets.map(String.init).joined(separator: ","))"
         ].joined(separator: ";")
     }
 
@@ -375,6 +428,45 @@ final class ExamplePagerViewController: UIViewController {
         argumentValue(after: "--anchorPagerRapidSelectionTargets")?
             .split(separator: ",")
             .compactMap { Int($0) } ?? []
+    }
+
+    private var rapidBarSelectionTargets: [Int] {
+        argumentValue(after: "--anchorPagerRapidBarSelectionTargets")?
+            .split(separator: ",")
+            .compactMap { Int($0) } ?? []
+    }
+
+    private var sizeTransitionSelectionTargets: [Int] {
+        argumentValue(after: "--anchorPagerSizeTransitionSelectionTargets")?
+            .split(separator: ",")
+            .compactMap { Int($0) } ?? []
+    }
+
+    private func activateBarItem(at index: Int) {
+        guard pages.indices.contains(index),
+              let title = pages[index].title else {
+            return
+        }
+        pagerViewController.view.layoutIfNeeded()
+        firstControl(in: pagerViewController.view) {
+            $0.accessibilityLabel == title
+                && $0.accessibilityTraits.contains(.button)
+        }?.sendActions(for: .touchUpInside)
+    }
+
+    private func firstControl(
+        in root: UIView,
+        matching predicate: (UIControl) -> Bool
+    ) -> UIControl? {
+        if let control = root as? UIControl, predicate(control) {
+            return control
+        }
+        for subview in root.subviews {
+            if let control = firstControl(in: subview, matching: predicate) {
+                return control
+            }
+        }
+        return nil
     }
 
     private func argumentValue(after key: String) -> String? {
@@ -719,15 +811,27 @@ final class ExamplePagerViewController: UIViewController {
               ) else {
             return
         }
+        let visibleIndex = pagerViewController.effectiveSelectedIndex
+            ?? pagerViewController.selectedIndex
+        let oldVisiblePage = pages.indices.contains(visibleIndex)
+            ? pages[visibleIndex]
+            : nil
+        trackedCompetitionTraceView?.accessibilityValue = trackedCompetitionTraceValue(
+            triggered: true,
+            tracking: true,
+            oldVisibleAfterPublic: false
+        )
         didTriggerTrackedScrollCompetition = true
         switch action {
         case "reload":
+            prepareTrackedReloadGeneration()
             pagerViewController.reloadData()
         case "layout":
             pagerViewController.reloadHeaderLayout(
                 offsetAdjustment: .preserveVisualPosition
             )
         case "reload-layout":
+            prepareTrackedReloadGeneration()
             pagerViewController.reloadData()
             pagerViewController.reloadHeaderLayout(
                 offsetAdjustment: .preserveVisualPosition
@@ -735,6 +839,31 @@ final class ExamplePagerViewController: UIViewController {
         default:
             break
         }
+        trackedCompetitionTraceView?.accessibilityValue = trackedCompetitionTraceValue(
+            triggered: true,
+            tracking: true,
+            oldVisibleAfterPublic: oldVisiblePage?.viewIfLoaded?.window != nil
+        )
+    }
+
+    private func trackedCompetitionTraceValue(
+        triggered: Bool,
+        tracking: Bool,
+        oldVisibleAfterPublic: Bool
+    ) -> String {
+        [
+            "triggered=\(triggered ? 1 : 0)",
+            "tracking=\(tracking ? 1 : 0)",
+            "oldVisibleAfterPublic=\(oldVisibleAfterPublic ? 1 : 0)"
+        ].joined(separator: ";")
+    }
+
+    private func prepareTrackedReloadGeneration() {
+        scrollCoordinationState.resetPresentationMetrics()
+        resetHeaderGeometryBaseline()
+        updateScrollCoordinationStateControl()
+        pageGeneration += 1
+        pages = makePages()
     }
 }
 
