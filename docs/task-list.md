@@ -535,7 +535,7 @@
 - [x] Adapter 覆写 Pageboy open `isUserInteractionEnabled`，恢复为 true 后只 acknowledgement matching executor-ready identifier
 - [x] 创建 `Sources/AnchorPager/Gesture/AnchorPagerInteractionState.swift`
 - [x] 创建 `Sources/AnchorPager/Gesture/AnchorPagerInteractionCoordinator.swift`
-- [ ] 创建 `Sources/AnchorPager/Gesture/AnchorPagerGesturePriorityCoordinator.swift`，只安装 public failure relation
+- [x] 创建 `Sources/AnchorPager/Gesture/AnchorPagerGesturePriorityCoordinator.swift`，只安装 public failure relation
 - [x] 定义 idle
 - [x] 定义 verticalDragging
 - [x] 定义 verticalDecelerating
@@ -565,9 +565,9 @@
 - [ ] container-to-child 跨 owner 剩余 velocity 合成
 - [ ] child-to-container 跨 owner 剩余 velocity 合成
 - [ ] 新手势、selection、reload、layout、尺寸变化和 identity 变化同步取消 synthetic deceleration
-- [ ] 系统返回手势优先级明确
-- [ ] child 横向 content scroll 手势优先级明确
-- [ ] Pageboy paging pan 对 interactive-pop 和具备横向范围的 committed current child pan 建立失败依赖
+- [x] 系统返回手势优先级明确：Pageboy paging pan 让 navigation interactive-pop gesture 优先
+- [x] child 横向 content scroll 手势优先级明确：只消费 Store committed current 的真实水平范围
+- [x] Pageboy paging pan 对 interactive-pop 和具备横向范围的 committed current child pan 建立公开失败依赖，不设置任何 delegate
 - [x] 为 interaction state begin 加入 gesture 日志
 - [x] 为重要 update 边界加入 gesture 日志
 - [x] 为 finish 和 cancel 加入 gesture 日志

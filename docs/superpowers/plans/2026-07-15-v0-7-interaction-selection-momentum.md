@@ -8,7 +8,7 @@
 
 **Tech Stack:** Swift 6.2、Swift 6 language mode、UIKit、iOS 14+、Swift Package Manager、Tabman 4.0.1、Pageboy 5.0.2、XCTest/XCUITest、Xcode 26.6、iPhone 17 Pro / iOS 26.5 Simulator。
 
-**当前状态：** 专项设计与 Pageboy executor-ready 补充契约已确认；用户已复核并授权实施。Task 0–7 已完成，下一步安装 system/page/current-child 手势失败关系。
+**当前状态：** 专项设计与 Pageboy executor-ready 补充契约已确认；用户已复核并授权实施。Task 0–8 已完成，下一步实现纯衰减模型与唯一 `CADisplayLink` driver。
 
 ## Global Constraints
 
@@ -621,23 +621,23 @@ final class AnchorPagerGesturePriorityCoordinator {
 }
 ```
 
-- [ ] **Step 1：写 failure matrix RED**
+- [x] **Step 1：写 failure matrix RED**
 
 验证 `pagingPan -> interactivePop`；只有 committed scroll view 水平范围满足 `contentSize.width + adjustedContentInset.left + adjustedContentInset.right > bounds.width + 0.5` 时安装 `pagingPan -> childPan`；plain nil、普通纵向 child、不相关 cached page 不安装。
 
-- [ ] **Step 2：写 delegate/configuration RED**
+- [x] **Step 2：写 delegate/configuration RED**
 
 绑定与 refresh 不改变 system/Pageboy/child recognizer delegate，不改变业务 scroll delegate、isScrollEnabled、bounce。注入 `FailureInstaller` 记录 public relation，不用 KVC/private introspection。
 
-- [ ] **Step 3：实现单调 relation 与 identity guard**
+- [x] **Step 3：实现单调 relation 与 identity guard**
 
 UIKit 没有 removal API；同一 pair 只安装一次，paging surface identity 改变后为新 pan 重建当前关系。旧 page pan 离开命中层级后不参与新触摸。若同一 committed child 在同一 paging surface 生命周期内从水平可滚动态缩为不可滚，已安装 relation 只能保留到 surface replacement；把该 UIKit 限制写入 architecture known limitations，不新增 Public API 模拟动态移除。
 
-- [ ] **Step 4：装配 navigation/current committed identity**
+- [x] **Step 4：装配 navigation/current committed identity**
 
 ViewController 在 paging surface change、`viewDidAppear`/navigation 变化、matching reload/selection/cancel terminal 和 committed scroll identity 变化时 refresh；只消费 Store committed current scroll view。
 
-- [ ] **Step 5：运行聚焦测试**
+- [x] **Step 5：运行聚焦测试**
 
 ```bash
 xcodebuild -quiet -scheme AnchorPager \
@@ -646,12 +646,14 @@ xcodebuild -quiet -scheme AnchorPager \
   -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests test
 ```
 
-- [ ] **Step 6：自审并提交**
+- [x] **Step 6：自审并提交**
 
 ```bash
 git add Sources/AnchorPager/Gesture/AnchorPagerGesturePriorityCoordinator.swift Sources/AnchorPager/Public/AnchorPagerViewController.swift Tests/AnchorPagerTests/AnchorPagerGesturePriorityCoordinatorTests.swift Tests/AnchorPagerTests/AnchorPagerViewControllerTests.swift docs/architecture.md
 git commit -m "明确横向与系统手势优先级"
 ```
+
+验收记录：RED 因 `AnchorPagerGesturePriorityCoordinator` 与 ViewController 装配入口缺失而编译失败。GREEN 使用可注入 `FailureInstaller` 固定 `pagingPan -> interactivePop` 与仅 committed current 具备真实水平范围时的 `pagingPan -> childPan`；plain nil、普通纵向 current、不相关 cached page 均不安装。关系记录弱持有双方 identity，同一 pair 单调去重；paging surface replacement 为新 pan 建立当前有效关系，已安装 pair 不用 KVC/private API 模拟删除。delegate/configuration 源码隔离和运行时 identity 均覆盖，空 reload 清空当前 paging/committed binding，matching reload/selection/cancel terminal 只重绑 Store committed identity。两条 ViewController 初跑失败经 xcresult 定位为测试 weak data source 临时对象已释放，修正夹具后生产逻辑无需变化。Coordinator + ViewController 最终聚焦 118/118、0 fail、0 skip，结果包 `/private/tmp/AnchorPagerV07Task8FocusedFinal-20260715-1832.xcresult`；Framework 全量 380/380、0 fail、0 skip，结果包 `/private/tmp/AnchorPagerV07Task8FrameworkFinal-20260715-1833.xcresult`；两份 xcresult 均为 0 error、0 warning、0 analyzer warning。自审确认未扩大 Public API，未改变 Tabman/Pageboy containment、Host/Store generation、纵向 simultaneous pair、业务 child delegate/pan/bounce/isScrollEnabled、offset writer 或 overscroll policy owner；真实导航栈/横向 child UI 验收留在 Task 13。
 
 ---
 

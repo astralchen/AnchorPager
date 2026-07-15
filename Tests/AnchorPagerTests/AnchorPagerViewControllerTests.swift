@@ -68,6 +68,115 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         )
     }
 
+    @MainActor
+    func testGesturePriorityUsesPagingSurfaceSystemBackAndCommittedHorizontalChild() throws {
+        let child = ScrollChildViewController()
+        child.loadViewIfNeeded()
+        child.scrollView.contentSize = CGSize(width: 900, height: 1_200)
+        let pager = AnchorPagerViewController()
+        let dataSource = StubDataSource(count: 1, viewControllers: [child])
+        pager.dataSource = dataSource
+        let navigationController = UINavigationController(rootViewController: pager)
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = navigationController
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+        window.layoutIfNeeded()
+        let adapter = try XCTUnwrap(installedAdapter(in: pager))
+        adapter.view.layoutIfNeeded()
+        pager.viewDidLayoutSubviews()
+        pager.viewDidAppear(false)
+        let pagingPan = try XCTUnwrap(adapter.pagingSurface?.panGestureRecognizer)
+        let interactivePop = try XCTUnwrap(
+            navigationController.interactivePopGestureRecognizer
+        )
+        let pagingDelegate = pagingPan.delegate
+        let popDelegate = interactivePop.delegate
+        let scrollDelegate = child.scrollView.delegate
+        let childPanDelegate = child.scrollView.panGestureRecognizer.delegate
+
+        pager.viewDidLayoutSubviews()
+
+        let coordinator = pager.gesturePriorityCoordinatorForTesting
+        XCTAssertTrue(
+            coordinator.hasInstalledRelationForTesting(
+                from: pagingPan,
+                to: interactivePop
+            )
+        )
+        XCTAssertTrue(
+            coordinator.hasInstalledRelationForTesting(
+                from: pagingPan,
+                to: child.scrollView.panGestureRecognizer
+            )
+        )
+        XCTAssertTrue(
+            coordinator.committedScrollViewForTesting === child.scrollView
+        )
+        XCTAssertTrue(pagingPan.delegate === pagingDelegate)
+        XCTAssertTrue(interactivePop.delegate === popDelegate)
+        XCTAssertTrue(child.scrollView.delegate === scrollDelegate)
+        XCTAssertTrue(child.scrollView.panGestureRecognizer.delegate === childPanDelegate)
+
+        dataSource.count = 0
+        dataSource.titles = []
+        dataSource.viewControllers = []
+        pager.reloadData()
+
+        XCTAssertNil(coordinator.pagingPanForTesting)
+        XCTAssertNil(coordinator.committedScrollViewForTesting)
+    }
+
+    @MainActor
+    func testGesturePriorityIgnoresVerticalCurrentAndNonCurrentHorizontalPage() throws {
+        let current = ScrollChildViewController()
+        let cached = ScrollChildViewController()
+        current.loadViewIfNeeded()
+        cached.loadViewIfNeeded()
+        current.scrollView.contentSize = CGSize(width: 390, height: 1_200)
+        cached.scrollView.contentSize = CGSize(width: 900, height: 1_200)
+        var configuration = AnchorPagerConfiguration.default
+        configuration.paging.keepsAdjacentPagesLoaded = true
+        let pager = AnchorPagerViewController(configuration: configuration)
+        let dataSource = StubDataSource(
+            count: 2,
+            viewControllers: [current, cached]
+        )
+        pager.dataSource = dataSource
+        let navigationController = UINavigationController(rootViewController: pager)
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = navigationController
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+        window.layoutIfNeeded()
+        let adapter = try XCTUnwrap(installedAdapter(in: pager))
+        adapter.view.layoutIfNeeded()
+        _ = adapter.viewController(for: adapter, at: 1)
+        pager.viewDidLayoutSubviews()
+        let pagingPan = try XCTUnwrap(adapter.pagingSurface?.panGestureRecognizer)
+        let coordinator = pager.gesturePriorityCoordinatorForTesting
+
+        XCTAssertFalse(
+            coordinator.hasInstalledRelationForTesting(
+                from: pagingPan,
+                to: current.scrollView.panGestureRecognizer
+            )
+        )
+        XCTAssertFalse(
+            coordinator.hasInstalledRelationForTesting(
+                from: pagingPan,
+                to: cached.scrollView.panGestureRecognizer
+            )
+        )
+        XCTAssertTrue(coordinator.committedScrollViewForTesting === current.scrollView)
+    }
+
     func testVerticalCoordinationSourcesNeverAssignBusinessOrPanDelegates() throws {
         let testURL = URL(fileURLWithPath: #filePath)
         let packageRoot = testURL
@@ -3370,6 +3479,10 @@ final class AnchorPagerViewControllerTests: XCTestCase {
             pendingPage.scrollView,
             insteadOf: oldFirst.scrollView
         )
+        XCTAssertTrue(
+            fixture.pager.gesturePriorityCoordinatorForTesting
+                .committedScrollViewForTesting === pendingPage.scrollView
+        )
     }
 
     @MainActor
@@ -3385,6 +3498,10 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         fixture.assertOnlyScrollViewIsBound(
             oldSecond.scrollView,
             insteadOf: pendingPage.scrollView
+        )
+        XCTAssertTrue(
+            fixture.pager.gesturePriorityCoordinatorForTesting
+                .committedScrollViewForTesting === oldSecond.scrollView
         )
     }
 
@@ -3405,6 +3522,10 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         fixture.assertOnlyScrollViewIsBound(
             oldFirst.scrollView,
             insteadOf: pendingPage.scrollView
+        )
+        XCTAssertTrue(
+            fixture.pager.gesturePriorityCoordinatorForTesting
+                .committedScrollViewForTesting === oldFirst.scrollView
         )
     }
 

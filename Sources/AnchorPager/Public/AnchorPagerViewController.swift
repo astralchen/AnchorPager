@@ -74,6 +74,7 @@ open class AnchorPagerViewController: UIViewController {
     private let layoutEngine = AnchorPagerLayoutEngine()
     private let pagingHost = AnchorPagerPagingHostViewController()
     private let interactionCoordinator = AnchorPagerInteractionCoordinator()
+    private let gesturePriorityCoordinator = AnchorPagerGesturePriorityCoordinator()
     private let managedInsetCoordinator = AnchorPagerManagedInsetCoordinator()
     private var scrollRangeHeightConstraint: NSLayoutConstraint?
     private var headerHeightConstraint: NSLayoutConstraint?
@@ -131,6 +132,7 @@ open class AnchorPagerViewController: UIViewController {
         MainActor.assumeIsolated {
             resetPresentationSurfaces()
             scrollCoordinator?.invalidate()
+            gesturePriorityCoordinator.invalidate()
             pageStateStore.releaseAll()
             managedInsetCoordinator.releaseAll()
         }
@@ -149,9 +151,15 @@ open class AnchorPagerViewController: UIViewController {
 
     open override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        defer { refreshGesturePriorities() }
         guard pendingHeaderLayoutRequest == nil
             || interactionCoordinator.isReadyForDeferredWorkDrain else { return }
         updateVisibleLayout()
+    }
+
+    open override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        refreshGesturePriorities()
     }
 
     open override func viewSafeAreaInsetsDidChange() {
@@ -305,6 +313,10 @@ open class AnchorPagerViewController: UIViewController {
 
     var interactionStateForTesting: AnchorPagerInteractionState {
         interactionCoordinator.state
+    }
+
+    var gesturePriorityCoordinatorForTesting: AnchorPagerGesturePriorityCoordinator {
+        gesturePriorityCoordinator
     }
 
     var hasPendingHeaderLayoutRequestForTesting: Bool {
@@ -1064,6 +1076,20 @@ open class AnchorPagerViewController: UIViewController {
         guard isViewLoaded else { return }
         installScrollCoordinatorIfNeeded()
         scrollCoordinator?.bindCommittedChild(pageStateStore.committedCurrentScrollView)
+        refreshGesturePriorities()
+    }
+
+    private func refreshGesturePriorities() {
+        gesturePriorityCoordinator.bindPagingPan(
+            pagingHost.activeAdapter?.pagingSurface?.panGestureRecognizer
+        )
+        gesturePriorityCoordinator.bindInteractivePopGesture(
+            navigationController?.interactivePopGestureRecognizer
+        )
+        gesturePriorityCoordinator.bindCommittedScrollView(
+            pageStateStore.committedCurrentScrollView
+        )
+        gesturePriorityCoordinator.refresh()
     }
 
     private var pageAccessContext: AnchorPagerPageStateStore.AccessContext {
