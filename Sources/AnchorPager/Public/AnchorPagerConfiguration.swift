@@ -43,9 +43,13 @@ public struct AnchorPagerHeaderConfiguration: Sendable, Equatable {
     public static let `default` = AnchorPagerHeaderConfiguration()
 
     /// 创建 Header 配置。
+    ///
+    /// - Parameters:
+    ///   - heightMode: Header 高度模式。
+    ///   - topBehavior: Header 顶部绘制行为，默认为延伸到顶部系统区域。
     public init(
         heightMode: AnchorPagerHeaderHeightMode = .automatic(min: 0, max: nil),
-        topBehavior: AnchorPagerHeaderTopBehavior = .insideSafeArea
+        topBehavior: AnchorPagerHeaderTopBehavior = .extendsUnderTopSafeArea
     ) {
         self.heightMode = heightMode
         self.topBehavior = topBehavior

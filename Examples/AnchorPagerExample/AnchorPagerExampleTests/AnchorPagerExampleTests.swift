@@ -176,7 +176,7 @@ struct AnchorPagerExampleTests {
         #expect(settingsItem.image != nil || settingsItem.title == "设置")
         #expect(submenus.map(\.title) == ["Header 顶部行为", "顶部回弹模式"])
         #expect(headerActions.map(\.title) == ["安全区内", "延伸到顶部"])
-        #expect(headerActions.map(\.state) == [.on, .off])
+        #expect(headerActions.map(\.state) == [.off, .on])
         #expect(overscrollActions.map(\.title) == ["关闭", "容器", "子页面"])
         #expect(overscrollActions.map(\.state) == [.off, .on, .off])
     }
@@ -266,6 +266,10 @@ struct AnchorPagerExampleTests {
                 viewController.children.compactMap { $0 as? AnchorPagerViewController }.first
             )
             try await waitForInitialSelection(in: pagerViewController)
+            pagerViewController.configuration.header.topBehavior = .insideSafeArea
+            pagerViewController.reloadHeaderLayout(offsetAdjustment: .resetToExpanded)
+            window.layoutIfNeeded()
+            #expect(pagerViewController.verticalScrollView.contentInset.top > 1)
             let layoutProbe = LayoutProbe()
             pagerViewController.delegate = layoutProbe
             let insideTopInset = pagerViewController.verticalScrollView.contentInset.top

@@ -247,25 +247,32 @@ final class AnchorPagerExampleUITests: XCTestCase {
     func testHeaderTopBehaviorMenuSwitchesVisibleConfiguration() throws {
         let app = XCUIApplication()
         app.launch()
+        let probe = scrollCoordinationStateProbe(in: app)
 
+        XCTAssertNotNil(waitForScrollState(from: probe) {
+            $0.containerTopInset < 0.5 && $0.headerHeight > 1
+        })
         openSettingsSubmenu(named: "Header 顶部行为", in: app)
         let safeAreaAction = app.buttons["安全区内"]
         let extendedAction = app.buttons["延伸到顶部"]
         XCTAssertTrue(safeAreaAction.waitForExistence(timeout: 3))
         XCTAssertTrue(extendedAction.waitForExistence(timeout: 3))
-        XCTAssertTrue(safeAreaAction.isSelected)
-        extendedAction.tap()
+        XCTAssertTrue(extendedAction.isSelected)
+        safeAreaAction.tap()
 
         openSettingsSubmenu(named: "Header 顶部行为", in: app)
-        let refreshedExtendedAction = app.buttons["延伸到顶部"]
-        XCTAssertTrue(refreshedExtendedAction.waitForExistence(timeout: 3))
-        XCTAssertTrue(refreshedExtendedAction.isSelected)
+        XCTAssertTrue(app.buttons["安全区内"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["安全区内"].isSelected)
+        XCTAssertNotNil(waitForScrollState(from: probe) {
+            $0.containerTopInset > 1
+        })
     }
 
     @MainActor
     func testInsideSafeAreaUsesTopInsetAndKeepsHeaderHeightDuringCollapse() throws {
         let app = XCUIApplication()
         app.launch()
+        selectHeaderTopBehavior(named: "安全区内", in: app)
         let probe = scrollCoordinationStateProbe(in: app)
         XCTAssertNotNil(waitForScrollState(from: probe) {
             $0.containerTopInset > 1 && $0.headerHeight > 1
@@ -287,6 +294,7 @@ final class AnchorPagerExampleUITests: XCTestCase {
     func testExtendsUnderTopSafeAreaUsesZeroTopInsetAndPreservesBarPosition() throws {
         let app = XCUIApplication()
         app.launch()
+        selectHeaderTopBehavior(named: "安全区内", in: app)
         let probe = scrollCoordinationStateProbe(in: app)
         let barItem = app.descendants(matching: .any)["短页"]
         XCTAssertTrue(barItem.waitForExistence(timeout: 3))
@@ -296,10 +304,7 @@ final class AnchorPagerExampleUITests: XCTestCase {
         })
         let beforeBarMinY = barItem.frame.minY
 
-        openSettingsSubmenu(named: "Header 顶部行为", in: app)
-        let extendsAction = app.buttons["延伸到顶部"]
-        XCTAssertTrue(extendsAction.waitForExistence(timeout: 3))
-        extendsAction.tap()
+        selectHeaderTopBehavior(named: "延伸到顶部", in: app)
 
         let state = try XCTUnwrap(waitForScrollState(from: probe) {
             $0.containerTopInset < 0.5
@@ -343,10 +348,7 @@ final class AnchorPagerExampleUITests: XCTestCase {
         XCTAssertEqual(subtitle.frame.minY - title.frame.maxY, 8, accuracy: 1)
         XCTAssertLessThanOrEqual(title.frame.height, 44)
 
-        openSettingsSubmenu(named: "Header 顶部行为", in: app)
-        let extendedAction = app.buttons["延伸到顶部"]
-        XCTAssertTrue(extendedAction.waitForExistence(timeout: 3))
-        extendedAction.tap()
+        selectHeaderTopBehavior(named: "安全区内", in: app)
 
         XCTAssertEqual(title.frame.minY, navigationBar.frame.maxY + 20, accuracy: 1)
         XCTAssertEqual(subtitle.frame.minY - title.frame.maxY, 8, accuracy: 1)
@@ -362,12 +364,8 @@ final class AnchorPagerExampleUITests: XCTestCase {
         XCTAssertTrue(tabItem.waitForExistence(timeout: 3))
         let initialMinY = tabItem.frame.minY
 
-        openSettingsSubmenu(named: "Header 顶部行为", in: app)
-        XCTAssertTrue(app.buttons["延伸到顶部"].waitForExistence(timeout: 3))
-        app.buttons["延伸到顶部"].tap()
-        openSettingsSubmenu(named: "Header 顶部行为", in: app)
-        XCTAssertTrue(app.buttons["安全区内"].waitForExistence(timeout: 3))
-        app.buttons["安全区内"].tap()
+        selectHeaderTopBehavior(named: "安全区内", in: app)
+        selectHeaderTopBehavior(named: "延伸到顶部", in: app)
 
         let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.40))
         let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.56))
@@ -642,6 +640,17 @@ final class AnchorPagerExampleUITests: XCTestCase {
         let submenu = app.buttons[title]
         XCTAssertTrue(submenu.waitForExistence(timeout: 3))
         submenu.tap()
+    }
+
+    @MainActor
+    private func selectHeaderTopBehavior(
+        named title: String,
+        in app: XCUIApplication
+    ) {
+        openSettingsSubmenu(named: "Header 顶部行为", in: app)
+        let action = app.buttons[title]
+        XCTAssertTrue(action.waitForExistence(timeout: 3))
+        action.tap()
     }
 
     @MainActor

@@ -1267,6 +1267,7 @@ final class AnchorPagerViewControllerTests: XCTestCase {
     @MainActor
     func testHeaderReturnsToSafeAreaAfterTopBehaviorSwitchAndBounce() throws {
         var configuration = AnchorPagerConfiguration.default
+        configuration.header.topBehavior = .insideSafeArea
         configuration.header.heightMode = .fixed(max: 120, min: 0)
         let pager = AnchorPagerViewController(configuration: configuration)
         let headerView = FixedFittingView(height: 120)
@@ -1317,7 +1318,9 @@ final class AnchorPagerViewControllerTests: XCTestCase {
 
     @MainActor
     func testAutomaticHeaderHeightStaysStableAcrossTopBehaviorSwitchAndBounceSettlement() throws {
-        let pager = AnchorPagerViewController()
+        var configuration = AnchorPagerConfiguration.default
+        configuration.header.topBehavior = .insideSafeArea
+        let pager = AnchorPagerViewController(configuration: configuration)
         let headerView = SafeAreaSensitiveHeaderView(contentHeight: 80)
         let delegate = StubDelegate()
         let dataSource = StubDataSource(
@@ -1625,6 +1628,7 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         for (strategy, expectedLogicalOffset) in cases {
             var configuration = AnchorPagerConfiguration.default
             configuration.header.heightMode = .automatic(min: 20, max: nil)
+            configuration.header.topBehavior = .insideSafeArea
             let pager = AnchorPagerViewController(configuration: configuration)
             let headerView = DynamicFittingView(height: 100)
             let dataSource = StubDataSource(
@@ -2799,13 +2803,34 @@ final class AnchorPagerViewControllerTests: XCTestCase {
     }
 
     @MainActor
-    func testConfigurationDefaultsMatchV01Baseline() {
-        let configuration = AnchorPagerConfiguration.default
+    func testConfigurationDefaultsUseExtendedHeaderTopBehavior() {
+        let constructedHeader = AnchorPagerHeaderConfiguration()
+        let defaultHeader = AnchorPagerHeaderConfiguration.default
+        let constructedConfiguration = AnchorPagerConfiguration()
+        let defaultConfiguration = AnchorPagerConfiguration.default
+        let pager = AnchorPagerViewController()
+        let explicitInside = AnchorPagerHeaderConfiguration(
+            topBehavior: .insideSafeArea
+        )
 
-        XCTAssertEqual(configuration.header.heightMode, .automatic(min: 0, max: nil))
-        XCTAssertEqual(configuration.header.topBehavior, .insideSafeArea)
-        XCTAssertNil(configuration.bar.height)
-        XCTAssertEqual(configuration.topOverscrollHandlingMode, .container)
+        XCTAssertEqual(constructedHeader.heightMode, .automatic(min: 0, max: nil))
+        XCTAssertEqual(constructedHeader.topBehavior, .extendsUnderTopSafeArea)
+        XCTAssertEqual(defaultHeader.topBehavior, .extendsUnderTopSafeArea)
+        XCTAssertEqual(
+            constructedConfiguration.header.topBehavior,
+            .extendsUnderTopSafeArea
+        )
+        XCTAssertEqual(
+            defaultConfiguration.header.topBehavior,
+            .extendsUnderTopSafeArea
+        )
+        XCTAssertEqual(
+            pager.configuration.header.topBehavior,
+            .extendsUnderTopSafeArea
+        )
+        XCTAssertEqual(explicitInside.topBehavior, .insideSafeArea)
+        XCTAssertNil(defaultConfiguration.bar.height)
+        XCTAssertEqual(defaultConfiguration.topOverscrollHandlingMode, .container)
     }
 
     @MainActor
