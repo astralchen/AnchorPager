@@ -1405,9 +1405,114 @@ final class AnchorPagerScrollCoordinatorTests: XCTestCase {
         )
 
         XCTAssertEqual(Array(delegate.events.suffix(2)), [
-            .cancelled(identifier: 1),
+            .cancelledForNewPan(identifier: 1),
             .beganDragging(identifier: 2),
         ])
+    }
+
+    func testNewPanCancelsPendingBoundaryRecoveryBeforeBeginningNewInteraction() {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        let delegate = RecordingScrollInteractionDelegate()
+        fixture.coordinator.interactionDelegate = delegate
+
+        fixture.coordinator.handlePan(
+            source: .container,
+            state: .began,
+            translationY: 0,
+            velocityY: 0
+        )
+        fixture.coordinator.handlePan(
+            source: .container,
+            state: .changed,
+            translationY: 24,
+            velocityY: 0
+        )
+        fixture.container.contentOffset.y = -12
+        fixture.coordinator.containerDidScroll()
+        fixture.coordinator.handlePan(
+            source: .container,
+            state: .ended,
+            translationY: 24,
+            velocityY: 0
+        )
+        XCTAssertEqual(delegate.events.last, .enteredTopOverscroll(identifier: 1))
+
+        fixture.coordinator.handlePan(
+            source: .container,
+            state: .began,
+            translationY: 0,
+            velocityY: 0
+        )
+
+        XCTAssertEqual(Array(delegate.events.suffix(2)), [
+            .cancelledForNewPan(identifier: 1),
+            .beganDragging(identifier: 2),
+        ])
+    }
+
+    func testContainerTopBoundaryRejectsSyntheticDeceleration() {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        let delegate = RecordingScrollInteractionDelegate()
+        fixture.coordinator.interactionDelegate = delegate
+
+        fixture.coordinator.handlePan(state: .began, translationY: 0)
+        fixture.coordinator.handlePan(state: .changed, translationY: 1)
+        XCTAssertEqual(
+            fixture.coordinator.activeBoundaryForTesting,
+            .init(boundary: .top, owner: .container)
+        )
+        fixture.coordinator.handlePan(
+            source: .container,
+            state: .ended,
+            translationY: 1,
+            velocityY: -1_000
+        )
+
+        XCTAssertTrue(fixture.decelerationDrivers.drivers.isEmpty)
+        XCTAssertFalse(
+            delegate.events.contains(.beganDecelerating(identifier: 1))
+        )
+        XCTAssertEqual(delegate.events.last, .finishedDragging(identifier: 1))
+    }
+
+    func testChildTopBoundaryRejectsSyntheticDeceleration() {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        fixture.coordinator.updateTopOverscrollHandlingMode(.child)
+        fixture.child.bounces = false
+        let delegate = RecordingScrollInteractionDelegate()
+        fixture.coordinator.interactionDelegate = delegate
+        let source = AnchorPagerVerticalPanSource.child(
+            token: fixture.coordinator.bindingTokenForTesting
+        )
+
+        fixture.coordinator.handlePan(
+            source: source,
+            state: .began,
+            translationY: 0,
+            velocityY: 0
+        )
+        fixture.coordinator.handlePan(
+            source: source,
+            state: .changed,
+            translationY: 1,
+            velocityY: 0
+        )
+        XCTAssertEqual(
+            fixture.coordinator.activeBoundaryForTesting,
+            .init(boundary: .top, owner: .child)
+        )
+        fixture.coordinator.handlePan(
+            source: source,
+            state: .ended,
+            translationY: 1,
+            velocityY: -1_000
+        )
+
+        XCTAssertTrue(fixture.decelerationDrivers.drivers.isEmpty)
+        XCTAssertFalse(
+            delegate.events.contains(.beganDecelerating(identifier: 1))
+        )
+        XCTAssertEqual(delegate.events.last, .finishedDragging(identifier: 1))
     }
 
     func testCommittedIdentityChangeCancelsMatchingDecelerationInteraction() throws {

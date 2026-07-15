@@ -1137,6 +1137,114 @@ final class AnchorPagerViewControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testNewPanReplacementCancellationKeepsDeferredReloadAndLayoutUntilNewTerminal() throws {
+        let pager = AnchorPagerViewController()
+        let dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [ScrollChildViewController()],
+            headerContent: .view(FixedFittingView(height: 100))
+        )
+        pager.dataSource = dataSource
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+        let host = try XCTUnwrap(installedPagingHost(in: pager))
+        let adapter = try XCTUnwrap(host.activeAdapter)
+
+        pager.handleScrollInteractionEventForTesting(
+            .beganDragging(identifier: 71)
+        )
+        dataSource.count = 2
+        dataSource.titles = ["A", "B"]
+        dataSource.viewControllers = [
+            ScrollChildViewController(),
+            ScrollChildViewController(),
+        ]
+        pager.reloadData()
+        pager.reloadHeaderLayout(offsetAdjustment: .resetToCollapsed)
+        pager.handleScrollInteractionEventForTesting(
+            .beganDecelerating(identifier: 71)
+        )
+        XCTAssertTrue(pager.hasPendingHeaderLayoutRequestForTesting)
+        XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 1)
+
+        pager.handleScrollInteractionEventForTesting(
+            .cancelledForNewPan(identifier: 71)
+        )
+        XCTAssertEqual(pager.interactionStateForTesting, .idle)
+        XCTAssertTrue(pager.hasPendingHeaderLayoutRequestForTesting)
+        XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 1)
+
+        pager.handleScrollInteractionEventForTesting(
+            .beganDragging(identifier: 72)
+        )
+        XCTAssertEqual(
+            pager.interactionStateForTesting,
+            .verticalDragging(identifier: 72)
+        )
+        XCTAssertTrue(pager.hasPendingHeaderLayoutRequestForTesting)
+        XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 1)
+
+        pager.handleScrollInteractionEventForTesting(
+            .finishedDragging(identifier: 72)
+        )
+        XCTAssertEqual(pager.interactionStateForTesting, .idle)
+        XCTAssertFalse(pager.hasPendingHeaderLayoutRequestForTesting)
+        XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 2)
+    }
+
+    @MainActor
+    func testBoundaryRecoveryReplacementKeepsDeferredReloadAndLayoutUntilNewTerminal() throws {
+        let pager = AnchorPagerViewController()
+        let dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [ScrollChildViewController()],
+            headerContent: .view(FixedFittingView(height: 100))
+        )
+        pager.dataSource = dataSource
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+        let host = try XCTUnwrap(installedPagingHost(in: pager))
+        let adapter = try XCTUnwrap(host.activeAdapter)
+
+        pager.handleScrollInteractionEventForTesting(
+            .beganDragging(identifier: 81)
+        )
+        pager.handleScrollInteractionEventForTesting(
+            .enteredTopOverscroll(identifier: 81)
+        )
+        dataSource.count = 2
+        dataSource.titles = ["A", "B"]
+        dataSource.viewControllers = [
+            ScrollChildViewController(),
+            ScrollChildViewController(),
+        ]
+        pager.reloadData()
+        pager.reloadHeaderLayout(offsetAdjustment: .resetToCollapsed)
+        XCTAssertTrue(pager.hasPendingHeaderLayoutRequestForTesting)
+        XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 1)
+
+        pager.handleScrollInteractionEventForTesting(
+            .cancelledForNewPan(identifier: 81)
+        )
+        XCTAssertEqual(pager.interactionStateForTesting, .idle)
+        XCTAssertTrue(pager.hasPendingHeaderLayoutRequestForTesting)
+        XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 1)
+
+        pager.handleScrollInteractionEventForTesting(
+            .beganDragging(identifier: 82)
+        )
+        XCTAssertTrue(pager.hasPendingHeaderLayoutRequestForTesting)
+        XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 1)
+
+        pager.handleScrollInteractionEventForTesting(
+            .finishedDragging(identifier: 82)
+        )
+        XCTAssertEqual(pager.interactionStateForTesting, .idle)
+        XCTAssertFalse(pager.hasPendingHeaderLayoutRequestForTesting)
+        XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 2)
+    }
+
+    @MainActor
     func testRealVerticalDragKeepsHeaderConfigurationLayoutPending() {
         var configuration = AnchorPagerConfiguration.default
         configuration.header.heightMode = .fixed(max: 100, min: 20)
@@ -3569,6 +3677,34 @@ final class AnchorPagerViewControllerTests: XCTestCase {
 
         XCTAssertEqual(host.activeSelectionRequestForTesting?.targetIndex, 1)
         XCTAssertEqual(host.pendingExplicitSelectionRequestForTesting?.targetIndex, 0)
+    }
+
+    @MainActor
+    func testMissingWillSelectRecoveryCommitsPublicSelectionState() throws {
+        let pager = AnchorPagerViewController()
+        let dataSource = StubDataSource(
+            count: 2,
+            viewControllers: [
+                ScrollChildViewController(),
+                ScrollChildViewController(),
+            ]
+        )
+        pager.dataSource = dataSource
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+        let host = try XCTUnwrap(installedPagingHost(in: pager))
+        let adapter = try XCTUnwrap(host.activeAdapter)
+
+        adapter.handleDidSelect(
+            at: 1,
+            animated: true,
+            reportedCurrentIndex: 1
+        )
+
+        XCTAssertEqual(pager.selectedIndex, 1)
+        XCTAssertEqual(pager.effectiveSelectedIndex, 1)
+        XCTAssertEqual(host.committedSelectionIndexForTesting, 1)
+        XCTAssertEqual(pager.interactionStateForTesting, .idle)
     }
 
     @MainActor

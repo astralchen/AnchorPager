@@ -2,7 +2,7 @@
 
 **日期：** 2026-07-15
 
-**状态：** 设计已确认，尚未实施
+**状态：** Task 0–14 已实施；Task 15 fresh-pass 修复与最终门禁进行中
 
 **适用范围：** v0.7 interaction state、快速选择请求、Tabman bar 点击、Pageboy 横向 pan、纵向跨 owner 惯性、reload/layout/尺寸仲裁、系统返回优先级和业务横向手势可行性边界
 
@@ -398,6 +398,13 @@ delta(t0, t1) = v0 * (d^(1000 * t0) - d^(1000 * t1)) / (-1000 * ln(d))
 5. UIKit public API 不能安全表达“只在业务横向 scroll 命中区域或边界内由 child 消费、其他区域交给 Pageboy”的动态关系。若未来支持，必须先形成显式接入契约与独立设计；不得通过遍历业务 view tree、替换 delegate、强制 reset、写 offset 或私有 API 隐式实现。
 6. container/current child 的纵向 simultaneous pair 继续只由 `AnchorPagerContainerScrollView` 放行；Pageboy pan 和无关 pan 不加入该 pair。
 7. 已声明的真实优先级必须用导航栈、第一页、非第一页和普通纵向 child 的 UIKit/UI 测试固定，不能只用直接调用 delegate 方法代替；业务横向 child 用例作为不支持结论的证据保留在计划验收记录，不作为已交付能力。
+
+## Task 15 fresh-pass 修复契约
+
+1. Pageboy 真实 `didSelect` 缺失对应 `willSelect` 时，Adapter 不能只记录日志并丢弃 terminal。只有 active adapter 的公开 `currentIndex` 已等于 callback index、index 仍在当前 page 范围、没有其他 execution 且该 index 不等于 Adapter committed index 时，才允许建立一笔 recovery interactive execution；它必须先经 Host 正常 admission 获取 identifier，再同栈补发 internal `willSelect` 语义并转发 matching `didSelect`。admission 拒绝、真实 current 不匹配、重复 committed 或已有冲突 execution 时保持 stale，不猜测提交。
+2. active overscroll boundary 不启动 synthetic deceleration。顶部 `.container/.child` 与底部原生 owner 都先按既有 boundary lifecycle 完成回稳；v0.7 driver 只从 stable range 的 container/current child owner 启动，避免产生 Interaction Coordinator 不允许的 `topOverscrolling -> verticalDecelerating` 或 boundary/synthetic 双 owner。
+3. 新 pan 替换旧 synthetic deceleration 或仍等待原生回稳的 boundary recovery interaction 时，必须显式标记为 replacement cancel。ViewController 仍同步取消旧 vertical state，但该 cancel 不请求 deferred drain；紧随其后的新 `beganDragging` 建立后继续保持 Host suspended，延迟 reload/layout/selection 只能在新 pan matching terminal 后排空。其他结构性 cancel 继续按既有策略请求 drain。
+4. 真实 child→container 惯性 UI 必须证明 handoff 发生在手指离开后：释放前 child distance 要大于测试手指的物理位移并保留安全余量，再用短距离高速 flick 触发。若禁用 synthetic handoff，该用例必须无法同时满足 child 回顶和 Header 展开；不得只用“曾出现 child→container”而允许拖拽阶段先跨界。
 
 ## 日志
 

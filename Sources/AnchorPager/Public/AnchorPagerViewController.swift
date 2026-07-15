@@ -1137,6 +1137,14 @@ open class AnchorPagerViewController: UIViewController {
             }
             didTransition = interactionCoordinator.cancel(currentState)
             requestsDrain = true
+        case let .cancelledForNewPan(identifier):
+            let currentState = interactionCoordinator.state
+            guard currentState.identifier == identifier,
+                  currentState.isVerticalInteraction else {
+                return
+            }
+            didTransition = interactionCoordinator.cancel(currentState)
+            requestsDrain = false
         }
         guard didTransition else { return }
         updatePagingHostExecutionSuspension()

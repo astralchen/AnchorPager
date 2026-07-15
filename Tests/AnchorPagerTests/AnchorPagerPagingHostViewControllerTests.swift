@@ -262,6 +262,58 @@ final class AnchorPagerPagingHostViewControllerTests: XCTestCase {
         )
     }
 
+    func testMissingWillSelectRecoveryCommitsThroughHostTransaction() throws {
+        let host = makeHost()
+        let delegate = RecordingPagingHostDelegate()
+        host.eventDelegate = delegate
+        host.reload(titles: ["First", "Second"], pageCount: 2, selectedIndex: 0)
+        let adapter = try XCTUnwrap(host.activeAdapter)
+        delegate.events.removeAll()
+        delegate.interactionEvents.removeAll()
+
+        adapter.handleDidSelect(
+            at: 1,
+            animated: true,
+            reportedCurrentIndex: 1
+        )
+
+        XCTAssertEqual(delegate.events, [.willSelect(1, true), .didSelect(1, true)])
+        XCTAssertEqual(host.committedSelectionIndexForTesting, 1)
+        XCTAssertNil(host.activeSelectionRequestForTesting)
+        XCTAssertEqual(delegate.interactionEvents.count, 2)
+        guard case let .began(request) = delegate.interactionEvents.first else {
+            return XCTFail("恢复事务必须先经过 Host admission。")
+        }
+        XCTAssertEqual(request.targetIndex, 1)
+        XCTAssertEqual(delegate.interactionEvents.last, .finished(request))
+    }
+
+    func testMissingWillSelectRecoveryDoesNotBypassRejectedHostAdmission() throws {
+        let host = makeHost()
+        let delegate = RecordingPagingHostDelegate()
+        delegate.acceptsInteractionBegin = false
+        host.eventDelegate = delegate
+        host.reload(titles: ["First", "Second"], pageCount: 2, selectedIndex: 0)
+        let adapter = try XCTUnwrap(host.activeAdapter)
+        delegate.events.removeAll()
+        delegate.interactionEvents.removeAll()
+
+        adapter.handleDidSelect(
+            at: 1,
+            animated: true,
+            reportedCurrentIndex: 1
+        )
+
+        XCTAssertTrue(delegate.events.isEmpty)
+        XCTAssertEqual(host.committedSelectionIndexForTesting, 0)
+        XCTAssertNil(host.activeSelectionRequestForTesting)
+        XCTAssertEqual(delegate.interactionEvents.count, 1)
+        guard case let .began(request) = delegate.interactionEvents.first else {
+            return XCTFail("恢复尝试必须经过可拒绝的 Host admission。")
+        }
+        XCTAssertEqual(request.targetIndex, 1)
+    }
+
     func testPageProviderAndSelectionAreForwardedOnlyWhileAdapterIsActive() throws {
         let host = AnchorPagerPagingHostViewController()
         let provider = RecordingHostPageProvider()

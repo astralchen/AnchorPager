@@ -13,6 +13,7 @@ enum AnchorPagerVerticalInteractionEvent: Equatable, Sendable {
     case finishedDragging(identifier: Int)
     case finishedDecelerating(identifier: Int)
     case cancelled(identifier: Int)
+    case cancelledForNewPan(identifier: Int)
 }
 
 @MainActor
@@ -315,13 +316,17 @@ final class AnchorPagerScrollCoordinator {
         verticalInteractionIdentifier = nil
     }
 
-    func cancelSyntheticDeceleration() {
+    func cancelSyntheticDeceleration(forNewPan: Bool = false) {
         guard let context = decelerationContext else { return }
         decelerationContext = nil
         let driver = decelerationDriver
         decelerationDriver = nil
         driver?.cancel()
-        emitInteractionEvent(.cancelled(identifier: context.interactionIdentifier))
+        emitInteractionEvent(
+            forNewPan
+                ? .cancelledForNewPan(identifier: context.interactionIdentifier)
+                : .cancelled(identifier: context.interactionIdentifier)
+        )
     }
 }
 
@@ -359,8 +364,8 @@ private extension AnchorPagerScrollCoordinator {
         translationY: CGFloat
     ) {
         if verticalInteractionIdentifier == nil {
-            cancelSyntheticDeceleration()
-            cancelPendingBoundaryRecoveryInteractionIfNeeded()
+            cancelSyntheticDeceleration(forNewPan: true)
+            cancelPendingBoundaryRecoveryInteractionIfNeeded(forNewPan: true)
             nextVerticalInteractionIdentifier &+= 1
             let interactionIdentifier = nextVerticalInteractionIdentifier
             verticalInteractionIdentifier = interactionIdentifier
@@ -442,6 +447,11 @@ private extension AnchorPagerScrollCoordinator {
             return
         }
         didAttemptDecelerationForInteraction = true
+
+        guard overscrollCoordinator.activeOwner == nil else {
+            logRejectedDeceleration()
+            return
+        }
 
         let canonicalVelocity = -velocityY
         let rate = decelerationRate(for: owner)
@@ -1098,13 +1108,19 @@ private extension AnchorPagerScrollCoordinator {
         emitInteractionEvent(.finishedDragging(identifier: interactionIdentifier))
     }
 
-    func cancelPendingBoundaryRecoveryInteractionIfNeeded() {
+    func cancelPendingBoundaryRecoveryInteractionIfNeeded(
+        forNewPan: Bool = false
+    ) {
         guard let interactionIdentifier = pendingBoundaryRecoveryInteractionIdentifier else {
             return
         }
         pendingBoundaryRecoveryInteractionIdentifier = nil
         topOverscrollInteractionIdentifier = nil
-        emitInteractionEvent(.cancelled(identifier: interactionIdentifier))
+        emitInteractionEvent(
+            forNewPan
+                ? .cancelledForNewPan(identifier: interactionIdentifier)
+                : .cancelled(identifier: interactionIdentifier)
+        )
     }
 
     func cancelActiveVerticalInteractionForStructuralChange() {

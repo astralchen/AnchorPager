@@ -693,6 +693,79 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
     }
 
     @MainActor
+    func testAdapterRecoversMissingWillSelectOnlyWhenReportedCurrentIndexMatches() {
+        let adapter = AnchorPagerPagingAdapter()
+        let delegate = RecordingPagingDelegate()
+        delegate.nextInteractiveRequestIdentifier = 102
+        adapter.eventDelegate = delegate
+        reload(
+            adapter,
+            titles: ["First", "Second"],
+            viewControllers: [UIViewController(), UIViewController()],
+            selectedIndex: 0
+        )
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+
+        adapter.handleDidSelect(
+            at: 1,
+            animated: true,
+            reportedCurrentIndex: 1
+        )
+
+        XCTAssertEqual(delegate.events, [
+            .interactiveBegin(1, true),
+            .identifiedWillSelect(1, true, 102),
+            .identifiedDidSelect(1, true, 102),
+        ])
+        XCTAssertTrue(
+            events.contains(
+                .init(
+                    category: .paging,
+                    level: .debug,
+                    event: "paging.callback.recoverMissingWillSelect"
+                )
+            )
+        )
+        XCTAssertTrue(adapter.isReadyForReload)
+    }
+
+    @MainActor
+    func testAdapterRejectsMissingWillSelectRecoveryWhenReportedCurrentIndexDiffers() {
+        let adapter = AnchorPagerPagingAdapter()
+        let delegate = RecordingPagingDelegate()
+        delegate.nextInteractiveRequestIdentifier = 103
+        adapter.eventDelegate = delegate
+        reload(
+            adapter,
+            titles: ["First", "Second"],
+            viewControllers: [UIViewController(), UIViewController()],
+            selectedIndex: 0
+        )
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+
+        adapter.handleDidSelect(
+            at: 1,
+            animated: true,
+            reportedCurrentIndex: 0
+        )
+
+        XCTAssertTrue(delegate.events.isEmpty)
+        XCTAssertFalse(
+            events.contains {
+                $0.event == "paging.callback.recoverMissingWillSelect"
+            }
+        )
+        XCTAssertTrue(
+            events.contains { $0.event == "paging.callback.missingWillSelect" }
+        )
+        XCTAssertTrue(adapter.isReadyForReload)
+    }
+
+    @MainActor
     func testPrepareForRemovalSynchronouslyClearsScrollPageWithoutPagingEvents() {
         let page = ScrollPageViewController()
         let adapter = AnchorPagerPagingAdapter()

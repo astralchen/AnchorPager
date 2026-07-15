@@ -709,9 +709,18 @@ final class AnchorPagerExampleUITests: XCTestCase {
             $0.page == "long" && $0.childToContainer
                 && $0.distance < 0.5 && $0.collapse < 0.99
         }, "probe：\((probe.value as? String) ?? "nil")")
+        let terminalProbeValue = (probe.value as? String) ?? "nil"
         XCTAssertGreaterThan(state.samples, 2)
-        XCTAssertLessThanOrEqual(state.reversalMax, 0.5)
-        XCTAssertLessThanOrEqual(state.invariantMax, 0.5)
+        XCTAssertLessThanOrEqual(
+            state.reversalMax,
+            0.5,
+            "probe：\(terminalProbeValue)"
+        )
+        XCTAssertLessThanOrEqual(
+            state.invariantMax,
+            0.5,
+            "probe：\(terminalProbeValue)"
+        )
         XCTAssertEqual(
             state.canonical,
             state.headerCollapse + state.distance,
@@ -721,6 +730,43 @@ final class AnchorPagerExampleUITests: XCTestCase {
             state.hasZeroPresentationMetrics,
             "probe：\((probe.value as? String) ?? "nil")"
         )
+    }
+
+    @MainActor
+    func testShortDownwardFlingCompletesChildToContainerAfterFingerRelease() throws {
+        let app = launchPage(index: 2, mode: "none")
+        let probe = scrollCoordinationStateProbe(in: app)
+        drag(in: app, from: 0.76, to: 0.34)
+        let startOffset = CGVector(dx: 0.5, dy: 0.46)
+        let endOffset = CGVector(dx: 0.5, dy: 0.54)
+        let fingerTravel = app.frame.height * abs(endOffset.dy - startOffset.dy)
+        let initialState = try XCTUnwrap(waitForStableScrollState(from: probe, timeout: 5) {
+            $0.collapse >= 0.99
+                && $0.distance > fingerTravel + 20
+                && $0.distance < 350
+        }, "probe：\((probe.value as? String) ?? "nil")")
+        XCTAssertGreaterThan(initialState.distance, fingerTravel + 20)
+        probe.tap()
+
+        fastDrag(in: app, from: startOffset, to: endOffset)
+
+        let state = try XCTUnwrap(waitForScrollState(from: probe, timeout: 5) {
+            $0.page == "long" && $0.childToContainer
+                && $0.distance < 0.5 && $0.collapse < 0.99
+        }, "probe：\((probe.value as? String) ?? "nil")")
+        let terminalProbeValue = (probe.value as? String) ?? "nil"
+        XCTAssertGreaterThan(state.samples, 2)
+        XCTAssertLessThanOrEqual(
+            state.invariantMax,
+            0.5,
+            "probe：\(terminalProbeValue)"
+        )
+        XCTAssertEqual(
+            state.canonical,
+            state.headerCollapse + state.distance,
+            accuracy: 1
+        )
+        XCTAssertTrue(state.hasZeroPresentationMetrics, "probe：\(terminalProbeValue)")
     }
 
     @MainActor
@@ -1244,6 +1290,44 @@ final class AnchorPagerExampleUITests: XCTestCase {
             return nil
         }
         return ScrollCoordinationState(value: probe.value as? String)
+    }
+
+    @MainActor
+    private func waitForStableScrollState(
+        from probe: XCUIElement,
+        timeout: TimeInterval,
+        matching predicate: (ScrollCoordinationState) -> Bool
+    ) -> ScrollCoordinationState? {
+        let deadline = Date().addingTimeInterval(timeout)
+        var previousCanonical: CGFloat?
+        var stableSince: Date?
+
+        while Date() < deadline {
+            guard let state = ScrollCoordinationState(value: probe.value as? String),
+                  predicate(state) else {
+                previousCanonical = nil
+                stableSince = nil
+                RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+                continue
+            }
+
+            if let previousCanonical,
+               abs(state.canonical - previousCanonical) <= 0.25 {
+                let now = Date()
+                if let stableSince,
+                   now.timeIntervalSince(stableSince) >= 0.3 {
+                    return state
+                }
+                if stableSince == nil {
+                    stableSince = now
+                }
+            } else {
+                stableSince = nil
+            }
+            previousCanonical = state.canonical
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        }
+        return nil
     }
 
 }

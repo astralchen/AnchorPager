@@ -8,7 +8,7 @@
 
 **Tech Stack:** Swift 6.2、Swift 6 language mode、UIKit、iOS 14+、Swift Package Manager、Tabman 4.0.1、Pageboy 5.0.2、XCTest/XCUITest、Xcode 26.6、iPhone 17 Pro / iOS 26.5 Simulator。
 
-**当前状态：** Task 0–13 已完成并按任务提交。Task 14 的双向惯性、系统返回与纵横竞争真实 UI 已通过；业务横向 child 自动优先方案经真实 UIKit RED 否定并完成架构收口，正在执行 v0.5/v0.6 边界回归与任务级验收。
+**当前状态：** Task 0–14 已完成并按任务提交。Task 15 首轮全量命令退出 0；首轮 fresh-pass 的 Critical 0、Important 4、Minor 1 已逐项 RED/GREEN。复审追踪又发现 pending boundary recovery 的新 pan 仍走普通 cancel，正在按同一原子替换契约补充 RED/GREEN；完成前 v0.7 不标记 Ready。
 
 ## Global Constraints
 
@@ -1108,6 +1108,10 @@ xcrun xcresulttool get test-results summary --path /private/tmp/AnchorPagerV07Ex
 - [ ] **Step 7：fresh-pass 独立复审**
 
 使用 `superpowers:requesting-code-review` 从设计起点到当前 HEAD 重读完整 diff；在当前会话本地执行，除非用户明确要求 subagent。按 Critical/Important/Minor 记录发现；任何 Critical/Important 必须先补 RED、修复、重跑相邻与全量门禁，不得直接标记 Ready。
+
+首轮 fresh-pass 结论：Critical 0、Important 4、Minor 1。Important 分别为缺失 `willSelect` 的真实 `didSelect` 未恢复 transaction、active top boundary 仍可非法启动 synthetic deceleration、新 pan replacement cancel 会在新 `.began` 前排空延迟事务、child→container UI 手指位移足以在 release 前完成 handoff；Minor 为设计/计划/architecture 状态文字滞后。4 项均已由主代理沿真实数据流复核成立，修复契约已先同步到设计文档；必须逐项补 RED、修复并重跑相邻及最终全量。
+
+首轮四项修复复审追踪结论为 Critical 0、Important 1、Minor 0：synthetic deceleration 的新 pan 已使用 replacement cancel，但 `pendingBoundaryRecoveryInteractionIdentifier` 仍通过普通 cancel 提前请求 deferred drain。该相邻缺口同样纳入原子替换契约，补充真实边界等待、新 pan 事件顺序，以及 pending reload/layout 直到新 terminal 才排空的 RED/GREEN。
 
 - [ ] **Step 8：生产 HEAD 最终复验**
 

@@ -431,7 +431,27 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
             animated: animated
         )
         guard reloadSelectionCallbackSuppressionDepth == 0 else { return }
+        handleDidSelect(
+            at: index,
+            animated: animated,
+            reportedCurrentIndex: pageboyViewController.currentIndex
+        )
+    }
+
+    /// 统一处理 Pageboy selection terminal，并允许测试注入其公开 current 快照。
+    func handleDidSelect(
+        at index: Int,
+        animated: Bool,
+        reportedCurrentIndex: Int?
+    ) {
         AnchorPagerLogger.log(.info, category: .paging, event: "paging.didSelect")
+        if matchingExecution(at: index) == nil {
+            recoverMissingWillSelectIfPossible(
+                at: index,
+                animated: animated,
+                reportedCurrentIndex: reportedCurrentIndex
+            )
+        }
         recordTerminalSelectionCallback(at: index)
         guard let execution = matchingExecution(at: index) else {
             logStaleSelectionTerminal()
@@ -610,6 +630,38 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
             previousIndex: committedSelectedIndex
         )
         return requestIdentifier
+    }
+
+    private func recoverMissingWillSelectIfPossible(
+        at index: Int,
+        animated: Bool,
+        reportedCurrentIndex: Int?
+    ) {
+        guard executingSelection == nil,
+              pendingPageboySelectionIndex == nil,
+              reportedCurrentIndex == index,
+              (0..<configuredPageCount).contains(index),
+              committedSelectedIndex != index,
+              let requestIdentifier = requestIdentifierForWillSelect(
+                  at: index,
+                  animated: animated
+              ) else {
+            return
+        }
+
+        AnchorPagerLogger.log(
+            .debug,
+            category: .paging,
+            event: "paging.callback.recoverMissingWillSelect"
+        )
+        AnchorPagerLogger.log(.info, category: .paging, event: "paging.willSelect")
+        recordWillSelectCallback(at: index)
+        eventDelegate?.pagingAdapter(
+            self,
+            willSelect: index,
+            animated: animated,
+            requestIdentifier: requestIdentifier
+        )
     }
 
     private func matchingExecution(at index: Int) -> ExecutingSelection? {
