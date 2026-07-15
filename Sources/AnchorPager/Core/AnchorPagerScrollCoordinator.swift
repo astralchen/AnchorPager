@@ -5,6 +5,24 @@ enum AnchorPagerVerticalPanSource: Hashable, Sendable {
     case child(token: Int)
 }
 
+enum AnchorPagerVerticalInteractionEvent: Equatable, Sendable {
+    case beganDragging(identifier: Int)
+    case enteredTopOverscroll(identifier: Int)
+    case leftTopOverscroll(identifier: Int)
+    case beganDecelerating(identifier: Int)
+    case finishedDragging(identifier: Int)
+    case finishedDecelerating(identifier: Int)
+    case cancelled(identifier: Int)
+}
+
+@MainActor
+protocol AnchorPagerScrollCoordinatorInteractionDelegate: AnyObject {
+    func scrollCoordinator(
+        _ coordinator: AnchorPagerScrollCoordinator,
+        didEmit event: AnchorPagerVerticalInteractionEvent
+    )
+}
+
 @MainActor
 final class AnchorPagerScrollCoordinator {
     enum Owner: Equatable {
@@ -30,6 +48,7 @@ final class AnchorPagerScrollCoordinator {
     private let overscrollCoordinator: AnchorPagerOverscrollCoordinator
     private let decelerationDriverFactory: DecelerationDriverFactory
     private let decelerationRateProvider: DecelerationRateProvider
+    weak var interactionDelegate: AnchorPagerScrollCoordinatorInteractionDelegate?
     private var childBinding: AnchorPagerChildScrollBinding?
     private weak var committedChildScrollView: UIScrollView?
     private var bindingToken = 0
@@ -40,6 +59,9 @@ final class AnchorPagerScrollCoordinator {
     private var primaryPanSource: AnchorPagerVerticalPanSource?
     private var nextVerticalInteractionIdentifier = 0
     private var verticalInteractionIdentifier: Int?
+    private var pendingBoundaryRecoveryInteractionIdentifier: Int?
+    private var topOverscrollInteractionIdentifier: Int?
+    private var didCancelCurrentPanInteraction = false
     private var didAttemptDecelerationForInteraction = false
     private var isApplyingGuardedOffsets = false
     private var isInvalidated = false
@@ -89,12 +111,13 @@ final class AnchorPagerScrollCoordinator {
 
     deinit {
         MainActor.assumeIsolated {
-            cancelSyntheticDeceleration()
+            cancelActiveVerticalInteractionForStructuralChange()
         }
     }
 
     func updateTopOverscrollHandlingMode(_ mode: AnchorPagerTopOverscrollHandlingMode) {
-        cancelSyntheticDeceleration()
+        guard overscrollCoordinator.topMode != mode else { return }
+        cancelActiveVerticalInteractionForStructuralChange()
         let hadActiveOwner = overscrollCoordinator.activeOwner != nil
         overscrollCoordinator.updateTopMode(mode)
         if hadActiveOwner {
@@ -108,7 +131,7 @@ final class AnchorPagerScrollCoordinator {
     ) {
         let previous = currentStablePosition()
         if containerGeometry != geometry {
-            cancelSyntheticDeceleration()
+            cancelActiveVerticalInteractionForStructuralChange()
             overscrollCoordinator.cancel()
         }
         containerGeometry = geometry
@@ -131,7 +154,7 @@ final class AnchorPagerScrollCoordinator {
     func bindCommittedChild(_ scrollView: UIScrollView?) {
         guard !isInvalidated, committedChildScrollView !== scrollView else { return }
 
-        cancelSyntheticDeceleration()
+        cancelActiveVerticalInteractionForStructuralChange()
         overscrollCoordinator.cancel()
         endCurrentBindingIfNeeded()
         committedChildScrollView = scrollView
@@ -231,8 +254,16 @@ final class AnchorPagerScrollCoordinator {
                 overscrollCoordinator.reachedStableRange()
                 apply(AnchorPagerScrollPositionResolver.resolve(input))
             } else {
+                let previousBoundaryOwner = overscrollCoordinator.activeOwner
                 switch overscrollCoordinator.finishUnpresentedActiveOwner() {
-                case .inactive, .finished:
+                case .inactive:
+                    overscrollCoordinator.reachedStableRange()
+                    apply(AnchorPagerScrollPositionResolver.resolve(input))
+                case .finished:
+                    reportTopBoundaryTransition(
+                        from: previousBoundaryOwner,
+                        to: overscrollCoordinator.activeOwner
+                    )
                     overscrollCoordinator.reachedStableRange()
                     apply(AnchorPagerScrollPositionResolver.resolve(input))
                 case .presented:
@@ -258,7 +289,7 @@ final class AnchorPagerScrollCoordinator {
     }
 
     func cancelBoundaryHandling() {
-        cancelSyntheticDeceleration()
+        cancelActiveVerticalInteractionForStructuralChange()
         let didCancel = overscrollCoordinator.cancel()
         if didCancel {
             apply(currentStablePosition())
@@ -268,7 +299,7 @@ final class AnchorPagerScrollCoordinator {
     func invalidate() {
         guard !isInvalidated else { return }
         isInvalidated = true
-        cancelSyntheticDeceleration()
+        cancelActiveVerticalInteractionForStructuralChange()
         overscrollCoordinator.cancel()
         bindingToken &+= 1
         endCurrentBindingIfNeeded()
@@ -285,11 +316,12 @@ final class AnchorPagerScrollCoordinator {
     }
 
     func cancelSyntheticDeceleration() {
-        guard decelerationContext != nil else { return }
+        guard let context = decelerationContext else { return }
         decelerationContext = nil
         let driver = decelerationDriver
         decelerationDriver = nil
         driver?.cancel()
+        emitInteractionEvent(.cancelled(identifier: context.interactionIdentifier))
     }
 }
 
@@ -328,12 +360,18 @@ private extension AnchorPagerScrollCoordinator {
     ) {
         if verticalInteractionIdentifier == nil {
             cancelSyntheticDeceleration()
+            cancelPendingBoundaryRecoveryInteractionIfNeeded()
             nextVerticalInteractionIdentifier &+= 1
-            verticalInteractionIdentifier = nextVerticalInteractionIdentifier
+            let interactionIdentifier = nextVerticalInteractionIdentifier
+            verticalInteractionIdentifier = interactionIdentifier
             gestureStartTotal = currentCanonicalTotal()
             gestureStartTranslationY = translationY
             primaryPanSource = source
             didAttemptDecelerationForInteraction = false
+            didCancelCurrentPanInteraction = false
+            emitInteractionEvent(
+                .beganDragging(identifier: interactionIdentifier)
+            )
         }
         activePanSources.insert(source)
     }
@@ -343,7 +381,7 @@ private extension AnchorPagerScrollCoordinator {
         state: UIGestureRecognizer.State,
         velocityY: CGFloat
     ) {
-        guard verticalInteractionIdentifier != nil else {
+        guard let interactionIdentifier = verticalInteractionIdentifier else {
             settleStableOffsets()
             return
         }
@@ -352,19 +390,46 @@ private extension AnchorPagerScrollCoordinator {
             startDecelerationIfPossible(source: source, velocityY: velocityY)
         } else {
             cancelSyntheticDeceleration()
+            didCancelCurrentPanInteraction = true
         }
         activePanSources.remove(source)
         guard activePanSources.isEmpty else { return }
 
+        let didStartDeceleration = decelerationContext?.interactionIdentifier
+            == interactionIdentifier
+        let interactionWasCancelled = didCancelCurrentPanInteraction
         gestureStartTotal = nil
         primaryPanSource = nil
         verticalInteractionIdentifier = nil
         didAttemptDecelerationForInteraction = false
-        if overscrollCoordinator.endInteraction() {
+        didCancelCurrentPanInteraction = false
+
+        if didStartDeceleration {
+            return
+        }
+        if interactionWasCancelled {
+            overscrollCoordinator.cancel()
+            topOverscrollInteractionIdentifier = nil
+            emitInteractionEvent(.cancelled(identifier: interactionIdentifier))
             settleStableOffsets()
-        } else if overscrollCoordinator.activeOwner == nil {
+            return
+        }
+
+        let previousBoundaryOwner = overscrollCoordinator.activeOwner
+        if overscrollCoordinator.endInteraction() {
+            reportTopBoundaryTransition(
+                from: previousBoundaryOwner,
+                to: overscrollCoordinator.activeOwner,
+                interactionIdentifier: interactionIdentifier
+            )
+            settleStableOffsets()
+        } else if overscrollCoordinator.activeOwner != nil {
+            pendingBoundaryRecoveryInteractionIdentifier = interactionIdentifier
+            return
+        } else {
             settleStableOffsets()
         }
+        emitInteractionEvent(.finishedDragging(identifier: interactionIdentifier))
     }
 
     func startDecelerationIfPossible(
@@ -406,6 +471,9 @@ private extension AnchorPagerScrollCoordinator {
             canonicalTotal: initialTotal,
             phase: .monitoringNative,
             nativeBoundaryReached: nativeOwnerBoundaryReached(nativeOwner)
+        )
+        emitInteractionEvent(
+            .beganDecelerating(identifier: interactionIdentifier)
         )
         driver.onTick = { [weak self] sample in
             self?.consumeDecelerationSample(
@@ -549,7 +617,10 @@ private extension AnchorPagerScrollCoordinator {
         case .monitoringNative:
             guard context.nativeBoundaryReached else {
                 if sample.isFinished {
-                    decelerationContext = nil
+                    finishDecelerationInteraction(
+                        interactionIdentifier: interactionIdentifier,
+                        cancelsDriver: false
+                    )
                 } else {
                     decelerationContext = context
                 }
@@ -579,9 +650,16 @@ private extension AnchorPagerScrollCoordinator {
         let didReachTerminalBoundary = applySyntheticPosition(&context)
         if didReachTerminalBoundary {
             decelerationContext = context
-            cancelSyntheticDeceleration()
+            finishDecelerationInteraction(
+                interactionIdentifier: interactionIdentifier,
+                cancelsDriver: true
+            )
         } else if sample.isFinished {
-            decelerationContext = nil
+            decelerationContext = context
+            finishDecelerationInteraction(
+                interactionIdentifier: interactionIdentifier,
+                cancelsDriver: false
+            )
         } else {
             decelerationContext = context
         }
@@ -614,6 +692,26 @@ private extension AnchorPagerScrollCoordinator {
             return
         }
         decelerationContext = nil
+        decelerationDriver = nil
+        emitInteractionEvent(.cancelled(identifier: interactionIdentifier))
+    }
+
+    func finishDecelerationInteraction(
+        interactionIdentifier: Int,
+        cancelsDriver: Bool
+    ) {
+        guard decelerationContext?.interactionIdentifier == interactionIdentifier else {
+            return
+        }
+        decelerationContext = nil
+        if cancelsDriver {
+            let driver = decelerationDriver
+            decelerationDriver = nil
+            driver?.cancel()
+        }
+        emitInteractionEvent(
+            .finishedDecelerating(identifier: interactionIdentifier)
+        )
     }
 
     func logRejectedDeceleration() {
@@ -722,9 +820,14 @@ private extension AnchorPagerScrollCoordinator {
         _ boundary: AnchorPagerOverscrollCoordinator.Boundary,
         resolverInput: AnchorPagerScrollPositionResolver.Input? = nil
     ) {
+        let previousBoundaryOwner = overscrollCoordinator.activeOwner
         let route = overscrollCoordinator.begin(
             boundary: boundary,
             hasChild: committedChildScrollView != nil
+        )
+        reportTopBoundaryTransition(
+            from: previousBoundaryOwner,
+            to: overscrollCoordinator.activeOwner
         )
         switch route {
         case let .clampStableBoundary(boundary):
@@ -776,12 +879,14 @@ private extension AnchorPagerScrollCoordinator {
         resolverInput: AnchorPagerScrollPositionResolver.Input?
     ) {
         guard case let .finished(finishedOwner) = result else { return }
+        reportTopBoundaryTransition(from: finishedOwner, to: nil)
         overscrollCoordinator.reachedStableRange()
         if let resolverInput {
             apply(AnchorPagerScrollPositionResolver.resolve(resolverInput))
-            return
+        } else {
+            applyStablePositionAfterObservedBoundaryFinish(finishedOwner)
         }
-        applyStablePositionAfterObservedBoundaryFinish(finishedOwner)
+        finishPendingBoundaryRecoveryInteractionIfNeeded()
     }
 
     func applyStablePositionAfterObservedBoundaryFinish(
@@ -905,8 +1010,80 @@ private extension AnchorPagerScrollCoordinator {
             )
             return
         }
-        cancelSyntheticDeceleration()
+        cancelActiveVerticalInteractionForStructuralChange()
         childDidChange(token: token)
+    }
+
+    func emitInteractionEvent(_ event: AnchorPagerVerticalInteractionEvent) {
+        interactionDelegate?.scrollCoordinator(self, didEmit: event)
+    }
+
+    func reportTopBoundaryTransition(
+        from previous: AnchorPagerOverscrollCoordinator.ActiveOwner?,
+        to current: AnchorPagerOverscrollCoordinator.ActiveOwner?,
+        interactionIdentifier explicitIdentifier: Int? = nil
+    ) {
+        let interactionIdentifier = explicitIdentifier
+            ?? verticalInteractionIdentifier
+            ?? pendingBoundaryRecoveryInteractionIdentifier
+        guard let interactionIdentifier else { return }
+
+        let previousWasTop = previous?.boundary == .top
+        let currentIsTop = current?.boundary == .top
+        if previousWasTop, !currentIsTop,
+           topOverscrollInteractionIdentifier == interactionIdentifier {
+            topOverscrollInteractionIdentifier = nil
+            emitInteractionEvent(
+                .leftTopOverscroll(identifier: interactionIdentifier)
+            )
+        }
+        if !previousWasTop, currentIsTop,
+           topOverscrollInteractionIdentifier != interactionIdentifier {
+            topOverscrollInteractionIdentifier = interactionIdentifier
+            emitInteractionEvent(
+                .enteredTopOverscroll(identifier: interactionIdentifier)
+            )
+        }
+    }
+
+    func finishPendingBoundaryRecoveryInteractionIfNeeded() {
+        guard verticalInteractionIdentifier == nil,
+              let interactionIdentifier = pendingBoundaryRecoveryInteractionIdentifier else {
+            return
+        }
+        pendingBoundaryRecoveryInteractionIdentifier = nil
+        emitInteractionEvent(.finishedDragging(identifier: interactionIdentifier))
+    }
+
+    func cancelPendingBoundaryRecoveryInteractionIfNeeded() {
+        guard let interactionIdentifier = pendingBoundaryRecoveryInteractionIdentifier else {
+            return
+        }
+        pendingBoundaryRecoveryInteractionIdentifier = nil
+        topOverscrollInteractionIdentifier = nil
+        emitInteractionEvent(.cancelled(identifier: interactionIdentifier))
+    }
+
+    func cancelActiveVerticalInteractionForStructuralChange() {
+        let draggingIdentifier = verticalInteractionIdentifier
+        let boundaryIdentifier = pendingBoundaryRecoveryInteractionIdentifier
+        cancelSyntheticDeceleration()
+
+        gestureStartTotal = nil
+        activePanSources.removeAll()
+        primaryPanSource = nil
+        verticalInteractionIdentifier = nil
+        pendingBoundaryRecoveryInteractionIdentifier = nil
+        didAttemptDecelerationForInteraction = false
+        didCancelCurrentPanInteraction = false
+        topOverscrollInteractionIdentifier = nil
+
+        if let draggingIdentifier {
+            emitInteractionEvent(.cancelled(identifier: draggingIdentifier))
+        }
+        if let boundaryIdentifier, boundaryIdentifier != draggingIdentifier {
+            emitInteractionEvent(.cancelled(identifier: boundaryIdentifier))
+        }
     }
 
     func endCurrentBindingIfNeeded() {

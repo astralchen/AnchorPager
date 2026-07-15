@@ -131,6 +131,7 @@ open class AnchorPagerViewController: UIViewController {
     deinit {
         MainActor.assumeIsolated {
             resetPresentationSurfaces()
+            scrollCoordinator?.interactionDelegate = nil
             scrollCoordinator?.invalidate()
             gesturePriorityCoordinator.invalidate()
             pageStateStore.releaseAll()
@@ -173,7 +174,6 @@ open class AnchorPagerViewController: UIViewController {
         to size: CGSize,
         with coordinator: any UIViewControllerTransitionCoordinator
     ) {
-        cancelBoundaryHandlingAndRestoreCanonicalPresentation()
         super.viewWillTransition(to: size, with: coordinator)
         nextInteractionIdentifier &+= 1
         let identifier = nextInteractionIdentifier
@@ -182,6 +182,7 @@ open class AnchorPagerViewController: UIViewController {
         )
         guard interactionCoordinator.begin(state) else { return }
         updatePagingHostExecutionSuspension()
+        cancelBoundaryHandlingAndRestoreCanonicalPresentation()
         let didRegisterCompletion = coordinator.animate(
             alongsideTransition: nil
         ) { [weak self] _ in
@@ -296,6 +297,9 @@ open class AnchorPagerViewController: UIViewController {
 
         updatePagingHostExecutionSuspension()
         let didAcceptRequest = pagingHost.setSelectedIndex(selectedIndex, animated: animated)
+        if didAcceptRequest {
+            cancelVerticalDecelerationForDeferredWorkIfNeeded()
+        }
         if !didAcceptRequest {
             AnchorPagerLogger.log(.debug, category: .paging, event: "setSelectedIndex.rejected")
         }
@@ -361,6 +365,25 @@ open class AnchorPagerViewController: UIViewController {
             requestDeferredWorkDrain()
         }
         return didCancel
+    }
+
+    func handleScrollInteractionEventForTesting(
+        _ event: AnchorPagerVerticalInteractionEvent
+    ) {
+        handleScrollInteractionEvent(event)
+    }
+
+    func handleVerticalPanForTesting(
+        state: UIGestureRecognizer.State,
+        translationY: CGFloat,
+        velocityY: CGFloat = 0
+    ) {
+        scrollCoordinator?.handlePan(
+            source: .container,
+            state: state,
+            translationY: translationY,
+            velocityY: velocityY
+        )
     }
 
     private func installVerticalScrollViewIfNeeded() {
@@ -448,6 +471,7 @@ open class AnchorPagerViewController: UIViewController {
             pageCount: snapshot.pageCount,
             selectedIndex: snapshot.selectedIndex
         )
+        cancelVerticalDecelerationForDeferredWorkIfNeeded()
         requestDeferredWorkDrain()
     }
 
@@ -457,9 +481,7 @@ open class AnchorPagerViewController: UIViewController {
         pendingHeaderLayoutRequest = PendingHeaderLayoutRequest(
             offsetAdjustment: offsetAdjustment
         )
-        if case .verticalDecelerating = interactionCoordinator.state {
-            _ = interactionCoordinator.cancel(interactionCoordinator.state)
-        }
+        cancelVerticalDecelerationForDeferredWorkIfNeeded()
         updatePagingHostExecutionSuspension()
         requestDeferredWorkDrain()
     }
@@ -1058,6 +1080,69 @@ open class AnchorPagerViewController: UIViewController {
             containerScrollView: container,
             topOverscrollHandlingMode: configuration.topOverscrollHandlingMode
         )
+        scrollCoordinator?.interactionDelegate = self
+    }
+
+    private func cancelVerticalDecelerationForDeferredWorkIfNeeded() {
+        guard case .verticalDecelerating = interactionCoordinator.state else { return }
+        scrollCoordinator?.cancelSyntheticDeceleration()
+        if case .verticalDecelerating = interactionCoordinator.state {
+            _ = interactionCoordinator.cancel(interactionCoordinator.state)
+            updatePagingHostExecutionSuspension()
+            requestDeferredWorkDrain()
+        }
+    }
+
+    private func handleScrollInteractionEvent(
+        _ event: AnchorPagerVerticalInteractionEvent
+    ) {
+        let didTransition: Bool
+        let requestsDrain: Bool
+        switch event {
+        case let .beganDragging(identifier):
+            didTransition = interactionCoordinator.begin(
+                .verticalDragging(identifier: identifier)
+            )
+            requestsDrain = false
+        case let .enteredTopOverscroll(identifier):
+            didTransition = interactionCoordinator.updateBoundary(
+                to: .topOverscrolling(identifier: identifier)
+            )
+            requestsDrain = false
+        case let .leftTopOverscroll(identifier):
+            didTransition = interactionCoordinator.updateBoundary(
+                to: .verticalDragging(identifier: identifier)
+            )
+            requestsDrain = false
+        case let .beganDecelerating(identifier):
+            didTransition = interactionCoordinator.begin(
+                .verticalDecelerating(identifier: identifier)
+            )
+            requestsDrain = false
+        case let .finishedDragging(identifier):
+            didTransition = interactionCoordinator.finish(
+                .verticalDragging(identifier: identifier)
+            )
+            requestsDrain = true
+        case let .finishedDecelerating(identifier):
+            didTransition = interactionCoordinator.finish(
+                .verticalDecelerating(identifier: identifier)
+            )
+            requestsDrain = true
+        case let .cancelled(identifier):
+            let currentState = interactionCoordinator.state
+            guard currentState.identifier == identifier,
+                  currentState.isVerticalInteraction else {
+                return
+            }
+            didTransition = interactionCoordinator.cancel(currentState)
+            requestsDrain = true
+        }
+        guard didTransition else { return }
+        updatePagingHostExecutionSuspension()
+        if requestsDrain {
+            requestDeferredWorkDrain()
+        }
     }
 
     private func cancelBoundaryHandlingAndRestoreCanonicalPresentation() {
@@ -1128,6 +1213,76 @@ extension AnchorPagerViewController: AnchorPagerPageProviding {
 }
 
 extension AnchorPagerViewController: AnchorPagerPagingHostViewControllerDelegate {
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
+        shouldBeginReloadInteraction identifier: AnchorPagerPagingReloadRequestIdentifier
+    ) -> Bool {
+        let state = AnchorPagerInteractionState.layoutReloading(
+            identifier: identifier
+        )
+        let didBegin = interactionCoordinator.begin(state)
+        if didBegin {
+            updatePagingHostExecutionSuspension()
+        }
+        return didBegin
+    }
+
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
+        didFinishReloadInteraction identifier: AnchorPagerPagingReloadRequestIdentifier
+    ) {
+        guard interactionCoordinator.finish(
+            .layoutReloading(identifier: identifier)
+        ) else { return }
+        updatePagingHostExecutionSuspension()
+    }
+
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
+        didCancelReloadInteraction identifier: AnchorPagerPagingReloadRequestIdentifier
+    ) {
+        guard interactionCoordinator.cancel(
+            .layoutReloading(identifier: identifier)
+        ) else { return }
+        updatePagingHostExecutionSuspension()
+    }
+
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
+        shouldBeginInteractionFor request: AnchorPagerPagingSelectionRequest
+    ) -> Bool {
+        let state: AnchorPagerInteractionState = request.source == .interactive
+            ? .horizontalPaging(identifier: request.identifier)
+            : .programmaticPaging(identifier: request.identifier)
+        let didBegin = interactionCoordinator.begin(state)
+        if didBegin {
+            updatePagingHostExecutionSuspension()
+        }
+        return didBegin
+    }
+
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
+        didFinishInteractionFor request: AnchorPagerPagingSelectionRequest
+    ) {
+        let state: AnchorPagerInteractionState = request.source == .interactive
+            ? .horizontalPaging(identifier: request.identifier)
+            : .programmaticPaging(identifier: request.identifier)
+        guard interactionCoordinator.finish(state) else { return }
+        updatePagingHostExecutionSuspension()
+    }
+
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
+        didCancelInteractionFor request: AnchorPagerPagingSelectionRequest
+    ) {
+        let state: AnchorPagerInteractionState = request.source == .interactive
+            ? .horizontalPaging(identifier: request.identifier)
+            : .programmaticPaging(identifier: request.identifier)
+        guard interactionCoordinator.cancel(state) else { return }
+        updatePagingHostExecutionSuspension()
+    }
+
     func pagingHost(
         _ host: AnchorPagerPagingHostViewController,
         willPerformReloadRequest identifier: AnchorPagerPagingReloadRequestIdentifier
@@ -1229,5 +1384,14 @@ extension AnchorPagerViewController: AnchorPagerPagingHostViewControllerDelegate
             stagedReloadSnapshot = nil
         }
         return true
+    }
+}
+
+extension AnchorPagerViewController: AnchorPagerScrollCoordinatorInteractionDelegate {
+    func scrollCoordinator(
+        _ coordinator: AnchorPagerScrollCoordinator,
+        didEmit event: AnchorPagerVerticalInteractionEvent
+    ) {
+        handleScrollInteractionEvent(event)
     }
 }

@@ -1107,6 +1107,155 @@ final class AnchorPagerViewControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testStructuredScrollEventsDriveBoundaryStateAndDrainPendingLayout() {
+        let pager = AnchorPagerViewController()
+        pager.dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [ScrollChildViewController()],
+            headerContent: .view(FixedFittingView(height: 100))
+        )
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+
+        pager.handleScrollInteractionEventForTesting(
+            .beganDragging(identifier: 71)
+        )
+        pager.reloadHeaderLayout(offsetAdjustment: .resetToCollapsed)
+        XCTAssertTrue(pager.hasPendingHeaderLayoutRequestForTesting)
+
+        pager.handleScrollInteractionEventForTesting(
+            .enteredTopOverscroll(identifier: 71)
+        )
+        XCTAssertEqual(
+            pager.interactionStateForTesting,
+            .topOverscrolling(identifier: 71)
+        )
+        pager.handleScrollInteractionEventForTesting(
+            .leftTopOverscroll(identifier: 71)
+        )
+        pager.handleScrollInteractionEventForTesting(
+            .finishedDragging(identifier: 71)
+        )
+
+        XCTAssertEqual(pager.interactionStateForTesting, .idle)
+        XCTAssertFalse(pager.hasPendingHeaderLayoutRequestForTesting)
+    }
+
+    @MainActor
+    func testRealVerticalDragKeepsHeaderConfigurationLayoutPending() {
+        var configuration = AnchorPagerConfiguration.default
+        configuration.header.heightMode = .fixed(max: 100, min: 20)
+        let pager = AnchorPagerViewController(configuration: configuration)
+        let dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [ScrollChildViewController()],
+            headerContent: .view(FixedFittingView(height: 100))
+        )
+        pager.dataSource = dataSource
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+        pager.handleVerticalPanForTesting(state: .began, translationY: 0)
+
+        pager.configuration.header.heightMode = .fixed(max: 180, min: 20)
+
+        XCTAssertEqual(
+            pager.interactionStateForTesting,
+            .verticalDragging(identifier: 1)
+        )
+        XCTAssertTrue(pager.hasPendingHeaderLayoutRequestForTesting)
+
+        pager.handleVerticalPanForTesting(state: .ended, translationY: 0)
+
+        XCTAssertEqual(pager.interactionStateForTesting, .idle)
+        XCTAssertFalse(pager.hasPendingHeaderLayoutRequestForTesting)
+    }
+
+    @MainActor
+    func testSizeStatePrecedesRealVerticalCancellationAndKeepsLayoutPending() {
+        let pager = AnchorPagerViewController()
+        let dataSource = StubDataSource(
+            count: 1,
+            viewControllers: [ScrollChildViewController()]
+        )
+        pager.dataSource = dataSource
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+        pager.handleVerticalPanForTesting(state: .began, translationY: 0)
+        pager.reloadHeaderLayout(offsetAdjustment: .resetToCollapsed)
+        let coordinator = ControllableTransitionCoordinator()
+
+        pager.viewWillTransition(
+            to: CGSize(width: 844, height: 390),
+            with: coordinator
+        )
+
+        guard case .transitioningSize = pager.interactionStateForTesting else {
+            return XCTFail("真实 vertical cancel 前必须先建立 size state。")
+        }
+        XCTAssertTrue(pager.hasPendingHeaderLayoutRequestForTesting)
+
+        coordinator.completeTransition()
+
+        XCTAssertEqual(pager.interactionStateForTesting, .idle)
+        XCTAssertFalse(pager.hasPendingHeaderLayoutRequestForTesting)
+    }
+
+    @MainActor
+    func testPagingInteractionAdmissionRejectsConflictWithoutReplacingVerticalState() {
+        let pager = AnchorPagerViewController()
+        XCTAssertTrue(
+            pager.beginInteractionForTesting(.verticalDragging(identifier: 72))
+        )
+        let request = AnchorPagerPagingSelectionRequest(
+            identifier: 9,
+            targetIndex: 1,
+            animated: true,
+            source: .interactive
+        )
+
+        let didAdmit = pager.pagingHost(
+            AnchorPagerPagingHostViewController(),
+            shouldBeginInteractionFor: request
+        )
+
+        XCTAssertFalse(didAdmit)
+        XCTAssertEqual(
+            pager.interactionStateForTesting,
+            .verticalDragging(identifier: 72)
+        )
+    }
+
+    @MainActor
+    func testExplicitSelectionCancelsVerticalDecelerationThenStartsPaging() throws {
+        let pager = AnchorPagerViewController()
+        let dataSource = StubDataSource(
+            count: 2,
+            viewControllers: [
+                ScrollChildViewController(),
+                ScrollChildViewController(),
+            ]
+        )
+        pager.dataSource = dataSource
+        pager.loadViewIfNeeded()
+        pager.reloadData()
+        let host = try XCTUnwrap(installedPagingHost(in: pager))
+        pager.handleScrollInteractionEventForTesting(
+            .beganDragging(identifier: 73)
+        )
+        pager.handleScrollInteractionEventForTesting(
+            .beganDecelerating(identifier: 73)
+        )
+
+        pager.setSelectedIndex(1, animated: true)
+
+        let request = try XCTUnwrap(host.activeSelectionRequestForTesting)
+        XCTAssertEqual(
+            pager.interactionStateForTesting,
+            .programmaticPaging(identifier: request.identifier)
+        )
+    }
+
+    @MainActor
     func testHeaderLayoutCallbackReentryRunsInNextDrainRound() {
         var configuration = AnchorPagerConfiguration.default
         configuration.header.heightMode = .automatic(min: 20, max: nil)
@@ -3390,7 +3539,10 @@ final class AnchorPagerViewControllerTests: XCTestCase {
 
         coordinator.completeTransition()
 
-        XCTAssertEqual(pager.interactionStateForTesting, .idle)
+        XCTAssertEqual(
+            pager.interactionStateForTesting,
+            .programmaticPaging(identifier: activeIdentifier)
+        )
         XCTAssertEqual(
             host.activeSelectionRequestForTesting?.identifier,
             activeIdentifier

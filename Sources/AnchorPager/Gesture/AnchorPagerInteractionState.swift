@@ -37,4 +37,17 @@ extension AnchorPagerInteractionState {
             false
         }
     }
+
+    var isVerticalInteraction: Bool {
+        switch self {
+        case .verticalDragging, .verticalDecelerating, .topOverscrolling:
+            true
+        case .idle,
+             .horizontalPaging,
+             .programmaticPaging,
+             .layoutReloading,
+             .transitioningSize:
+            false
+        }
+    }
 }

@@ -815,29 +815,30 @@ git commit -m "合成纵向跨所有者惯性"
 
 **Files:**
 - Modify: `Sources/AnchorPager/Core/AnchorPagerScrollCoordinator.swift`
+- Modify: `Sources/AnchorPager/Gesture/AnchorPagerInteractionState.swift`
 - Modify: `Sources/AnchorPager/Paging/AnchorPagerPagingHostViewController.swift`
 - Modify: `Sources/AnchorPager/Public/AnchorPagerViewController.swift`
 - Modify: `Tests/AnchorPagerTests/AnchorPagerScrollCoordinatorTests.swift`
 - Modify: `Tests/AnchorPagerTests/AnchorPagerPagingHostViewControllerTests.swift`
 - Modify: `Tests/AnchorPagerTests/AnchorPagerViewControllerTests.swift`
 
-- [ ] **Step 1：写纵向状态事件 RED**
+- [x] **Step 1：写纵向状态事件 RED**
 
 container/current child began → verticalDragging；top pass-through begin → topOverscrolling；回稳定范围 → 同一 pan verticalDragging；ended 启动 monitor/synthetic driver context → verticalDecelerating，否则 idle；driver 速度阈值 finish、cancel/fail/identity change 形成 matching finish/cancel。不得依赖业务 child `scrollViewDidEndDecelerating` 或 `isDecelerating` KVO。
 
-- [ ] **Step 2：写 paging 状态 RED**
+- [x] **Step 2：写 paging 状态 RED**
 
 Host explicit start → programmaticPaging；Pageboy interactive will → horizontalPaging；semantic did/cancel 与 required acknowledgements 全部到达才 finish；size 中 terminal 清 suspended paging；冲突 interactive will 不建立第二 active。
 
-- [ ] **Step 3：写跨域优先级 RED**
+- [x] **Step 3：写跨域优先级 RED**
 
 verticalDragging/topOverscrolling 时 selection/reload/layout 只排队；verticalDecelerating 时 selection/reload/layout 先同步 cancel driver 再 drain；programmatic/horizontal paging 阻塞结构性 reload/layout；size 最高优先。
 
-- [ ] **Step 4：实现结构化 delegate 装配**
+- [x] **Step 4：实现结构化 delegate 装配**
 
 ScrollCoordinator/Host 只向 ViewController 发送 internal interaction lifecycle；ViewController 转交 Interaction Coordinator 并请求统一 drain。任何 coordinator 都不直接调用另一个 specialized coordinator 的 offset/page API。
 
-- [ ] **Step 5：运行集成回归**
+- [x] **Step 5：运行集成回归**
 
 ```bash
 xcodebuild -quiet -scheme AnchorPager \
@@ -848,14 +849,16 @@ xcodebuild -quiet -scheme AnchorPager \
   -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests test
 ```
 
-- [ ] **Step 6：所有权源码扫描、自审并提交**
+- [x] **Step 6：所有权源码扫描、自审并提交**
 
 确认 v0.7 新文件没有业务 `.delegate =`、`.isScrollEnabled =`、`.bounces =`、`.alwaysBounceVertical =`，Public 目录没有 Tabman/Pageboy import。
 
 ```bash
-git add Sources/AnchorPager/Core/AnchorPagerScrollCoordinator.swift Sources/AnchorPager/Paging/AnchorPagerPagingHostViewController.swift Sources/AnchorPager/Public/AnchorPagerViewController.swift Tests/AnchorPagerTests/AnchorPagerScrollCoordinatorTests.swift Tests/AnchorPagerTests/AnchorPagerPagingHostViewControllerTests.swift Tests/AnchorPagerTests/AnchorPagerViewControllerTests.swift
+git add Sources/AnchorPager/Core/AnchorPagerScrollCoordinator.swift Sources/AnchorPager/Gesture/AnchorPagerInteractionState.swift Sources/AnchorPager/Paging/AnchorPagerPagingHostViewController.swift Sources/AnchorPager/Public/AnchorPagerViewController.swift Tests/AnchorPagerTests/AnchorPagerScrollCoordinatorTests.swift Tests/AnchorPagerTests/AnchorPagerPagingHostViewControllerTests.swift Tests/AnchorPagerTests/AnchorPagerViewControllerTests.swift
 git commit -m "装配跨域交互生命周期"
 ```
+
+验收记录：RED 因 vertical/paging 结构化 event 与 delegate 边界缺失而编译失败。首轮 GREEN 暴露把 reload interaction begin 混入 `willPerformReloadRequest` 会破坏该回调既有 provider-generation lease 职责；修复后由 Host 单独发 reload begin/finish/cancel，`willPerform` 恢复只管理 matching generation。ScrollCoordinator 以同一 identifier 发出 drag、top enter/leave、deceleration 与 matching terminal；自审补充的未呈现 top 回稳 RED 修复了 Overscroll owner 已 finish 但 interaction 仍停在 top 的缺口。第二轮自审 RED 又证明 top mode 未变化时取消真实 drag、以及 size state 建立前的 Scroll cancel 可能抢先 drain pending；GREEN 后 same-mode 为 no-op，尺寸入口先建立最高优先 state、暂停 Host，再取消 boundary/driver。PagingHost 只在真实 explicit execution/interactive admission 后 begin，interactive semantic 或 explicit semantic + completion + executor-ready 全部满足后 finish，结构 teardown/adapter reject 才 cancel。ViewController 统一映射事件、暂停 Host execution，并保持 active Pageboy 跨 size 时恢复 matching paging state；vertical deceleration 的 selection/reload/Header/size 路径先同步取消 driver 再按 reload → Header → selection 排空。最终聚焦 Interaction/Scroll/Host/ViewController 226/226、Framework 全量 413/413，均 0 fail、0 skip；结果包分别为 `/private/tmp/AnchorPagerV07Task11FocusedFinal3-20260715-2052.xcresult` 与 `/private/tmp/AnchorPagerV07Task11FrameworkFinal2-20260715-2055.xcresult`，两份均为 0 error、0 warning、0 analyzer warning。新增行扫描对业务 `.delegate =`、`.isScrollEnabled =`、`.bounces =`、`.alwaysBounceVertical =` 零命中，Public 目录 Tabman/Pageboy 零命中。自审确认 Interaction Coordinator 不持有 payload/UIKit/offset，Host 继续独占 reload/selection transaction，Store/provider generation、Pageboy containment、业务 child ownership 与 Scroll/Overscroll writer/policy 边界未改变。
 
 ---
 

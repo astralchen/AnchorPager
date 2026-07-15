@@ -8,8 +8,38 @@ enum AnchorPagerPagingReloadTerminal: Equatable {
     case empty
 }
 
+enum AnchorPagerPagingInteractionEvent: Equatable {
+    case began(AnchorPagerPagingSelectionRequest)
+    case finished(AnchorPagerPagingSelectionRequest)
+    case cancelled(AnchorPagerPagingSelectionRequest)
+}
+
 @MainActor
 protocol AnchorPagerPagingHostViewControllerDelegate: AnyObject {
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
+        shouldBeginReloadInteraction identifier: AnchorPagerPagingReloadRequestIdentifier
+    ) -> Bool
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
+        didFinishReloadInteraction identifier: AnchorPagerPagingReloadRequestIdentifier
+    )
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
+        didCancelReloadInteraction identifier: AnchorPagerPagingReloadRequestIdentifier
+    )
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
+        shouldBeginInteractionFor request: AnchorPagerPagingSelectionRequest
+    ) -> Bool
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
+        didFinishInteractionFor request: AnchorPagerPagingSelectionRequest
+    )
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
+        didCancelInteractionFor request: AnchorPagerPagingSelectionRequest
+    )
     func pagingHost(
         _ host: AnchorPagerPagingHostViewController,
         willPerformReloadRequest identifier: AnchorPagerPagingReloadRequestIdentifier
@@ -42,6 +72,40 @@ protocol AnchorPagerPagingHostViewControllerDelegate: AnyObject {
 }
 
 extension AnchorPagerPagingHostViewControllerDelegate {
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
+        shouldBeginReloadInteraction identifier: AnchorPagerPagingReloadRequestIdentifier
+    ) -> Bool {
+        true
+    }
+
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
+        didFinishReloadInteraction identifier: AnchorPagerPagingReloadRequestIdentifier
+    ) {}
+
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
+        didCancelReloadInteraction identifier: AnchorPagerPagingReloadRequestIdentifier
+    ) {}
+
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
+        shouldBeginInteractionFor request: AnchorPagerPagingSelectionRequest
+    ) -> Bool {
+        true
+    }
+
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
+        didFinishInteractionFor request: AnchorPagerPagingSelectionRequest
+    ) {}
+
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
+        didCancelInteractionFor request: AnchorPagerPagingSelectionRequest
+    ) {}
+
     func pagingHost(
         _ host: AnchorPagerPagingHostViewController,
         willPerformReloadRequest identifier: AnchorPagerPagingReloadRequestIdentifier
@@ -152,6 +216,16 @@ final class AnchorPagerPagingHostViewController: UIViewController {
     @discardableResult
     private func performReload(_ request: ReloadRequest) -> Bool {
         isStartingReloadRequest = true
+        let shouldBeginInteraction = eventDelegate?.pagingHost(
+            self,
+            shouldBeginReloadInteraction: request.identifier
+        ) ?? true
+        guard shouldBeginInteraction else {
+            isStartingReloadRequest = false
+            pendingReloadRequest = request
+            AnchorPagerLogger.log(.debug, category: .paging, event: "paging.reload.deferred")
+            return false
+        }
         let shouldPerform = eventDelegate?.pagingHost(
             self,
             willPerformReloadRequest: request.identifier
@@ -159,6 +233,10 @@ final class AnchorPagerPagingHostViewController: UIViewController {
         isStartingReloadRequest = false
 
         guard shouldPerform else {
+            eventDelegate?.pagingHost(
+                self,
+                didCancelReloadInteraction: request.identifier
+            )
             AnchorPagerLogger.log(.debug, category: .paging, event: "paging.reload.stale")
             requestDeferredWorkDrain()
             return false
@@ -171,6 +249,10 @@ final class AnchorPagerPagingHostViewController: UIViewController {
             guard removeActiveAdapterIfNeeded(pendingRequestOnFailure: request) else {
                 activeReloadRequest = nil
                 activeReloadFinalBarInsets = nil
+                eventDelegate?.pagingHost(
+                    self,
+                    didCancelReloadInteraction: request.identifier
+                )
                 requestDeferredWorkDrain()
                 return false
             }
@@ -339,6 +421,16 @@ final class AnchorPagerPagingHostViewController: UIViewController {
             AnchorPagerLogger.log(.debug, category: .paging, event: "paging.selection.reject")
             return false
         }
+        guard eventDelegate?.pagingHost(
+            self,
+            shouldBeginInteractionFor: request
+        ) ?? true else {
+            if request.source.isExplicit {
+                pendingExplicitSelectionRequest = request
+            }
+            AnchorPagerLogger.log(.debug, category: .paging, event: "paging.selection.reject")
+            return request.source.isExplicit
+        }
         let previousIndex = committedSelectionIndex ?? adapter.currentIndex ?? request.targetIndex
         activeSelectionTransaction = AnchorPagerPagingSelectionTransaction(
             request: request,
@@ -352,6 +444,10 @@ final class AnchorPagerPagingHostViewController: UIViewController {
                 activeSelectionTransaction = nil
                 forwardedWillSelectRequestIdentifier = nil
             }
+            eventDelegate?.pagingHost(
+                self,
+                didCancelInteractionFor: request
+            )
             AnchorPagerLogger.log(.debug, category: .paging, event: "paging.selection.reject")
             requestDeferredWorkDrain()
             return false
@@ -444,6 +540,10 @@ final class AnchorPagerPagingHostViewController: UIViewController {
         activeSelectionTransaction = nil
         forwardedWillSelectRequestIdentifier = nil
         pendingExplicitSelectionRequest = nil
+        eventDelegate?.pagingHost(
+            self,
+            didCancelInteractionFor: transaction.request
+        )
         AnchorPagerLogger.log(
             .debug,
             category: .paging,
@@ -477,6 +577,17 @@ final class AnchorPagerPagingHostViewController: UIViewController {
         ) ?? true
         activeReloadRequest = nil
         activeReloadFinalBarInsets = nil
+        if didCommitTerminal {
+            eventDelegate?.pagingHost(
+                self,
+                didFinishReloadInteraction: request.identifier
+            )
+        } else {
+            eventDelegate?.pagingHost(
+                self,
+                didCancelReloadInteraction: request.identifier
+            )
+        }
         if didCommitTerminal {
             lastReportedBarInsets = finalBarInsets
             switch terminal {
@@ -541,6 +652,12 @@ extension AnchorPagerPagingHostViewController: AnchorPagerPagingAdapterDelegate 
             animated: animated,
             source: .interactive
         )
+        guard eventDelegate?.pagingHost(
+            self,
+            shouldBeginInteractionFor: request
+        ) ?? true else {
+            return nil
+        }
         activeSelectionTransaction = AnchorPagerPagingSelectionTransaction(
             request: request,
             previousIndex: committedSelectionIndex ?? adapter.currentIndex ?? index,
@@ -804,9 +921,14 @@ extension AnchorPagerPagingHostViewController: AnchorPagerPagingAdapterDelegate 
     }
 
     private func finishActiveSelectionIfReady() {
-        guard activeSelectionTransaction?.isReadyToFinish == true else { return }
+        guard let transaction = activeSelectionTransaction,
+              transaction.isReadyToFinish else { return }
         activeSelectionTransaction = nil
         forwardedWillSelectRequestIdentifier = nil
+        eventDelegate?.pagingHost(
+            self,
+            didFinishInteractionFor: transaction.request
+        )
         requestDeferredWorkDrain()
     }
 

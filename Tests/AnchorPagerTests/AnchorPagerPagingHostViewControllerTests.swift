@@ -415,6 +415,86 @@ final class AnchorPagerPagingHostViewControllerTests: XCTestCase {
         )
     }
 
+    func testProgrammaticInteractionFinishesOnlyAfterAllAcknowledgements() throws {
+        let host = makeHost()
+        let delegate = RecordingPagingHostDelegate()
+        host.eventDelegate = delegate
+        host.reload(titles: ["A", "B"], pageCount: 2, selectedIndex: 0)
+        let adapter = try XCTUnwrap(host.activeAdapter)
+        delegate.interactionEvents.removeAll()
+
+        XCTAssertTrue(host.enqueueSelection(index: 1, animated: true, source: .api))
+        let request = try XCTUnwrap(host.activeSelectionRequestForTesting)
+        XCTAssertEqual(delegate.interactionEvents, [.began(request)])
+
+        host.pagingAdapter(
+            adapter,
+            didSelect: 1,
+            animated: true,
+            requestIdentifier: request.identifier
+        )
+        host.pagingAdapter(
+            adapter,
+            didComplete: request.identifier,
+            finished: true,
+            currentIndex: 1
+        )
+        XCTAssertEqual(delegate.interactionEvents, [.began(request)])
+
+        host.pagingAdapter(adapter, executorDidBecomeReadyFor: request.identifier)
+
+        XCTAssertEqual(delegate.interactionEvents, [.began(request), .finished(request)])
+    }
+
+    func testRejectedInteractiveInteractionDoesNotCreateHostTransaction() throws {
+        let host = makeHost()
+        let delegate = RecordingPagingHostDelegate()
+        host.eventDelegate = delegate
+        host.reload(titles: ["A", "B"], pageCount: 2, selectedIndex: 0)
+        let adapter = try XCTUnwrap(host.activeAdapter)
+        delegate.acceptsInteractionBegin = false
+        delegate.interactionEvents.removeAll()
+
+        let identifier = host.pagingAdapter(
+            adapter,
+            didBeginInteractiveSelectionAt: 1,
+            animated: true
+        )
+
+        XCTAssertNil(identifier)
+        XCTAssertNil(host.activeSelectionRequestForTesting)
+        XCTAssertEqual(delegate.interactionEvents.count, 1)
+        guard case .began(let request) = delegate.interactionEvents[0] else {
+            return XCTFail("应记录一次 interactive admission 尝试")
+        }
+        XCTAssertEqual(request.source, .interactive)
+    }
+
+    func testStructuralSelectionCancelEmitsMatchingInteractionCancel() throws {
+        let host = makeHost()
+        let delegate = RecordingPagingHostDelegate()
+        host.eventDelegate = delegate
+        host.reload(titles: ["A", "B"], pageCount: 2, selectedIndex: 0)
+        let adapter = try XCTUnwrap(host.activeAdapter)
+        let identifier = try XCTUnwrap(host.pagingAdapter(
+            adapter,
+            didBeginInteractiveSelectionAt: 1,
+            animated: true
+        ))
+        let request = try XCTUnwrap(host.activeSelectionRequestForTesting)
+        XCTAssertEqual(request.identifier, identifier)
+        XCTAssertEqual(request.source, .interactive)
+        delegate.interactionEvents.removeAll()
+
+        host.reload(
+            titles: [],
+            pageCount: 0,
+            selectedIndex: 0
+        )
+
+        XCTAssertTrue(delegate.interactionEvents.contains(.cancelled(request)))
+    }
+
     func testInteractiveSelectionUsesOneTransactionAndCancelDoesNotCommit() throws {
         let host = makeHost()
         let delegate = RecordingPagingHostDelegate()
@@ -460,6 +540,38 @@ final class AnchorPagerPagingHostViewControllerTests: XCTestCase {
         XCTAssertNil(host.activeSelectionRequestForTesting)
         XCTAssertEqual(host.committedSelectionIndexForTesting, 0)
         XCTAssertEqual(delegate.events, [.willSelect(1, true), .didCancel(1, 0)])
+        XCTAssertEqual(delegate.interactionEvents, [
+            .began(.init(
+                identifier: identifier,
+                targetIndex: 1,
+                animated: true,
+                source: .interactive
+            )),
+            .finished(.init(
+                identifier: identifier,
+                targetIndex: 1,
+                animated: true,
+                source: .interactive
+            )),
+        ])
+    }
+
+    func testReloadInteractionWrapsProviderAndSemanticTerminal() {
+        let host = makeHost()
+        let delegate = RecordingPagingHostDelegate()
+        host.eventDelegate = delegate
+
+        host.reload(
+            requestIdentifier: 7,
+            titles: ["A"],
+            pageCount: 1,
+            selectedIndex: 0
+        )
+
+        XCTAssertEqual(delegate.reloadInteractionEvents, [
+            .began(7),
+            .finished(7),
+        ])
     }
 
     func testProgrammaticCompletionRecoversMissingSemanticTerminal() throws {
@@ -1311,6 +1423,12 @@ private final class RecordingRequestPagingHostDelegate: AnchorPagerPagingHostVie
 
 @MainActor
 private final class RecordingPagingHostDelegate: AnchorPagerPagingHostViewControllerDelegate {
+    enum ReloadInteractionEvent: Equatable {
+        case began(AnchorPagerPagingReloadRequestIdentifier)
+        case finished(AnchorPagerPagingReloadRequestIdentifier)
+        case cancelled(AnchorPagerPagingReloadRequestIdentifier)
+    }
+
     enum Event: Equatable {
         case reload(AnchorPagerPagingReloadTerminal)
         case willSelect(Int, Bool)
@@ -1327,6 +1445,9 @@ private final class RecordingPagingHostDelegate: AnchorPagerPagingHostViewContro
     }
 
     var events: [Event] = []
+    var interactionEvents: [AnchorPagerPagingInteractionEvent] = []
+    var reloadInteractionEvents: [ReloadInteractionEvent] = []
+    var acceptsInteractionBegin = true
     var terminalSnapshots: [TerminalSnapshot] = []
     var reloadFinalBarInsets: [UIEdgeInsets] = []
     var onWillSelect: ((AnchorPagerPagingHostViewController, Int, Bool) -> Void)?
@@ -1334,6 +1455,50 @@ private final class RecordingPagingHostDelegate: AnchorPagerPagingHostViewContro
     var onWillPerformReload: ((AnchorPagerPagingHostViewController) -> Void)?
     var reloadWillPerformCount = 0
     weak var observedPage: UIViewController?
+
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
+        shouldBeginReloadInteraction identifier: AnchorPagerPagingReloadRequestIdentifier
+    ) -> Bool {
+        reloadInteractionEvents.append(.began(identifier))
+        return true
+    }
+
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
+        didFinishReloadInteraction identifier: AnchorPagerPagingReloadRequestIdentifier
+    ) {
+        reloadInteractionEvents.append(.finished(identifier))
+    }
+
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
+        didCancelReloadInteraction identifier: AnchorPagerPagingReloadRequestIdentifier
+    ) {
+        reloadInteractionEvents.append(.cancelled(identifier))
+    }
+
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
+        shouldBeginInteractionFor request: AnchorPagerPagingSelectionRequest
+    ) -> Bool {
+        interactionEvents.append(.began(request))
+        return acceptsInteractionBegin
+    }
+
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
+        didFinishInteractionFor request: AnchorPagerPagingSelectionRequest
+    ) {
+        interactionEvents.append(.finished(request))
+    }
+
+    func pagingHost(
+        _ host: AnchorPagerPagingHostViewController,
+        didCancelInteractionFor request: AnchorPagerPagingSelectionRequest
+    ) {
+        interactionEvents.append(.cancelled(request))
+    }
 
     func pagingHost(
         _ host: AnchorPagerPagingHostViewController,

@@ -1249,6 +1249,129 @@ final class AnchorPagerScrollCoordinatorTests: XCTestCase {
         )
     }
 
+    func testStructuredInteractionEventsFollowDragTopBoundaryAndStableFinish() {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        let delegate = RecordingScrollInteractionDelegate()
+        fixture.coordinator.interactionDelegate = delegate
+
+        fixture.coordinator.handlePan(
+            source: .container,
+            state: .began,
+            translationY: 0,
+            velocityY: 0
+        )
+        fixture.container.contentOffset.y = -20
+        fixture.coordinator.containerDidScroll()
+        fixture.container.contentOffset.y = 0
+        fixture.coordinator.containerDidScroll()
+        fixture.coordinator.handlePan(
+            source: .container,
+            state: .ended,
+            translationY: 20,
+            velocityY: 0
+        )
+
+        XCTAssertEqual(delegate.events, [
+            .beganDragging(identifier: 1),
+            .enteredTopOverscroll(identifier: 1),
+            .leftTopOverscroll(identifier: 1),
+            .finishedDragging(identifier: 1),
+        ])
+    }
+
+    func testUnpresentedTopBoundaryStillReturnsInteractionToDragging() {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        let delegate = RecordingScrollInteractionDelegate()
+        fixture.coordinator.interactionDelegate = delegate
+
+        fixture.coordinator.handlePan(
+            source: .container,
+            state: .began,
+            translationY: 0,
+            velocityY: 0
+        )
+        fixture.coordinator.handlePan(
+            source: .container,
+            state: .changed,
+            translationY: 20,
+            velocityY: 0
+        )
+        fixture.coordinator.handlePan(
+            source: .container,
+            state: .changed,
+            translationY: 0,
+            velocityY: 0
+        )
+        fixture.coordinator.handlePan(
+            source: .container,
+            state: .ended,
+            translationY: 0,
+            velocityY: 0
+        )
+
+        XCTAssertEqual(delegate.events, [
+            .beganDragging(identifier: 1),
+            .enteredTopOverscroll(identifier: 1),
+            .leftTopOverscroll(identifier: 1),
+            .finishedDragging(identifier: 1),
+        ])
+    }
+
+    func testStructuredInteractionEventsKeepDecelerationIdentifierUntilFinish() throws {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        let delegate = RecordingScrollInteractionDelegate()
+        fixture.coordinator.interactionDelegate = delegate
+        fixture.container.contentOffset.y = 40
+
+        fixture.startDeceleration(source: .container, velocityY: -1_000)
+        let driver = try XCTUnwrap(fixture.decelerationDrivers.drivers.first)
+
+        XCTAssertEqual(delegate.events, [
+            .beganDragging(identifier: 1),
+            .beganDecelerating(identifier: 1),
+        ])
+
+        driver.emit(.init(delta: 1, velocity: 4, isFinished: true))
+
+        XCTAssertEqual(delegate.events.last, .finishedDecelerating(identifier: 1))
+    }
+
+    func testNewPanCancelsOldDecelerationBeforeBeginningNewInteraction() throws {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        let delegate = RecordingScrollInteractionDelegate()
+        fixture.coordinator.interactionDelegate = delegate
+        fixture.container.contentOffset.y = 40
+        fixture.startDeceleration(source: .container, velocityY: -1_000)
+        _ = try XCTUnwrap(fixture.decelerationDrivers.drivers.first)
+
+        fixture.coordinator.handlePan(
+            source: .container,
+            state: .began,
+            translationY: 0,
+            velocityY: 0
+        )
+
+        XCTAssertEqual(Array(delegate.events.suffix(2)), [
+            .cancelled(identifier: 1),
+            .beganDragging(identifier: 2),
+        ])
+    }
+
+    func testCommittedIdentityChangeCancelsMatchingDecelerationInteraction() throws {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        let delegate = RecordingScrollInteractionDelegate()
+        fixture.coordinator.interactionDelegate = delegate
+        fixture.container.contentOffset.y = 40
+        fixture.startDeceleration(source: .container, velocityY: -1_000)
+        _ = try XCTUnwrap(fixture.decelerationDrivers.drivers.first)
+
+        fixture.coordinator.bindCommittedChild(
+            fixture.makeChild(maximumDistance: 300)
+        )
+
+        XCTAssertEqual(delegate.events.last, .cancelled(identifier: 1))
+    }
+
     func testInvalidateEmitsOneBindingAndResourceReleaseEvent() {
         let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
         var events: [AnchorPagerLogger.Event] = []
@@ -1398,5 +1521,18 @@ private final class RecordingDecelerationDriver: AnchorPagerVerticalDeceleration
         _ sample: AnchorPagerVerticalDecelerationModel.Sample
     ) {
         onTick?(sample)
+    }
+}
+
+@MainActor
+private final class RecordingScrollInteractionDelegate:
+    AnchorPagerScrollCoordinatorInteractionDelegate {
+    private(set) var events: [AnchorPagerVerticalInteractionEvent] = []
+
+    func scrollCoordinator(
+        _ coordinator: AnchorPagerScrollCoordinator,
+        didEmit event: AnchorPagerVerticalInteractionEvent
+    ) {
+        events.append(event)
     }
 }
