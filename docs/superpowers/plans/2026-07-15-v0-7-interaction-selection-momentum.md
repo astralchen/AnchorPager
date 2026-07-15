@@ -8,7 +8,7 @@
 
 **Tech Stack:** Swift 6.2、Swift 6 language mode、UIKit、iOS 14+、Swift Package Manager、Tabman 4.0.1、Pageboy 5.0.2、XCTest/XCUITest、Xcode 26.6、iPhone 17 Pro / iOS 26.5 Simulator。
 
-**当前状态：** 专项设计与 Pageboy executor-ready 补充契约已确认；用户已复核并授权实施。Task 0–4 已完成，正在继续建立单一 Interaction State。
+**当前状态：** 专项设计与 Pageboy executor-ready 补充契约已确认；用户已复核并授权实施。Task 0–5 已完成，正在继续装配 reload/layout/selection/size 统一 drain。
 
 ## Global Constraints
 
@@ -449,19 +449,19 @@ final class AnchorPagerInteractionCoordinator {
 
 实现可使用 internal suspended state 保存 size preemption 前的 programmatic/horizontal/layout transaction；不得把 suspended page/index/provider 存入 coordinator。
 
-- [ ] **Step 1：写全部状态 RED**
+- [x] **Step 1：写全部状态 RED**
 
 逐一覆盖 idle、verticalDragging、verticalDecelerating、horizontalPaging、programmaticPaging、topOverscrolling、layoutReloading、transitioningSize 的 begin/update/finish/cancel；matching identifier 才能结束；duplicate 幂等；非法低优先级 begin 不覆盖高优先级状态。
 
-- [ ] **Step 2：写 size suspension RED**
+- [x] **Step 2：写 size suspension RED**
 
 programmatic/horizontal/layout active 时 size begin 进入 transitioningSize；原 transaction 在 size 内 terminal 时清除 suspended resume；size finish 后恢复仍 active 的 paging，否则 idle 并发出一次 drain-ready。
 
-- [ ] **Step 3：写日志 RED**
+- [x] **Step 3：写日志 RED**
 
 通过注入 sink 精确验证 `interaction.state.begin/updateBoundary/finish/cancel/invalidTransition`；identifier、index、velocity、geometry 不得进入 event 名或消息正文；重复非法 callback 不刷屏。
 
-- [ ] **Step 4：运行 RED/GREEN**
+- [x] **Step 4：运行 RED/GREEN**
 
 ```bash
 xcodebuild -quiet -scheme AnchorPager \
@@ -470,12 +470,14 @@ xcodebuild -quiet -scheme AnchorPager \
   -only-testing:AnchorPagerTests/AnchorPagerLoggerTests test
 ```
 
-- [ ] **Step 5：自审并提交**
+- [x] **Step 5：自审并提交**
 
 ```bash
-git add Sources/AnchorPager/Gesture/AnchorPagerInteractionState.swift Sources/AnchorPager/Gesture/AnchorPagerInteractionCoordinator.swift Tests/AnchorPagerTests/AnchorPagerInteractionCoordinatorTests.swift Tests/AnchorPagerTests/AnchorPagerLoggerTests.swift
+git add Sources/AnchorPager/Gesture/AnchorPagerInteractionState.swift Sources/AnchorPager/Gesture/AnchorPagerInteractionCoordinator.swift Tests/AnchorPagerTests/AnchorPagerInteractionCoordinatorTests.swift Tests/AnchorPagerTests/AnchorPagerLoggerTests.swift docs/architecture.md docs/task-list.md docs/superpowers/plans/2026-07-15-v0-7-interaction-selection-momentum.md
 git commit -m "建立统一交互状态机"
 ```
+
+验收记录：RED 因 `AnchorPagerInteractionState` 与 `AnchorPagerInteractionCoordinator` 缺失而编译失败。GREEN 覆盖八种 state、matching identifier、vertical drag/top/deceleration 边界、paging/layout begin/finish/cancel、重复幂等、低优先级非法 begin、size 抢占与 programmatic/horizontal/layout suspended resume、size 内 terminal 清除 resume，以及最近一次非法转换日志去重。Interaction + Logger 聚焦 15/15、Framework 全量 353/353，均 0 fail、0 skip；结果包分别为 `/private/tmp/AnchorPagerV07Task5InteractionFinal-20260715-1912.xcresult` 与 `/private/tmp/AnchorPagerV07Task5FrameworkFull-20260715-1915.xcresult`。自审确认 state 是纯 `Sendable` 值类型，Coordinator 仅保存 state/suspended state/非法转换去重键，不持有 UIKit、page、provider、Store、index payload、geometry 或 offset；日志只有固定事件名且不含 identifier。Host/ViewController/Scroll 装配仍留在 Task 6。
 
 ---
 

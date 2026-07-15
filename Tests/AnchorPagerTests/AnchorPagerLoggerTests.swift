@@ -120,4 +120,22 @@ final class AnchorPagerLoggerTests: XCTestCase {
         XCTAssertEqual(events.map(\.category), [.layout, .resource])
         XCTAssertEqual(events.map(\.event), ["layout.measured", "resource.release_failed"])
     }
+
+    @MainActor
+    func testInteractionCoordinatorLogsDoNotContainRuntimeIdentifier() {
+        let coordinator = AnchorPagerInteractionCoordinator()
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+
+        XCTAssertTrue(coordinator.begin(.programmaticPaging(identifier: 9_876)))
+        XCTAssertTrue(coordinator.finish(.programmaticPaging(identifier: 9_876)))
+
+        XCTAssertEqual(events.map(\.event), [
+            "interaction.state.begin",
+            "interaction.state.finish",
+        ])
+        XCTAssertFalse(events.contains { $0.event.contains("9876") })
+        XCTAssertTrue(events.allSatisfy { $0.category == .gesture })
+    }
 }

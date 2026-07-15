@@ -533,21 +533,21 @@
 - [ ] Adapter 建立可撤销 Pageboy paging surface/pan observation，不替换第三方 scroll/pan delegate
 - [x] 动画 programmatic completion 与 Pageboy executor-ready 分离，禁止在 completion 调用栈内 drain latest selection
 - [x] Adapter 覆写 Pageboy open `isUserInteractionEnabled`，恢复为 true 后只 acknowledgement matching executor-ready identifier
-- [ ] 创建 `Sources/AnchorPager/Gesture/AnchorPagerInteractionState.swift`
-- [ ] 创建 `Sources/AnchorPager/Gesture/AnchorPagerInteractionCoordinator.swift`
+- [x] 创建 `Sources/AnchorPager/Gesture/AnchorPagerInteractionState.swift`
+- [x] 创建 `Sources/AnchorPager/Gesture/AnchorPagerInteractionCoordinator.swift`
 - [ ] 创建 `Sources/AnchorPager/Gesture/AnchorPagerGesturePriorityCoordinator.swift`，只安装 public failure relation
-- [ ] 定义 idle
-- [ ] 定义 verticalDragging
-- [ ] 定义 verticalDecelerating
-- [ ] 定义 horizontalPaging
-- [ ] 定义 programmaticPaging
-- [ ] 定义 topOverscrolling
-- [ ] 定义 layoutReloading
-- [ ] 定义 transitioningSize
-- [ ] 每个状态实现 begin 路径
-- [ ] 每个状态实现 update 路径
-- [ ] 每个状态实现 finish 路径
-- [ ] 每个状态实现 cancel 路径
+- [x] 定义 idle
+- [x] 定义 verticalDragging
+- [x] 定义 verticalDecelerating
+- [x] 定义 horizontalPaging
+- [x] 定义 programmaticPaging
+- [x] 定义 topOverscrolling
+- [x] 定义 layoutReloading
+- [x] 定义 transitioningSize
+- [x] 每个状态实现 begin 路径
+- [x] 每个状态实现 update 路径
+- [x] 每个状态实现 finish 路径
+- [x] 每个状态实现 cancel 路径
 - [x] 统一 setSelectedIndex selection commit/cancel
 - [x] 统一分段栏点击 selection commit/cancel
 - [x] 统一横向滑动 selection commit/cancel
