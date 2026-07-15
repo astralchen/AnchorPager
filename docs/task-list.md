@@ -521,10 +521,18 @@
 
 ## v0.7：手势与交互状态机版
 
+- [x] 完成 AnchorPager/Tabman 4.0.1/Pageboy 5.0.2 源码审查，确认连续非动画选择窗口、Tabman bar 默认旁路、Pageboy delegate ownership 和 paging surface 内部观察边界
+- [x] 确认 v0.7 专项设计：Host 统一 active/latest pending selection request，Adapter 只执行第三方分页，Interaction Coordinator 只做跨域仲裁，Scroll/Overscroll 保持唯一 offset/policy owner
+- [ ] 完成 v0.7 详细实施计划并由用户复核
 - [ ] 复用 v0.5 已建立的 current container/current child 最小纵向 simultaneous recognition，不重复建立第二套纵向 handoff
-- [ ] 扩展 PagingHost 现有单一 request/selection transaction，不建立第二套 generation owner 或旁路 terminal
+- [ ] 先以 RED 覆盖同一调用栈连续 `animated: false` 的 Pageboy 假接受/无 completion 窗口
+- [ ] PagingHost 建立一笔 active + 一笔 latest pending selection request，不建立第二套 generation owner 或旁路 terminal
+- [ ] selection request 使用 Host 单调 identifier，并区分 api、bar、interactive source
+- [ ] Adapter 覆写 Tabman bar 请求入口，禁止 bar 点击旁路 Host transaction
+- [ ] Adapter 建立可撤销 Pageboy paging surface/pan observation，不替换第三方 scroll/pan delegate
 - [ ] 创建 `Sources/AnchorPager/Gesture/AnchorPagerInteractionState.swift`
-- [ ] 创建 `Sources/AnchorPager/Gesture/AnchorPagerGestureCoordinator.swift`
+- [ ] 创建 `Sources/AnchorPager/Gesture/AnchorPagerInteractionCoordinator.swift`
+- [ ] 创建 `Sources/AnchorPager/Gesture/AnchorPagerGesturePriorityCoordinator.swift`，只安装 public failure relation
 - [ ] 定义 idle
 - [ ] 定义 verticalDragging
 - [ ] 定义 verticalDecelerating
@@ -542,20 +550,30 @@
 - [ ] 统一横向滑动 selection commit/cancel
 - [ ] selectedIndex 只在确认完成后提交
 - [ ] 非相邻页面切换使用 source/target 过渡语义
-- [ ] 快速连续 setSelectedIndex 不被旧 completion 覆盖
+- [ ] 快速连续 setSelectedIndex/bar 点击使用 active + latest pending，旧 completion 不清除新请求
+- [ ] active 期间请求 committed source index 仍作为有效 latest intent
 - [ ] reloadData 非 idle 时执行 cancel 或延迟合并
 - [ ] reloadHeaderLayout 非 idle 时执行 cancel 或延迟合并
+- [ ] container/child pan 结束时记录 velocity 和 deceleration rate，不占用业务 delegate
+- [ ] 创建纯衰减计算与 `CADisplayLink` 驱动的 internal vertical deceleration driver
+- [ ] container-to-child 跨 owner 剩余 velocity 合成
+- [ ] child-to-container 跨 owner 剩余 velocity 合成
+- [ ] 新手势、selection、reload、layout、尺寸变化和 identity 变化同步取消 synthetic deceleration
 - [ ] 系统返回手势优先级明确
 - [ ] child 横向 content scroll 手势优先级明确
+- [ ] Pageboy paging pan 对 interactive-pop 和具备横向范围的 committed current child pan 建立失败依赖
 - [ ] 为 interaction state begin 加入 gesture 日志
 - [ ] 为重要 update 边界加入 gesture 日志
 - [ ] 为 finish 和 cancel 加入 gesture 日志
 - [ ] 为非法 transition 忽略加入 gesture 日志
 - [ ] 测试 paging cancel 不提交 selectedIndex
 - [ ] 测试快速连续 setSelectedIndex
+- [ ] 测试连续 bar 点击与 API/bar 混合 latest pending
 - [ ] 测试非相邻页面切换
+- [ ] 测试双向跨 owner 惯性连续且保持唯一 offset writer/owner
 - [ ] 测试横向分页与纵向拖拽竞争
 - [ ] 测试系统返回手势与横向分页手势优先级
+- [ ] 使用真实横向业务 scroll child 验证 child/Pageboy 优先级和 delegate 身份不变
 
 ## v0.8：状态栏点击与尺寸变化版
 
