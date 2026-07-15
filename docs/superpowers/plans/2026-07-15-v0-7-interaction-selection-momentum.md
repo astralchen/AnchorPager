@@ -8,7 +8,7 @@
 
 **Tech Stack:** Swift 6.2、Swift 6 language mode、UIKit、iOS 14+、Swift Package Manager、Tabman 4.0.1、Pageboy 5.0.2、XCTest/XCUITest、Xcode 26.6、iPhone 17 Pro / iOS 26.5 Simulator。
 
-**当前状态：** 专项设计与 Pageboy executor-ready 补充契约已确认；用户已复核并授权实施。Task 0–2 已完成，正在继续执行 Host selection transaction。
+**当前状态：** 专项设计与 Pageboy executor-ready 补充契约已确认；用户已复核并授权实施。Task 0–3 已完成，正在继续统一 selection/reload terminal 串行。
 
 ## Global Constraints
 
@@ -325,19 +325,19 @@ func performPendingSelectionIfPossible() -> Bool
 
 Host 新增单调 `nextSelectionRequestIdentifier`、`activeSelectionTransaction`、`pendingExplicitSelectionRequest` 和 committed index；testing 只读状态可返回值快照，不能暴露到 Public API。
 
-- [ ] **Step 1：写 Host admission RED**
+- [x] **Step 1：写 Host admission RED**
 
 覆盖：无 active 时开始 API；active 时 C 入 pending、D 替换 C；重复 active target 不建 pending；active B 时请求 committed A 是有效 pending；越界/reload pending 拒绝；bar 与 API 使用同一 identifier 递增序列。
 
-- [ ] **Step 2：写 matching terminal RED**
+- [x] **Step 2：写 matching terminal RED**
 
 覆盖：did-select 立即转发 ViewController/Store 一次，但 active 直到 completion/ready 才释放；cancel 不提交 selection；duplicate/stale/out-of-order identifier、target、adapter identity 均不释放 active；completion missing semantic 按 Adapter current index recovery。
 
-- [ ] **Step 3：写真实中间页提交 RED**
+- [x] **Step 3：写真实中间页提交 RED**
 
 模拟 `A -> B` active、D pending；B semantic terminal 必须先转发 `.didSelect(B)`，三项确认齐全后才直接执行 `B -> D`，不逐页经过 C，不允许 B 的旧 callback 清除 D。
 
-- [ ] **Step 4：运行 RED**
+- [x] **Step 4：运行 RED**
 
 ```bash
 xcodebuild -quiet -scheme AnchorPager \
@@ -345,11 +345,11 @@ xcodebuild -quiet -scheme AnchorPager \
   -only-testing:AnchorPagerTests/AnchorPagerPagingHostViewControllerTests test
 ```
 
-- [ ] **Step 5：实现 Host queue 与 identifier matching**
+- [x] **Step 5：实现 Host queue 与 identifier matching**
 
 Host 创建 request 后才调用 `executeSelection`；Adapter false 形成 rejected-before-start，不提交 Store，结束 matching active 后继续评估最新请求。Host 不持有 page controller、provider generation、scroll target 或 offset。
 
-- [ ] **Step 6：运行 Host + Adapter 聚焦回归**
+- [x] **Step 6：运行 Host + Adapter 聚焦回归**
 
 ```bash
 xcodebuild -quiet -scheme AnchorPager \
@@ -358,12 +358,14 @@ xcodebuild -quiet -scheme AnchorPager \
   -only-testing:AnchorPagerTests/AnchorPagerPagingAdapterTests test
 ```
 
-- [ ] **Step 7：自审并提交**
+- [x] **Step 7：自审并提交**
 
 ```bash
-git add Sources/AnchorPager/Paging/AnchorPagerPagingHostViewController.swift Tests/AnchorPagerTests/AnchorPagerPagingHostViewControllerTests.swift
+git add Sources/AnchorPager/Paging/AnchorPagerPagingHostViewController.swift Tests/AnchorPagerTests/AnchorPagerPagingHostViewControllerTests.swift docs/architecture.md docs/task-list.md docs/superpowers/plans/2026-07-15-v0-7-interaction-selection-momentum.md
 git commit -m "统一分页选择请求所有权"
 ```
+
+验收记录：RED 因缺少 `enqueueSelection`、active/latest 与 committed index 快照而编译失败。GREEN 覆盖 API/bar 共用单调 identifier、active + latest replacement、committed 返回意图、interactive duplicate/cancel、matching semantic/completion/ready、out-of-order ready、missing semantic select/cancel recovery、旧 adapter/identifier/target 隔离，以及真实非动画 Pageboy updater 的中间页先提交/最新目标后启动。Host + Adapter 联合回归 64/64、0 fail、0 skip，结果包为 `/private/tmp/AnchorPagerV07Task3HostAdapterFinal-20260715-1720.xcresult`；Framework 全量 342/342、0 fail、0 skip，结果包为 `/private/tmp/AnchorPagerV07Task3FrameworkFull-20260715-1728.xcresult`。自审确认 Host 未持有 page controller、provider generation、scroll target 或 offset；Adapter queue、Public API、containment、appearance 与业务 child ownership 均未改变。selection/reload 交叉的 pending generation 丢弃和统一优先 drain 仍留在 Task 4。
 
 ---
 

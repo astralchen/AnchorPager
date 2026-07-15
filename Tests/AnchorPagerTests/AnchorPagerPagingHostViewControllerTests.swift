@@ -169,9 +169,29 @@ final class AnchorPagerPagingHostViewControllerTests: XCTestCase {
         delegate.events.removeAll()
         delegate.terminalSnapshots.removeAll()
 
-        host.pagingAdapter(adapter, willSelect: 1, animated: true)
-        host.pagingAdapter(adapter, didSelect: 1, animated: true)
-        host.pagingAdapter(adapter, didCancelSelectionAt: 1, returningTo: 0)
+        let requestIdentifier = try XCTUnwrap(host.pagingAdapter(
+            adapter,
+            didBeginInteractiveSelectionAt: 1,
+            animated: true
+        ))
+        host.pagingAdapter(
+            adapter,
+            willSelect: 1,
+            animated: true,
+            requestIdentifier: requestIdentifier
+        )
+        host.pagingAdapter(
+            adapter,
+            didSelect: 1,
+            animated: true,
+            requestIdentifier: requestIdentifier
+        )
+        host.pagingAdapter(
+            adapter,
+            didCancelSelectionAt: 1,
+            returningTo: 0,
+            requestIdentifier: requestIdentifier
+        )
         host.pagingAdapter(
             adapter,
             didReloadAt: 1,
@@ -181,7 +201,7 @@ final class AnchorPagerPagingHostViewControllerTests: XCTestCase {
 
         XCTAssertEqual(
             delegate.events,
-            [.willSelect(1, true), .didSelect(1, true), .didCancel(1, 0)]
+            [.willSelect(1, true), .didSelect(1, true)]
         )
     }
 
@@ -200,6 +220,297 @@ final class AnchorPagerPagingHostViewControllerTests: XCTestCase {
 
         let emptyHost = AnchorPagerPagingHostViewController()
         XCTAssertFalse(emptyHost.setSelectedIndex(0, animated: false))
+    }
+
+    func testExplicitSelectionAdmissionKeepsOneActiveAndLatestPendingIntent() throws {
+        let host = makeHost()
+        host.reload(titles: ["A", "B", "C", "D"], pageCount: 4, selectedIndex: 0)
+        var logEvents: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { logEvents.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+
+        XCTAssertTrue(host.enqueueSelection(index: 1, animated: true, source: .api))
+        XCTAssertEqual(host.activeSelectionRequestForTesting?.identifier, 1)
+        XCTAssertEqual(host.activeSelectionRequestForTesting?.targetIndex, 1)
+        XCTAssertNil(host.pendingExplicitSelectionRequestForTesting)
+
+        XCTAssertFalse(host.enqueueSelection(index: 1, animated: false, source: .api))
+        XCTAssertNil(host.pendingExplicitSelectionRequestForTesting)
+
+        XCTAssertTrue(host.enqueueSelection(index: 2, animated: true, source: .bar))
+        XCTAssertEqual(host.pendingExplicitSelectionRequestForTesting?.identifier, 2)
+        XCTAssertEqual(host.pendingExplicitSelectionRequestForTesting?.targetIndex, 2)
+        XCTAssertEqual(host.pendingExplicitSelectionRequestForTesting?.source, .bar)
+
+        XCTAssertTrue(host.enqueueSelection(index: 3, animated: false, source: .api))
+        XCTAssertEqual(host.pendingExplicitSelectionRequestForTesting?.identifier, 3)
+        XCTAssertEqual(host.pendingExplicitSelectionRequestForTesting?.targetIndex, 3)
+
+        XCTAssertTrue(host.enqueueSelection(index: 0, animated: true, source: .api))
+        XCTAssertEqual(host.pendingExplicitSelectionRequestForTesting?.identifier, 4)
+        XCTAssertEqual(host.pendingExplicitSelectionRequestForTesting?.targetIndex, 0)
+        XCTAssertEqual(host.committedSelectionIndexForTesting, 0)
+        XCTAssertFalse(host.enqueueSelection(index: 4, animated: true, source: .api))
+        XCTAssertFalse(host.enqueueSelection(index: 2, animated: true, source: .interactive))
+
+        XCTAssertTrue(logEvents.contains { $0.event == "paging.selection.start" })
+        XCTAssertTrue(logEvents.contains { $0.event == "paging.selection.enqueue" })
+        XCTAssertEqual(
+            logEvents.filter { $0.event == "paging.selection.replacePending" }.count,
+            2
+        )
+    }
+
+    func testAPIAndBarSelectionsShareHostIdentifierSequence() throws {
+        let host = makeHost()
+        host.reload(titles: ["A", "B", "C"], pageCount: 3, selectedIndex: 0)
+        let adapter = try XCTUnwrap(host.activeAdapter)
+
+        XCTAssertTrue(host.setSelectedIndex(1, animated: true))
+        host.pagingAdapter(adapter, didRequestBarSelectionAt: 2)
+
+        XCTAssertEqual(host.activeSelectionRequestForTesting?.identifier, 1)
+        XCTAssertEqual(host.activeSelectionRequestForTesting?.source, .api)
+        XCTAssertEqual(host.pendingExplicitSelectionRequestForTesting?.identifier, 2)
+        XCTAssertEqual(host.pendingExplicitSelectionRequestForTesting?.source, .bar)
+    }
+
+    func testMatchingSelectionTerminalCommitsOnceAndWaitsForAllAcknowledgements() throws {
+        let host = makeHost()
+        let delegate = RecordingPagingHostDelegate()
+        host.eventDelegate = delegate
+        host.reload(titles: ["A", "B", "C"], pageCount: 3, selectedIndex: 0)
+        let adapter = try XCTUnwrap(host.activeAdapter)
+        let staleAdapter = AnchorPagerPagingAdapter()
+        delegate.events.removeAll()
+        var logEvents: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { logEvents.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+
+        XCTAssertTrue(host.enqueueSelection(index: 1, animated: true, source: .api))
+        let identifier = try XCTUnwrap(host.activeSelectionRequestForTesting?.identifier)
+        host.pagingAdapter(
+            adapter,
+            willSelect: 1,
+            animated: true,
+            requestIdentifier: identifier
+        )
+        host.pagingAdapter(
+            adapter,
+            willSelect: 1,
+            animated: true,
+            requestIdentifier: identifier
+        )
+        host.pagingAdapter(
+            staleAdapter,
+            didSelect: 1,
+            animated: true,
+            requestIdentifier: identifier
+        )
+        host.pagingAdapter(
+            adapter,
+            didSelect: 2,
+            animated: true,
+            requestIdentifier: identifier
+        )
+        host.pagingAdapter(
+            adapter,
+            didSelect: 1,
+            animated: true,
+            requestIdentifier: identifier
+        )
+        host.pagingAdapter(
+            adapter,
+            didSelect: 1,
+            animated: true,
+            requestIdentifier: identifier
+        )
+
+        XCTAssertEqual(delegate.events, [.willSelect(1, true), .didSelect(1, true)])
+        XCTAssertEqual(host.committedSelectionIndexForTesting, 1)
+        XCTAssertNotNil(host.activeSelectionRequestForTesting)
+
+        host.pagingAdapter(adapter, executorDidBecomeReadyFor: identifier)
+        XCTAssertNotNil(host.activeSelectionRequestForTesting)
+        host.pagingAdapter(
+            adapter,
+            didComplete: identifier + 10,
+            finished: true,
+            currentIndex: 1
+        )
+        host.pagingAdapter(adapter, executorDidBecomeReadyFor: identifier + 10)
+        XCTAssertNotNil(host.activeSelectionRequestForTesting)
+
+        host.pagingAdapter(
+            adapter,
+            didComplete: identifier,
+            finished: true,
+            currentIndex: 1
+        )
+        XCTAssertNotNil(host.activeSelectionRequestForTesting)
+        host.pagingAdapter(adapter, executorDidBecomeReadyFor: identifier)
+
+        XCTAssertNil(host.activeSelectionRequestForTesting)
+        XCTAssertEqual(delegate.events, [.willSelect(1, true), .didSelect(1, true)])
+        XCTAssertGreaterThanOrEqual(
+            logEvents.filter { $0.event == "paging.selection.staleTerminal" }.count,
+            4
+        )
+    }
+
+    func testInteractiveSelectionUsesOneTransactionAndCancelDoesNotCommit() throws {
+        let host = makeHost()
+        let delegate = RecordingPagingHostDelegate()
+        host.eventDelegate = delegate
+        host.reload(titles: ["A", "B"], pageCount: 2, selectedIndex: 0)
+        let adapter = try XCTUnwrap(host.activeAdapter)
+        delegate.events.removeAll()
+
+        let identifier = try XCTUnwrap(host.pagingAdapter(
+            adapter,
+            didBeginInteractiveSelectionAt: 1,
+            animated: true
+        ))
+        XCTAssertEqual(identifier, 1)
+        XCTAssertEqual(host.activeSelectionRequestForTesting?.source, .interactive)
+        XCTAssertEqual(
+            host.pagingAdapter(
+                adapter,
+                didBeginInteractiveSelectionAt: 1,
+                animated: true
+            ),
+            identifier
+        )
+        host.pagingAdapter(
+            adapter,
+            willSelect: 1,
+            animated: true,
+            requestIdentifier: identifier
+        )
+        host.pagingAdapter(
+            adapter,
+            willSelect: 1,
+            animated: true,
+            requestIdentifier: identifier
+        )
+        host.pagingAdapter(
+            adapter,
+            didCancelSelectionAt: 1,
+            returningTo: 0,
+            requestIdentifier: identifier
+        )
+
+        XCTAssertNil(host.activeSelectionRequestForTesting)
+        XCTAssertEqual(host.committedSelectionIndexForTesting, 0)
+        XCTAssertEqual(delegate.events, [.willSelect(1, true), .didCancel(1, 0)])
+    }
+
+    func testProgrammaticCompletionRecoversMissingSemanticTerminal() throws {
+        let host = makeHost()
+        let delegate = RecordingPagingHostDelegate()
+        host.eventDelegate = delegate
+        host.reload(titles: ["A", "B"], pageCount: 2, selectedIndex: 0)
+        let adapter = try XCTUnwrap(host.activeAdapter)
+        delegate.events.removeAll()
+        var logEvents: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { logEvents.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+
+        XCTAssertTrue(host.enqueueSelection(index: 1, animated: true, source: .api))
+        let identifier = try XCTUnwrap(host.activeSelectionRequestForTesting?.identifier)
+        host.pagingAdapter(
+            adapter,
+            didComplete: identifier,
+            finished: true,
+            currentIndex: 1
+        )
+
+        XCTAssertEqual(delegate.events, [.willSelect(1, true), .didSelect(1, true)])
+        XCTAssertEqual(host.committedSelectionIndexForTesting, 1)
+        XCTAssertNotNil(host.activeSelectionRequestForTesting)
+        XCTAssertTrue(logEvents.contains { $0.event == "paging.selection.missingSemantic" })
+
+        host.pagingAdapter(adapter, executorDidBecomeReadyFor: identifier)
+        XCTAssertNil(host.activeSelectionRequestForTesting)
+    }
+
+    func testFailedProgrammaticCompletionRecoversMissingCancelTerminal() throws {
+        let host = makeHost()
+        let delegate = RecordingPagingHostDelegate()
+        host.eventDelegate = delegate
+        host.reload(titles: ["A", "B"], pageCount: 2, selectedIndex: 0)
+        let adapter = try XCTUnwrap(host.activeAdapter)
+        delegate.events.removeAll()
+
+        XCTAssertTrue(host.enqueueSelection(index: 1, animated: true, source: .api))
+        let identifier = try XCTUnwrap(host.activeSelectionRequestForTesting?.identifier)
+        host.pagingAdapter(
+            adapter,
+            didComplete: identifier,
+            finished: false,
+            currentIndex: 0
+        )
+
+        XCTAssertEqual(delegate.events, [.willSelect(1, true), .didCancel(1, 0)])
+        XCTAssertEqual(host.committedSelectionIndexForTesting, 0)
+        XCTAssertNotNil(host.activeSelectionRequestForTesting)
+
+        host.pagingAdapter(adapter, executorDidBecomeReadyFor: identifier)
+        XCTAssertNil(host.activeSelectionRequestForTesting)
+    }
+
+    func testRealIntermediateTerminalCommitsBeforeLatestSelectionStarts() async throws {
+        let host = makeHost()
+        let delegate = RecordingPagingHostDelegate()
+        host.eventDelegate = delegate
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        host.view.layoutIfNeeded()
+        host.reload(titles: ["A", "B", "C", "D"], pageCount: 4, selectedIndex: 0)
+        _ = try XCTUnwrap(host.activeAdapter)
+        host.view.layoutIfNeeded()
+        delegate.events.removeAll()
+        let intermediateTerminal = expectation(description: "真实中间页先提交")
+        let latestSelectionStarted = expectation(description: "latest selection 后启动")
+        var intermediateActiveIdentifier: Int?
+        var intermediatePendingIdentifier: Int?
+        var latestActiveIdentifier: Int?
+        var latestActiveTarget: Int?
+        var latestPendingIdentifier: Int?
+        delegate.onDidSelect = { host, index, _ in
+            guard index == 1 else { return }
+            intermediateActiveIdentifier = host.activeSelectionRequestForTesting?.identifier
+            intermediatePendingIdentifier =
+                host.pendingExplicitSelectionRequestForTesting?.identifier
+            intermediateTerminal.fulfill()
+        }
+        delegate.onWillSelect = { host, index, _ in
+            guard index == 3 else { return }
+            latestActiveIdentifier = host.activeSelectionRequestForTesting?.identifier
+            latestActiveTarget = host.activeSelectionRequestForTesting?.targetIndex
+            latestPendingIdentifier = host.pendingExplicitSelectionRequestForTesting?.identifier
+            latestSelectionStarted.fulfill()
+        }
+
+        XCTAssertTrue(host.setSelectedIndex(1, animated: false))
+        XCTAssertTrue(host.setSelectedIndex(3, animated: false))
+        let firstIdentifier = try XCTUnwrap(host.activeSelectionRequestForTesting?.identifier)
+        let latestIdentifier = try XCTUnwrap(
+            host.pendingExplicitSelectionRequestForTesting?.identifier
+        )
+
+        await fulfillment(
+            of: [intermediateTerminal, latestSelectionStarted],
+            timeout: 2,
+            enforceOrder: true
+        )
+
+        XCTAssertEqual(intermediateActiveIdentifier, firstIdentifier)
+        XCTAssertEqual(intermediatePendingIdentifier, latestIdentifier)
+        XCTAssertEqual(latestActiveIdentifier, latestIdentifier)
+        XCTAssertEqual(latestActiveTarget, 3)
+        XCTAssertNil(latestPendingIdentifier)
     }
 
     func testAnimatedSelectionDefersEmptyReloadUntilSelectionTerminal() throws {
@@ -245,7 +556,7 @@ final class AnchorPagerPagingHostViewControllerTests: XCTestCase {
         XCTAssertNil(host.activeAdapter)
         XCTAssertTrue(host.children.isEmpty)
         XCTAssertTrue(delegate.events.contains(.reload(.empty)))
-        XCTAssertFalse(delegate.events.contains(.didSelect(1, true)))
+        XCTAssertTrue(delegate.events.contains(.didSelect(1, true)))
     }
 
     func testLatestNonemptyReloadWinsWhileSelectionIsPending() throws {
@@ -279,10 +590,10 @@ final class AnchorPagerPagingHostViewControllerTests: XCTestCase {
         XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 1)
         XCTAssertTrue(delegate.events.contains(.reload(.page(index: 0))))
         XCTAssertFalse(delegate.events.contains(.reload(.empty)))
-        XCTAssertFalse(delegate.events.contains(.didSelect(1, true)))
+        XCTAssertTrue(delegate.events.contains(.didSelect(1, true)))
     }
 
-    func testRejectedSecondProgrammaticSelectionKeepsFirstCompletionBusyUntilReloadCanAdvance() throws {
+    func testQueuedSecondProgrammaticSelectionKeepsFirstCompletionBusyUntilReloadCanAdvance() throws {
         let host = AnchorPagerPagingHostViewController()
         let provider = RecordingHostPageProvider()
         host.pageProvider = provider
@@ -291,7 +602,7 @@ final class AnchorPagerPagingHostViewControllerTests: XCTestCase {
         host.reload(titles: ["First", "Second", "Third"], pageCount: 3, selectedIndex: 0)
         let adapter = try XCTUnwrap(host.activeAdapter)
         XCTAssertTrue(host.setSelectedIndex(1, animated: true))
-        XCTAssertFalse(host.setSelectedIndex(2, animated: true))
+        XCTAssertTrue(host.setSelectedIndex(2, animated: true))
         delegate.events.removeAll()
         delegate.terminalSnapshots.removeAll()
 
@@ -306,7 +617,7 @@ final class AnchorPagerPagingHostViewControllerTests: XCTestCase {
         XCTAssertTrue(host.activeAdapter === adapter)
         XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 3)
         XCTAssertFalse(delegate.events.contains(.reload(.page(index: 0))))
-        XCTAssertFalse(delegate.events.contains(.didSelect(1, true)))
+        XCTAssertTrue(delegate.events.contains(.didSelect(1, true)))
 
         adapter.finishProgrammaticTransition(
             requestIdentifier: 1,
@@ -350,7 +661,7 @@ final class AnchorPagerPagingHostViewControllerTests: XCTestCase {
         XCTAssertTrue(host.children.isEmpty)
         XCTAssertTrue(delegate.events.contains(.reload(.empty)))
         XCTAssertFalse(delegate.events.contains(.reload(.page(index: 0))))
-        XCTAssertFalse(delegate.events.contains(.didCancel(1, 0)))
+        XCTAssertTrue(delegate.events.contains(.didCancel(1, 0)))
     }
 
     func testDeferredReloadOnlyStartsLatestRequestAfterSelectionTerminal() throws {
@@ -851,6 +1162,8 @@ private final class RecordingPagingHostDelegate: AnchorPagerPagingHostViewContro
     var events: [Event] = []
     var terminalSnapshots: [TerminalSnapshot] = []
     var reloadFinalBarInsets: [UIEdgeInsets] = []
+    var onWillSelect: ((AnchorPagerPagingHostViewController, Int, Bool) -> Void)?
+    var onDidSelect: ((AnchorPagerPagingHostViewController, Int, Bool) -> Void)?
     weak var observedPage: UIViewController?
 
     func pagingHost(
@@ -880,6 +1193,7 @@ private final class RecordingPagingHostDelegate: AnchorPagerPagingHostViewContro
     ) {
         let event = Event.willSelect(index, animated)
         events.append(event)
+        onWillSelect?(host, index, animated)
     }
 
     func pagingHost(
@@ -889,6 +1203,7 @@ private final class RecordingPagingHostDelegate: AnchorPagerPagingHostViewContro
     ) {
         let event = Event.didSelect(index, animated)
         events.append(event)
+        onDidSelect?(host, index, animated)
     }
 
     func pagingHost(

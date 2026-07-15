@@ -78,8 +78,24 @@ final class AnchorPagerPagingHostViewController: UIViewController {
     private var finishingReloadRequestIdentifier: AnchorPagerPagingReloadRequestIdentifier?
     private var isStartingReloadRequest = false
     private var isPagePresentationSurfaceUnavailable = false
-    // Task 3 会把 identifier 与 active/latest pending transaction 一并收口到 Host。
     private var nextSelectionRequestIdentifier: AnchorPagerPagingSelectionRequestIdentifier = 1
+    private var committedSelectionIndex: Int?
+    private var committedSelectionPageCount = 0
+    private var activeSelectionTransaction: AnchorPagerPagingSelectionTransaction?
+    private var pendingExplicitSelectionRequest: AnchorPagerPagingSelectionRequest?
+    private var forwardedWillSelectRequestIdentifier: AnchorPagerPagingSelectionRequestIdentifier?
+
+    var activeSelectionRequestForTesting: AnchorPagerPagingSelectionRequest? {
+        activeSelectionTransaction?.request
+    }
+
+    var pendingExplicitSelectionRequestForTesting: AnchorPagerPagingSelectionRequest? {
+        pendingExplicitSelectionRequest
+    }
+
+    var committedSelectionIndexForTesting: Int? {
+        committedSelectionIndex
+    }
 
     override func loadView() {
         let view = UIView()
@@ -175,15 +191,19 @@ final class AnchorPagerPagingHostViewController: UIViewController {
 
     @discardableResult
     func setSelectedIndex(_ index: Int, animated: Bool) -> Bool {
-        executeSelection(index: index, animated: animated, source: .api)
+        enqueueSelection(index: index, animated: animated, source: .api)
     }
 
     @discardableResult
-    private func executeSelection(
+    func enqueueSelection(
         index: Int,
         animated: Bool,
         source: AnchorPagerPagingSelectionSource
     ) -> Bool {
+        guard source.isExplicit else {
+            AnchorPagerLogger.log(.debug, category: .paging, event: "paging.selection.reject")
+            return false
+        }
         guard pendingReloadRequest == nil,
               activeReloadRequest == nil,
               !isStartingReloadRequest else {
@@ -194,19 +214,96 @@ final class AnchorPagerPagingHostViewController: UIViewController {
             )
             return false
         }
-        guard let activeAdapter else { return false }
-        let requestIdentifier = nextSelectionRequestIdentifier
-        nextSelectionRequestIdentifier += 1
+        guard let activeAdapter,
+              (0..<committedSelectionPageCount).contains(index),
+              let committedSelectionIndex else {
+            AnchorPagerLogger.log(.debug, category: .paging, event: "paging.selection.reject")
+            return false
+        }
+
         let request = AnchorPagerPagingSelectionRequest(
-            identifier: requestIdentifier,
+            identifier: nextSelectionRequestIdentifier,
             targetIndex: index,
             animated: animated,
             source: source
         )
-        return activeAdapter.executeSelection(
-            request,
-            previousIndex: activeAdapter.currentIndex ?? index
+        let admission = AnchorPagerPagingExplicitSelectionAdmission.resolve(
+            request: request,
+            committedIndex: committedSelectionIndex,
+            activeRequest: activeSelectionTransaction?.request,
+            pendingRequest: pendingExplicitSelectionRequest
         )
+        switch admission {
+        case .start:
+            nextSelectionRequestIdentifier += 1
+            AnchorPagerLogger.log(.debug, category: .paging, event: "paging.selection.enqueue")
+            return startSelection(request, on: activeAdapter)
+        case .replaceLatest:
+            nextSelectionRequestIdentifier += 1
+            let didReplace = pendingExplicitSelectionRequest != nil
+            pendingExplicitSelectionRequest = request
+            AnchorPagerLogger.log(
+                .debug,
+                category: .paging,
+                event: didReplace
+                    ? "paging.selection.replacePending"
+                    : "paging.selection.enqueue"
+            )
+            return true
+        case .noOp, .duplicate, .rejectedInteractive:
+            return false
+        }
+    }
+
+    @discardableResult
+    func performPendingSelectionIfPossible() -> Bool {
+        guard activeSelectionTransaction == nil,
+              pendingReloadRequest == nil,
+              activeReloadRequest == nil,
+              !isStartingReloadRequest,
+              let adapter = activeAdapter,
+              let request = pendingExplicitSelectionRequest else {
+            return false
+        }
+        pendingExplicitSelectionRequest = nil
+        guard let committedSelectionIndex,
+              (0..<committedSelectionPageCount).contains(request.targetIndex),
+              request.targetIndex != committedSelectionIndex else {
+            return false
+        }
+        return startSelection(request, on: adapter)
+    }
+
+    @discardableResult
+    private func startSelection(
+        _ request: AnchorPagerPagingSelectionRequest,
+        on adapter: AnchorPagerPagingAdapter
+    ) -> Bool {
+        guard activeSelectionTransaction == nil,
+              adapter === activeAdapter else {
+            AnchorPagerLogger.log(.debug, category: .paging, event: "paging.selection.reject")
+            return false
+        }
+        let previousIndex = committedSelectionIndex ?? adapter.currentIndex ?? request.targetIndex
+        activeSelectionTransaction = AnchorPagerPagingSelectionTransaction(
+            request: request,
+            previousIndex: previousIndex,
+            adapterIdentifier: ObjectIdentifier(adapter)
+        )
+        forwardedWillSelectRequestIdentifier = nil
+        AnchorPagerLogger.log(.info, category: .paging, event: "paging.selection.start")
+        guard adapter.executeSelection(request, previousIndex: previousIndex) else {
+            if activeSelectionTransaction?.request.identifier == request.identifier {
+                activeSelectionTransaction = nil
+                forwardedWillSelectRequestIdentifier = nil
+            }
+            AnchorPagerLogger.log(.debug, category: .paging, event: "paging.selection.reject")
+            if !performPendingReloadIfNeeded() {
+                _ = performPendingSelectionIfPossible()
+            }
+            return false
+        }
+        return true
     }
 
     private func installAdapter() -> AnchorPagerPagingAdapter {
@@ -295,6 +392,14 @@ final class AnchorPagerPagingHostViewController: UIViewController {
         activeReloadFinalBarInsets = nil
         if didCommitTerminal {
             lastReportedBarInsets = finalBarInsets
+            switch terminal {
+            case let .page(index):
+                committedSelectionIndex = index
+                committedSelectionPageCount = request.pageCount
+            case .empty:
+                committedSelectionIndex = nil
+                committedSelectionPageCount = 0
+            }
         }
         finishingReloadRequestIdentifier = nil
         _ = performPendingReloadIfNeeded()
@@ -308,7 +413,7 @@ extension AnchorPagerPagingHostViewController: AnchorPagerPagingAdapterDelegate 
         didRequestBarSelectionAt index: Int
     ) {
         guard adapter === activeAdapter else { return }
-        _ = executeSelection(index: index, animated: true, source: .bar)
+        _ = enqueueSelection(index: index, animated: true, source: .bar)
     }
 
     func pagingAdapter(
@@ -316,9 +421,36 @@ extension AnchorPagerPagingHostViewController: AnchorPagerPagingAdapterDelegate 
         didBeginInteractiveSelectionAt index: Int,
         animated: Bool
     ) -> AnchorPagerPagingSelectionRequestIdentifier? {
-        guard adapter === activeAdapter else { return nil }
+        guard matchesActiveSelectionAdapter(adapter),
+              (0..<committedSelectionPageCount).contains(index) else {
+            logStaleSelectionTerminal()
+            return nil
+        }
+        if let transaction = activeSelectionTransaction {
+            guard transaction.request.source == .interactive,
+                  transaction.request.targetIndex == index,
+                  transaction.adapterIdentifier == ObjectIdentifier(adapter) else {
+                logStaleSelectionTerminal()
+                return nil
+            }
+            return transaction.request.identifier
+        }
+
         let requestIdentifier = nextSelectionRequestIdentifier
         nextSelectionRequestIdentifier += 1
+        let request = AnchorPagerPagingSelectionRequest(
+            identifier: requestIdentifier,
+            targetIndex: index,
+            animated: animated,
+            source: .interactive
+        )
+        activeSelectionTransaction = AnchorPagerPagingSelectionTransaction(
+            request: request,
+            previousIndex: committedSelectionIndex ?? adapter.currentIndex ?? index,
+            adapterIdentifier: ObjectIdentifier(adapter)
+        )
+        forwardedWillSelectRequestIdentifier = nil
+        AnchorPagerLogger.log(.info, category: .paging, event: "paging.selection.start")
         return requestIdentifier
     }
 
@@ -328,8 +460,17 @@ extension AnchorPagerPagingHostViewController: AnchorPagerPagingAdapterDelegate 
         animated: Bool,
         requestIdentifier: AnchorPagerPagingSelectionRequestIdentifier
     ) {
-        guard adapter === activeAdapter else { return }
-        pagingAdapter(adapter, willSelect: index, animated: animated)
+        guard matches(
+            adapter: adapter,
+            requestIdentifier: requestIdentifier,
+            targetIndex: index
+        ) else {
+            logStaleSelectionTerminal()
+            return
+        }
+        guard forwardedWillSelectRequestIdentifier != requestIdentifier else { return }
+        forwardedWillSelectRequestIdentifier = requestIdentifier
+        eventDelegate?.pagingHost(self, willSelect: index, animated: animated)
     }
 
     func pagingAdapter(
@@ -338,8 +479,23 @@ extension AnchorPagerPagingHostViewController: AnchorPagerPagingAdapterDelegate 
         animated: Bool,
         requestIdentifier: AnchorPagerPagingSelectionRequestIdentifier
     ) {
-        guard adapter === activeAdapter else { return }
-        pagingAdapter(adapter, didSelect: index, animated: animated)
+        guard var transaction = matchingSelectionTransaction(
+            adapter: adapter,
+            requestIdentifier: requestIdentifier,
+            targetIndex: index
+        ), transaction.recordSemanticTerminal(
+            .selected(index: index),
+            requestIdentifier: requestIdentifier,
+            targetIndex: index,
+            adapterIdentifier: ObjectIdentifier(adapter)
+        ) else {
+            logStaleSelectionTerminal()
+            return
+        }
+        activeSelectionTransaction = transaction
+        committedSelectionIndex = index
+        eventDelegate?.pagingHost(self, didSelect: index, animated: animated)
+        finishActiveSelectionIfReady()
     }
 
     func pagingAdapter(
@@ -348,12 +504,26 @@ extension AnchorPagerPagingHostViewController: AnchorPagerPagingAdapterDelegate 
         returningTo previousIndex: Int,
         requestIdentifier: AnchorPagerPagingSelectionRequestIdentifier
     ) {
-        guard adapter === activeAdapter else { return }
-        pagingAdapter(
-            adapter,
+        guard var transaction = matchingSelectionTransaction(
+            adapter: adapter,
+            requestIdentifier: requestIdentifier,
+            targetIndex: index
+        ), transaction.recordSemanticTerminal(
+            .cancelled(index: index, previousIndex: previousIndex),
+            requestIdentifier: requestIdentifier,
+            targetIndex: index,
+            adapterIdentifier: ObjectIdentifier(adapter)
+        ) else {
+            logStaleSelectionTerminal()
+            return
+        }
+        activeSelectionTransaction = transaction
+        eventDelegate?.pagingHost(
+            self,
             didCancelSelectionAt: index,
             returningTo: previousIndex
         )
+        finishActiveSelectionIfReady()
     }
 
     func pagingAdapter(
@@ -362,48 +532,91 @@ extension AnchorPagerPagingHostViewController: AnchorPagerPagingAdapterDelegate 
         finished: Bool,
         currentIndex: Int?
     ) {
-        guard adapter === activeAdapter else { return }
+        guard var transaction = matchingSelectionTransaction(
+            adapter: adapter,
+            requestIdentifier: requestIdentifier
+        ), transaction.request.source.isExplicit else {
+            logStaleSelectionTerminal()
+            return
+        }
+
+        var recoveredTerminal: AnchorPagerPagingSelectionSemanticTerminal?
+        if transaction.semanticTerminal == nil {
+            if finished, currentIndex == transaction.request.targetIndex {
+                let terminal = AnchorPagerPagingSelectionSemanticTerminal.selected(
+                    index: transaction.request.targetIndex
+                )
+                guard transaction.recordSemanticTerminal(
+                    terminal,
+                    requestIdentifier: requestIdentifier,
+                    targetIndex: transaction.request.targetIndex,
+                    adapterIdentifier: ObjectIdentifier(adapter)
+                ) else {
+                    logStaleSelectionTerminal()
+                    return
+                }
+                recoveredTerminal = terminal
+            } else if !finished {
+                let terminal = AnchorPagerPagingSelectionSemanticTerminal.cancelled(
+                    index: transaction.request.targetIndex,
+                    previousIndex: transaction.previousIndex
+                )
+                guard transaction.recordSemanticTerminal(
+                    terminal,
+                    requestIdentifier: requestIdentifier,
+                    targetIndex: transaction.request.targetIndex,
+                    adapterIdentifier: ObjectIdentifier(adapter)
+                ) else {
+                    logStaleSelectionTerminal()
+                    return
+                }
+                recoveredTerminal = terminal
+            }
+        }
+        guard transaction.acknowledgeProgrammaticCompletion(
+            requestIdentifier: requestIdentifier,
+            targetIndex: transaction.request.targetIndex,
+            adapterIdentifier: ObjectIdentifier(adapter)
+        ) else {
+            logStaleSelectionTerminal()
+            return
+        }
+        activeSelectionTransaction = transaction
+        if let recoveredTerminal {
+            AnchorPagerLogger.log(
+                .debug,
+                category: .paging,
+                event: "paging.selection.missingSemantic"
+            )
+            forwardRecoveredSelectionTerminal(
+                recoveredTerminal,
+                request: transaction.request
+            )
+        } else if transaction.semanticTerminal == nil {
+            logStaleSelectionTerminal()
+        }
+        finishActiveSelectionIfReady()
     }
 
     func pagingAdapter(
         _ adapter: AnchorPagerPagingAdapter,
         executorDidBecomeReadyFor requestIdentifier: AnchorPagerPagingSelectionRequestIdentifier
     ) {
-        guard adapter === activeAdapter else { return }
-    }
-
-    // Task 2 的签名兼容入口；Task 3 建立 transaction 后由 matching callback 直接提交。
-    func pagingAdapter(
-        _ adapter: AnchorPagerPagingAdapter,
-        willSelect index: Int,
-        animated: Bool
-    ) {
-        guard adapter === activeAdapter else { return }
-        eventDelegate?.pagingHost(self, willSelect: index, animated: animated)
-    }
-
-    func pagingAdapter(
-        _ adapter: AnchorPagerPagingAdapter,
-        didSelect index: Int,
-        animated: Bool
-    ) {
-        guard adapter === activeAdapter else { return }
-        guard !performPendingReloadIfNeeded() else { return }
-        eventDelegate?.pagingHost(self, didSelect: index, animated: animated)
-    }
-
-    func pagingAdapter(
-        _ adapter: AnchorPagerPagingAdapter,
-        didCancelSelectionAt index: Int,
-        returningTo previousIndex: Int
-    ) {
-        guard adapter === activeAdapter else { return }
-        guard !performPendingReloadIfNeeded() else { return }
-        eventDelegate?.pagingHost(
-            self,
-            didCancelSelectionAt: index,
-            returningTo: previousIndex
-        )
+        guard var transaction = matchingSelectionTransaction(
+            adapter: adapter,
+            requestIdentifier: requestIdentifier
+        ), transaction.request.source.isExplicit,
+        transaction.didAcknowledgeCompletion,
+        transaction.acknowledgeExecutorReady(
+            requestIdentifier: requestIdentifier,
+            targetIndex: transaction.request.targetIndex,
+            adapterIdentifier: ObjectIdentifier(adapter)
+        ) else {
+            logStaleSelectionTerminal()
+            return
+        }
+        activeSelectionTransaction = transaction
+        finishActiveSelectionIfReady()
     }
 
     func pagingAdapter(
@@ -439,6 +652,76 @@ extension AnchorPagerPagingHostViewController: AnchorPagerPagingAdapterDelegate 
 
     func pagingAdapterDidBecomeReadyForReload(_ adapter: AnchorPagerPagingAdapter) {
         guard adapter === activeAdapter else { return }
-        _ = performPendingReloadIfNeeded()
+        if !performPendingReloadIfNeeded() {
+            _ = performPendingSelectionIfPossible()
+        }
+    }
+
+    private func matchesActiveSelectionAdapter(_ adapter: AnchorPagerPagingAdapter) -> Bool {
+        adapter === activeAdapter
+    }
+
+    private func matches(
+        adapter: AnchorPagerPagingAdapter,
+        requestIdentifier: AnchorPagerPagingSelectionRequestIdentifier,
+        targetIndex: Int
+    ) -> Bool {
+        guard let transaction = activeSelectionTransaction else { return false }
+        return adapter === activeAdapter
+            && transaction.adapterIdentifier == ObjectIdentifier(adapter)
+            && transaction.request.identifier == requestIdentifier
+            && transaction.request.targetIndex == targetIndex
+    }
+
+    private func matchingSelectionTransaction(
+        adapter: AnchorPagerPagingAdapter,
+        requestIdentifier: AnchorPagerPagingSelectionRequestIdentifier,
+        targetIndex: Int? = nil
+    ) -> AnchorPagerPagingSelectionTransaction? {
+        guard adapter === activeAdapter,
+              let transaction = activeSelectionTransaction,
+              transaction.adapterIdentifier == ObjectIdentifier(adapter),
+              transaction.request.identifier == requestIdentifier else {
+            return nil
+        }
+        if let targetIndex,
+           transaction.request.targetIndex != targetIndex {
+            return nil
+        }
+        return transaction
+    }
+
+    private func forwardRecoveredSelectionTerminal(
+        _ terminal: AnchorPagerPagingSelectionSemanticTerminal,
+        request: AnchorPagerPagingSelectionRequest
+    ) {
+        switch terminal {
+        case let .selected(index):
+            committedSelectionIndex = index
+            eventDelegate?.pagingHost(self, didSelect: index, animated: request.animated)
+        case let .cancelled(index, previousIndex):
+            eventDelegate?.pagingHost(
+                self,
+                didCancelSelectionAt: index,
+                returningTo: previousIndex
+            )
+        }
+    }
+
+    private func finishActiveSelectionIfReady() {
+        guard activeSelectionTransaction?.isReadyToFinish == true else { return }
+        activeSelectionTransaction = nil
+        forwardedWillSelectRequestIdentifier = nil
+        if !performPendingReloadIfNeeded() {
+            _ = performPendingSelectionIfPossible()
+        }
+    }
+
+    private func logStaleSelectionTerminal() {
+        AnchorPagerLogger.log(
+            .debug,
+            category: .paging,
+            event: "paging.selection.staleTerminal"
+        )
     }
 }

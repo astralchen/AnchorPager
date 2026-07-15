@@ -527,7 +527,7 @@
 - [x] 用户复核并确认 v0.7 详细实施计划
 - [ ] 复用 v0.5 已建立的 current container/current child 最小纵向 simultaneous recognition，不重复建立第二套纵向 handoff
 - [x] 先以 RED 覆盖同一调用栈连续 `animated: false` 的 Pageboy 假接受/无 completion 窗口
-- [ ] PagingHost 建立一笔 active + 一笔 latest pending selection request，不建立第二套 generation owner 或旁路 terminal
+- [x] PagingHost 建立一笔 active + 一笔 latest pending selection request，不建立第二套 generation owner 或旁路 terminal
 - [x] selection request 使用 Host 单调 identifier，并区分 api、bar、interactive source
 - [x] Adapter 覆写 Tabman bar 请求入口，禁止 bar 点击旁路 Host transaction
 - [ ] Adapter 建立可撤销 Pageboy paging surface/pan observation，不替换第三方 scroll/pan delegate
