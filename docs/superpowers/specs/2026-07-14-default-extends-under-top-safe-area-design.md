@@ -2,7 +2,7 @@
 
 **日期：** 2026-07-14
 
-**状态：** 实现与聚焦 RED/GREEN 已完成；全量验收、自审和 fresh-pass 待完成
+**状态：** 已完成
 
 **适用范围：** `AnchorPagerHeaderConfiguration` 默认值、`AnchorPagerConfiguration.default`、`AnchorPagerViewController` 无参数配置、Example 初始顶部行为、默认配置测试与接入文档。
 
@@ -195,7 +195,19 @@ TDD 证据：
 3. 控制器类回归暴露出 3 个隐式依赖旧默认值的 inside 专项测试；逐项补充显式 `.insideSafeArea` 前置条件后，`AnchorPagerViewControllerTests` 101/101 通过，生产几何逻辑未增加兼容分支。
 4. `git diff --check` 与实现范围自审通过，`Examples/AnchorPagerExample.xcodeproj/project.pbxproj` 的用户改动未暂存、未提交。
 
-全量 Framework、Example/generic build、运行时约束扫描、静态门禁和 fresh-pass 结果仍待最终验收，不在此阶段预填。
+## 最终验收
+
+最终生产代码 HEAD 为 `3bdcfb6`。2026-07-15 使用 Apple Swift 6.3.3 / Xcode 26.6 完成以下新鲜验证：
+
+1. `swift package resolve` 退出码为 0。
+2. Framework 结果包 `/private/tmp/AnchorPagerDefaultHeaderFramework-20260715.xcresult` 为 322/322、0 fail、0 skip、0 expected failure；issue summary 为 0 error、0 warning、0 analyzer warning。
+3. Example 结果包 `/private/tmp/AnchorPagerDefaultHeaderExample-20260715.xcresult` 为 41/41（11 单元 + 30 UI）、0 fail、0 skip、0 expected failure；issue summary 为 0 error、0 warning、0 analyzer warning。
+4. generic Simulator build 结果包 `/private/tmp/AnchorPagerDefaultHeaderBuild-20260715.xcresult` 构建成功；issue summary 为 0 error、0 warning、0 analyzer warning。
+5. 默认启动与显式 inside 路径的运行时日志 `/private/tmp/AnchorPagerDefaultHeaderRuntime-20260715.log` 对 `Unable to simultaneously satisfy constraints`、`UIViewAlertForUnsatisfiableConstraints` 均零命中。
+6. 静态门禁确认 Public 目录无 Tabman/Pageboy；delegate/`alwaysBounceVertical` 写入只属于 AnchorPager 自有 `verticalScrollView`；生产默认参数只有 `.extendsUnderTopSafeArea` 一处，测试夹具的显式 inside 不形成第二份生产默认。
+7. fresh-pass 覆盖 `97e8fc2...f4d9f41`，结论为 Critical 0、Important 0、Minor 0；`project.pbxproj` 用户改动未进入专项提交。
+
+本专项没有改变 viewport 裁剪、固定 Header presentation、bar 吸顶、Pageboy child bounds、v0.5/v0.6 owner 或业务 child ownership；v0.5 Task 7 与 v0.6 继续为 Ready，可进入 v0.7。
 
 ## 架构停机条件
 

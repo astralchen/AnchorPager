@@ -692,7 +692,7 @@
 - [x] v0.4 最终独立复审已完成，Critical/Important/Minor 均为零；允许进入 v0.5 设计与计划阶段
 - [x] Header 默认顶部行为专项设计已确认；Public 单一默认源已改为 extendsUnderTopSafeArea，显式 insideSafeArea、固定 Header/paging/bounce 架构保持不变
 - [x] Header 默认顶部行为 Task 1 已完成聚焦 RED/GREEN：Framework 默认契约、101 项控制器回归、Example 11 项单元与 5 项相关 UI 测试通过；生产实现提交 `3bdcfb6`
-- [ ] Header 默认顶部行为全量 Framework/Example/generic build、运行时约束扫描与 fresh-pass 待专项 Task 3 完成
+- [x] Header 默认顶部行为专项已完成：生产代码 HEAD `3bdcfb6`；Framework 322/322、Example 41/41（11 单元 + 30 UI）、generic build、运行时约束与静态门禁全部通过；fresh-pass `97e8fc2...f4d9f41` 为 Critical 0、Important 0、Minor 0
 - [x] 实现时遵循测试先行
 - [x] 每个任务完成后运行对应测试
 - [x] 每个任务完成时确认是否需要 UI 测试

@@ -38,7 +38,7 @@
 
 ---
 
-### Task 1：默认配置、Example 与真实 UI 的 RED→GREEN
+### Task 1：默认配置、Example 与真实 UI 的 RED→GREEN（已完成）
 
 **Files:**
 
@@ -53,7 +53,7 @@
 - Consumes: `AnchorPagerHeaderConfiguration.init(heightMode:topBehavior:)`、`AnchorPagerConfiguration.default`、`AnchorPagerViewController.init(configuration:)` 和 Example 现有 Header 顶部行为菜单。
 - Produces: 所有默认构造路径的 `topBehavior == .extendsUnderTopSafeArea`；显式 `.insideSafeArea` 保持原语义；Example 初始菜单和真实 top inset 与 Public 默认一致。
 
-- [ ] **Step 1：确认工作区基线并隔离用户改动**
+- [x] **Step 1：确认工作区基线并隔离用户改动**
 
 Run:
 
@@ -64,7 +64,7 @@ git diff -- Examples/AnchorPagerExample.xcodeproj/project.pbxproj
 
 Expected: `project.pbxproj` 只包含用户已有的签名/平台设置差异；后续暂存列表不得包含它。
 
-- [ ] **Step 2：把框架默认配置测试改成新契约**
+- [x] **Step 2：把框架默认配置测试改成新契约**
 
 把旧 `testConfigurationDefaultsMatchV01Baseline` 替换为：
 
@@ -101,7 +101,7 @@ func testConfigurationDefaultsUseExtendedHeaderTopBehavior() {
 }
 ```
 
-- [ ] **Step 3：调整 Example 单元测试的默认勾选态和显式迁移起点**
+- [x] **Step 3：调整 Example 单元测试的默认勾选态和显式迁移起点**
 
 在 `pagerNavigationShowsUnifiedSettingsMenuWithCurrentConfiguration` 中把 Header action 断言改为：
 
@@ -121,7 +121,7 @@ window.layoutIfNeeded()
 
 其余 inside → extends 的 raw offset、Header 高度和 bar baseline 断言保持不变，确保测试验证运行时迁移而非依赖旧默认。
 
-- [ ] **Step 4：调整真实 UI 测试，使默认验证与 inside 专项互不混淆**
+- [x] **Step 4：调整真实 UI 测试，使默认验证与 inside 专项互不混淆**
 
 在 UI 测试 helper 区新增：
 
@@ -196,7 +196,7 @@ selectHeaderTopBehavior(named: "安全区内", in: app)
 selectHeaderTopBehavior(named: "延伸到顶部", in: app)
 ```
 
-- [ ] **Step 5：运行 RED，确认只失败于旧默认值**
+- [x] **Step 5：运行 RED，确认只失败于旧默认值**
 
 Run:
 
@@ -207,7 +207,7 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExa
 
 Expected: Framework 精确失败于实际 `.insideSafeArea`；Example 单元/UI 精确失败于默认菜单仍勾选“安全区内”或初始 top inset 非零。编译、containment、约束和其他断言不得失败。
 
-- [ ] **Step 6：最小修改唯一默认源和 DocC**
+- [x] **Step 6：最小修改唯一默认源和 DocC**
 
 把 `AnchorPagerHeaderConfiguration` 初始化器改为：
 
@@ -229,7 +229,7 @@ public init(
 不得修改 `AnchorPagerHeaderConfiguration.default`、`AnchorPagerConfiguration.default`、
 `AnchorPagerViewController` 或 Example 初始化代码；这些路径必须通过现有构造链自动继承。
 
-- [ ] **Step 7：运行聚焦 GREEN**
+- [x] **Step 7：运行聚焦 GREEN**
 
 Run:
 
@@ -240,7 +240,7 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExa
 
 Expected: 所列 Framework、Example 单元与 5 条 UI 测试全部通过，0 fail、0 skip。
 
-- [ ] **Step 8：检查实现范围并提交**
+- [x] **Step 8：检查实现范围并提交**
 
 Run:
 
@@ -262,7 +262,7 @@ git commit -m "默认 Header 延伸到顶部安全区域外"
 
 ---
 
-### Task 2：同步默认行为文档而不提前写入最终验收结论
+### Task 2：同步默认行为文档而不提前写入最终验收结论（已完成）
 
 **Files:**
 
@@ -281,7 +281,7 @@ git commit -m "默认 Header 延伸到顶部安全区域外"
 - Consumes: Task 1 已通过聚焦测试的 Public 默认值和 Example 初始行为。
 - Produces: 接入者与维护者一致的“默认 extends、显式 inside、裁剪架构不变”长期契约；最终全量测试数字仍保持未发布状态。
 
-- [ ] **Step 1：更新 README 接入示例与兼容性说明**
+- [x] **Step 1：更新 README 接入示例与兼容性说明**
 
 把 Header 配置示例改为默认 extends，并单独展示显式 inside：
 
@@ -299,7 +299,7 @@ let pager = AnchorPagerViewController(configuration: configuration)
 在随后说明中明确：默认值变更只影响未显式设置的接入；两种模式的固定 Header 高度、bar baseline 和
 viewport 裁剪不变，默认 extends 不等于“折叠时不裁剪”。
 
-- [ ] **Step 2：更新 requirements 当前默认契约**
+- [x] **Step 2：更新 requirements 当前默认契约**
 
 把 Header 要求第 3 条和默认行为第 2 条分别改为：
 
@@ -313,7 +313,7 @@ viewport 裁剪不变，默认 extends 不等于“折叠时不裁剪”。
 
 Public API 章节补充默认参数为 `.extendsUnderTopSafeArea`，不得修改两种模式的几何公式。
 
-- [ ] **Step 3：更新 architecture、task-list 与 roadmap**
+- [x] **Step 3：更新 architecture、task-list 与 roadmap**
 
 `docs/architecture.md` 在 Public API/LayoutEngine 章节加入：
 
@@ -325,14 +325,14 @@ Header 初始化器定义；两级 .default、Pager 无参数初始化和 Exampl
 `docs/task-list.md`：
 
 1. 把 v0.1 的旧 inside 默认条目标记为“历史默认”，不篡改当时实施事实。
-2. 在当前 v0.5/v0.6 专项记录后新增本设计确认、Task 1 聚焦 RED/GREEN 和“全量验收待 Task 3”的真实状态。
+2. 在当前 v0.5/v0.6 专项记录后新增本设计确认、Task 1 聚焦 RED/GREEN 和“全量验收待 Task 3”的当时真实中间态。
 
 roadmap 在 Header 布局版本说明中补充当前默认已改为 extends，同时注明 Public case、geometry、owner 和
 containment 均未改变。
 
-- [ ] **Step 4：更新专项设计的实施中状态**
+- [x] **Step 4：更新专项设计的实施中状态**
 
-把设计状态改为：
+当时把设计状态改为以下历史中间态：
 
 ```text
 **状态：** 实现与聚焦 RED/GREEN 已完成；全量验收、自审和 fresh-pass 待完成
@@ -340,7 +340,7 @@ containment 均未改变。
 
 记录 Task 1 的真实提交、实际运行命令和聚焦结果；不得预填 Framework/Example 全量测试总数，也不得提前标记最终完成。
 
-- [ ] **Step 5：扫描默认值矛盾并提交文档**
+- [x] **Step 5：扫描默认值矛盾并提交文档**
 
 Run:
 
@@ -361,7 +361,7 @@ git commit -m "同步 Header 默认顶部行为文档"
 
 ---
 
-### Task 3：最终全量验收、自审与 fresh-pass
+### Task 3：最终全量验收、自审与 fresh-pass（已完成）
 
 **Files:**
 
@@ -379,46 +379,46 @@ git commit -m "同步 Header 默认顶部行为文档"
 - Consumes: Task 1 的实现/测试提交和 Task 2 的行为文档提交。
 - Produces: 最终生产 HEAD、完整 xcresult、运行时约束日志、静态门禁、fresh-pass 结论和真实完成状态。
 
-- [ ] **Step 1：运行基础与完整 Framework 门禁**
+- [x] **Step 1：运行基础与完整 Framework 门禁**
 
 Run:
 
 ```bash
 git diff --check
 swift package resolve
-xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' -parallel-testing-enabled NO -resultBundlePath /private/tmp/AnchorPagerDefaultHeaderFramework-20260714.xcresult test
-xcrun xcresulttool get test-results summary --path /private/tmp/AnchorPagerDefaultHeaderFramework-20260714.xcresult
-xcrun xcresulttool get build-results issues --path /private/tmp/AnchorPagerDefaultHeaderFramework-20260714.xcresult
+xcodebuild -scheme AnchorPager -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' -parallel-testing-enabled NO -resultBundlePath /private/tmp/AnchorPagerDefaultHeaderFramework-20260715.xcresult test
+xcrun xcresulttool get test-results summary --path /private/tmp/AnchorPagerDefaultHeaderFramework-20260715.xcresult
+xcrun xcresulttool get build-results issues --path /private/tmp/AnchorPagerDefaultHeaderFramework-20260715.xcresult
 ```
 
 Expected: resolve/test exit 0，Framework 0 fail、0 skip，issue summary 为 0 error、0 warning、0 analyzer warning。记录工具返回的真实测试总数。
 
-- [ ] **Step 2：运行完整 Example 单元/UI 与 generic build**
+- [x] **Step 2：运行完整 Example 单元/UI 与 generic build**
 
 Run:
 
 ```bash
-xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' -parallel-testing-enabled NO -resultBundlePath /private/tmp/AnchorPagerDefaultHeaderExample-20260714.xcresult test
-xcrun xcresulttool get test-results summary --path /private/tmp/AnchorPagerDefaultHeaderExample-20260714.xcresult
-xcrun xcresulttool get build-results issues --path /private/tmp/AnchorPagerDefaultHeaderExample-20260714.xcresult
-xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'generic/platform=iOS Simulator' -resultBundlePath /private/tmp/AnchorPagerDefaultHeaderBuild-20260714.xcresult build
-xcrun xcresulttool get build-results issues --path /private/tmp/AnchorPagerDefaultHeaderBuild-20260714.xcresult
+xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' -parallel-testing-enabled NO -resultBundlePath /private/tmp/AnchorPagerDefaultHeaderExample-20260715.xcresult test
+xcrun xcresulttool get test-results summary --path /private/tmp/AnchorPagerDefaultHeaderExample-20260715.xcresult
+xcrun xcresulttool get build-results issues --path /private/tmp/AnchorPagerDefaultHeaderExample-20260715.xcresult
+xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'generic/platform=iOS Simulator' -resultBundlePath /private/tmp/AnchorPagerDefaultHeaderBuild-20260715.xcresult build
+xcrun xcresulttool get build-results issues --path /private/tmp/AnchorPagerDefaultHeaderBuild-20260715.xcresult
 ```
 
 Expected: Example 全部测试 0 fail、0 skip；generic build 成功；两份 issue summary 均为 0 error、0 warning、0 analyzer warning。分别记录单元与 UI 的真实数量。
 
-- [ ] **Step 3：捕获默认启动与显式 inside 的运行时约束日志**
+- [x] **Step 3：捕获默认启动与显式 inside 的运行时约束日志**
 
 Run:
 
 ```bash
-xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' -parallel-testing-enabled NO -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testHeaderTopBehaviorMenuSwitchesVisibleConfiguration -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testInsideSafeAreaUsesTopInsetAndKeepsHeaderHeightDuringCollapse test > /private/tmp/AnchorPagerDefaultHeaderRuntime-20260714.log 2>&1
-rg -n "Unable to simultaneously satisfy constraints|UIViewAlertForUnsatisfiableConstraints" /private/tmp/AnchorPagerDefaultHeaderRuntime-20260714.log
+xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExample -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' -parallel-testing-enabled NO -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testHeaderTopBehaviorMenuSwitchesVisibleConfiguration -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testInsideSafeAreaUsesTopInsetAndKeepsHeaderHeightDuringCollapse test > /private/tmp/AnchorPagerDefaultHeaderRuntime-20260715.log 2>&1
+rg -n "Unable to simultaneously satisfy constraints|UIViewAlertForUnsatisfiableConstraints" /private/tmp/AnchorPagerDefaultHeaderRuntime-20260715.log
 ```
 
 Expected: 第一条命令 exit 0；第二条无匹配输出。若出现约束冲突，先补 RED 并修复，不得在验收文档中豁免。
 
-- [ ] **Step 4：执行静态架构门禁**
+- [x] **Step 4：执行静态架构门禁**
 
 Run:
 
@@ -438,7 +438,7 @@ Expected:
 4. inside 默认文档命中只能是明确历史记录或迁移说明。
 5. `git diff --check` 通过。
 
-- [ ] **Step 5：做实现者自审和 fresh-pass**
+- [x] **Step 5：做实现者自审和 fresh-pass**
 
 Review range:
 
@@ -459,7 +459,7 @@ git diff 97e8fc2...HEAD -- Sources Tests Examples README.md docs AGENTS.md
 
 若发现 Critical/Important 或行为 Minor，必须先写 RED、完成最小修复、重跑受影响门禁并单独提交；未清零前不进入下一步。
 
-- [ ] **Step 6：写入真实最终结果并关闭专项**
+- [x] **Step 6：写入真实最终结果并关闭专项**
 
 只有 Step 1–5 全部通过后，才更新 AGENTS、README、requirements、architecture、task-list、roadmap、设计状态和本计划勾选项。记录内容必须来自本轮命令输出：
 
@@ -470,7 +470,9 @@ git diff 97e8fc2...HEAD -- Sources Tests Examples README.md docs AGENTS.md
 5. fresh-pass 的 Critical/Important/Minor 结论。
 6. 明确新默认不改变 viewport 裁剪或 v0.5/v0.6 Ready 架构门禁。
 
-- [ ] **Step 7：最终一致性检查并提交验收状态**
+实际结果（2026-07-15，Apple Swift 6.3.3 / Xcode 26.6）：生产代码 HEAD `3bdcfb6`；Framework 322/322；Example 41/41（11 单元 + 30 UI）；0 fail、0 skip、0 expected failure；generic Simulator build 成功；三份 xcresult 的 error/warning/analyzer warning 均为 0；运行时约束关键字零命中；fresh-pass `97e8fc2...f4d9f41` 为 Critical 0、Important 0、Minor 0。viewport 裁剪和 v0.5/v0.6 Ready 架构门禁保持不变。
+
+- [x] **Step 7：最终一致性检查并提交验收状态**
 
 Run:
 

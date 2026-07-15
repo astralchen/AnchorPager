@@ -59,6 +59,8 @@ Public API 保持领域无关，命名参考 UIKit。当前公开类型包括：
 
 `AnchorPagerHeaderConfiguration` 的默认 `topBehavior` 为 `.extendsUnderTopSafeArea`。该默认只由 Header 配置初始化器定义；`AnchorPagerHeaderConfiguration.default`、`AnchorPagerConfiguration.default`、Pager 无参数初始化和 Example 均沿同一构造链继承，不保存第二份默认事实。显式 `.insideSafeArea` 仍是完整支持的运行时模式。
 
+该默认迁移的生产代码 HEAD 为 `3bdcfb6`。2026-07-15 全量验收为 Framework 322/322、Example 41/41（11 单元 + 30 UI）及 generic Simulator build 全部通过；静态扫描确认没有新增几何/owner 分支、第三方 Public 泄漏或业务 child delegate/pan/bounce 写入，fresh-pass `97e8fc2...f4d9f41` 为 Critical 0、Important 0、Minor 0。
+
 可见状态下的程序化切页采用确认后提交语义：`AnchorPagerViewController` 只在内部 adapter 收到 Pageboy/Tabman 的完成回调后更新 public `selectedIndex` 并通知 delegate；取消或回弹不会提前提交。若 Pageboy 当前忙碌导致 adapter 拒绝新的程序化请求，v0.1 不做请求排队，public 状态保持旧值，并写入 rejected 日志。adapter 会保留已被接受但尚未完成的上一笔请求，避免后续被拒绝的请求清掉正在进行的 transition。
 
 ## Tabman/Pageboy 边界

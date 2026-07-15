@@ -8,7 +8,7 @@ AnchorPager 是一个 UIKit 容器框架，用于组合可变 Header、吸顶分
 
 2026-07-14 主容器 top inset 与固定高度 Header 专项已在最终生产 HEAD `424a0a3` 收口：`.insideSafeArea` 使用本地顶部遮挡作为真实 `contentInset.top`，`.extendsUnderTopSafeArea` 使用 `0`；业务 Header 根视图在正常折叠中保持完整高度，由 AnchorPager 自有 presentation surface 上移。fresh-pass 发现的 safe-area/bounds active boundary 清理、缺失 `willSelect` 的 plain selection terminal 清理、geometry 迁移日志和 Public DocC 共 2 个 Important、2 个 Minor 均已通过 RED/GREEN 修复，终态 Critical 0、Important 0、Minor 0。Framework 322/322、Example 41/41（11 项单元测试 + 30 项 UI 测试）与 generic Simulator build 全部通过，0 fail、0 skip、0 error/warning/analyzer warning；v0.5 Task 7 与 v0.6 已恢复 Ready。
 
-当前 `AnchorPagerHeaderTopBehavior` 默认使用 `.extendsUnderTopSafeArea`：未显式配置时，Header 背景从容器顶部开始并覆盖顶部系统区域；需要让 Header 背景从安全区域下方开始时，仍可显式选择 `.insideSafeArea`。这只是默认选择变化，不改变固定高度 Header、bar 吸顶基线或 viewport 裁剪语义。
+2026-07-15 Header 默认顶部行为专项已在生产代码 HEAD `3bdcfb6` 完成：`AnchorPagerHeaderTopBehavior` 默认使用 `.extendsUnderTopSafeArea`，未显式配置时 Header 背景从容器顶部开始并覆盖顶部系统区域；需要让 Header 背景从安全区域下方开始时，仍可显式选择 `.insideSafeArea`。这只是默认选择变化，不改变固定高度 Header、bar 吸顶基线或 viewport 裁剪语义。Apple Swift 6.3.3 / Xcode 26.6 下，Framework 322/322、Example 41/41（11 项单元测试 + 30 项 UI 测试）与 generic Simulator build 全部通过，0 fail、0 skip、0 error/warning/analyzer warning；默认启动与显式 inside 运行时日志未出现 UIKit 约束冲突。fresh-pass 覆盖 `97e8fc2...f4d9f41`，结论为 Critical 0、Important 0、Minor 0。
 
 ## 安装
 

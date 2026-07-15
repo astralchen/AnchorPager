@@ -185,6 +185,8 @@ public enum AnchorPagerHeaderTopBehavior: Sendable, Equatable {
 
 `AnchorPagerHeaderConfiguration` 的 `topBehavior` 默认参数为 `.extendsUnderTopSafeArea`；需要安全区域内背景时必须显式选择 `.insideSafeArea`。
 
+该默认迁移已在生产代码 HEAD `3bdcfb6` 完成，并于 2026-07-15 通过 Framework 322/322、Example 41/41（11 单元 + 30 UI）、generic Simulator build、运行时约束扫描和静态所有权门禁；两种模式的既有几何公式与 ownership 要求不变。
+
 两种顶部行为只决定主容器顶部 inset 与 Header 背景是否延伸到顶部系统区域，不决定折叠时缩小
 Header。业务 Header 根视图在稳定滚动和 bounce 期间必须保持完整解析高度；正常折叠只允许移动
 AnchorPager 自有 canonical content presentation surface。固定 viewport 是唯一屏幕裁剪边界，container
