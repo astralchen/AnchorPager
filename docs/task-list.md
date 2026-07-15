@@ -548,13 +548,13 @@
 - [ ] 每个状态实现 update 路径
 - [ ] 每个状态实现 finish 路径
 - [ ] 每个状态实现 cancel 路径
-- [ ] 统一 setSelectedIndex selection commit/cancel
-- [ ] 统一分段栏点击 selection commit/cancel
-- [ ] 统一横向滑动 selection commit/cancel
-- [ ] selectedIndex 只在确认完成后提交
-- [ ] 非相邻页面切换使用 source/target 过渡语义
-- [ ] 快速连续 setSelectedIndex/bar 点击使用 active + latest pending，旧 completion/executor-ready 不清除新请求
-- [ ] active 期间请求 committed source index 仍作为有效 latest intent
+- [x] 统一 setSelectedIndex selection commit/cancel
+- [x] 统一分段栏点击 selection commit/cancel
+- [x] 统一横向滑动 selection commit/cancel
+- [x] selectedIndex 只在确认完成后提交
+- [x] 非相邻页面切换使用 source/target 过渡语义
+- [x] 快速连续 setSelectedIndex/bar 点击使用 active + latest pending，旧 completion/executor-ready 不清除新请求
+- [x] active 期间请求 committed source index 仍作为有效 latest intent
 - [ ] reloadData 非 idle 时执行 cancel 或延迟合并
 - [ ] reloadHeaderLayout 非 idle 时执行 cancel 或延迟合并
 - [ ] container/child pan 结束时记录 velocity 和 deceleration rate，不占用业务 delegate

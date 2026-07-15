@@ -413,6 +413,7 @@ delta(t0, t1) = v0 * (d^(1000 * t0) - d^(1000 * t1)) / (-1000 * ln(d))
 - `paging.selection.reject`
 - `paging.selection.staleTerminal`
 - `paging.selection.executorReady`
+- `paging.selection.structuralCancel`
 - `scroll.deceleration.begin`
 - `scroll.deceleration.handoff`
 - `scroll.deceleration.finish`

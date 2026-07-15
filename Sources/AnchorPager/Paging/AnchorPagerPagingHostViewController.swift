@@ -115,9 +115,11 @@ final class AnchorPagerPagingHostViewController: UIViewController {
             pageCount: pageCount,
             selectedIndex: selectedIndex
         )
+        pendingExplicitSelectionRequest = nil
         if activeReloadRequest != nil ||
             isStartingReloadRequest ||
-            activeAdapter?.isReadyForReload == false {
+            activeAdapter?.isReadyForReload == false ||
+            shouldWaitForActiveSelection(before: request) {
             pendingReloadRequest = request
             AnchorPagerLogger.log(.debug, category: .paging, event: "paging.reload.deferred")
             return
@@ -348,6 +350,7 @@ final class AnchorPagerPagingHostViewController: UIViewController {
             )
             return false
         }
+        cancelActiveSelectionStructurally(for: adapter)
 
         adapter.willMove(toParent: nil)
         NSLayoutConstraint.deactivate(activeAdapterConstraints)
@@ -365,9 +368,38 @@ final class AnchorPagerPagingHostViewController: UIViewController {
         guard let request = pendingReloadRequest else { return false }
         guard activeReloadRequest == nil, !isStartingReloadRequest else { return true }
         guard activeAdapter?.isReadyForReload != false else { return true }
+        guard !shouldWaitForActiveSelection(before: request) else { return true }
         pendingReloadRequest = nil
         _ = performReload(request)
         return true
+    }
+
+    private func shouldWaitForActiveSelection(before request: ReloadRequest) -> Bool {
+        guard activeSelectionTransaction != nil else { return false }
+        let canStructurallyTeardown = request.pageCount == 0 &&
+            activeAdapter?.isReadyForReload == true
+        return !canStructurallyTeardown
+    }
+
+    private func cancelActiveSelectionStructurally(for adapter: AnchorPagerPagingAdapter) {
+        guard let transaction = activeSelectionTransaction,
+              transaction.adapterIdentifier == ObjectIdentifier(adapter) else {
+            return
+        }
+        activeSelectionTransaction = nil
+        forwardedWillSelectRequestIdentifier = nil
+        pendingExplicitSelectionRequest = nil
+        AnchorPagerLogger.log(
+            .debug,
+            category: .paging,
+            event: "paging.selection.structuralCancel"
+        )
+        guard transaction.semanticTerminal == nil else { return }
+        eventDelegate?.pagingHost(
+            self,
+            didCancelSelectionAt: transaction.request.targetIndex,
+            returningTo: transaction.previousIndex
+        )
     }
 
     private func finishActiveReload(

@@ -8,7 +8,7 @@
 
 **Tech Stack:** Swift 6.2、Swift 6 language mode、UIKit、iOS 14+、Swift Package Manager、Tabman 4.0.1、Pageboy 5.0.2、XCTest/XCUITest、Xcode 26.6、iPhone 17 Pro / iOS 26.5 Simulator。
 
-**当前状态：** 专项设计与 Pageboy executor-ready 补充契约已确认；用户已复核并授权实施。Task 0–3 已完成，正在继续统一 selection/reload terminal 串行。
+**当前状态：** 专项设计与 Pageboy executor-ready 补充契约已确认；用户已复核并授权实施。Task 0–4 已完成，正在继续建立单一 Interaction State。
 
 ## Global Constraints
 
@@ -374,21 +374,24 @@ git commit -m "统一分页选择请求所有权"
 **Files:**
 - Modify: `Sources/AnchorPager/Paging/AnchorPagerPagingHostViewController.swift`
 - Modify: `Tests/AnchorPagerTests/AnchorPagerPagingHostViewControllerTests.swift`
-- Modify: `Tests/AnchorPagerTests/AnchorPagerPagingAdapterTests.swift`
+- Verify: `Tests/AnchorPagerTests/AnchorPagerPagingAdapterTests.swift`
+- Modify: `docs/superpowers/specs/2026-07-15-v0-7-interaction-selection-momentum-design.md`
 
-- [ ] **Step 1：写 selection/reload 交叉 RED**
+计划复核补充：Task 2 已用 `testNonanimatedCompletionPublishesReadySynchronouslyAndTeardownClearsLateHook()` 固定 Adapter teardown 清除晚到 ready hook，本任务复用并联合运行该门禁，不重复修改 Adapter 测试；新增 Host 真实 custom transition 集成测试固定动画 completion → interaction hook → latest start 顺序。
+
+- [x] **Step 1：写 selection/reload 交叉 RED**
 
 覆盖：active selection + latest reload；reload 到来丢弃旧 generation pending selection；selection 三项确认前 reload 不开始；release 后 reload 优先于 selection；reload pending/active 时新 API/bar selection no-op；empty teardown 对 active transaction 发 matching structural cancel；旧 Adapter 迟到 terminal 不影响新 Adapter。
 
-- [ ] **Step 2：写 executor-ready 真实集成 RED**
+- [x] **Step 2：写 executor-ready 真实集成 RED**
 
 在真实 Adapter/Host 中启动 animated B，排队 D；手动到达 B semantic 与 completion 后断言 D 未启动；Pageboy interaction hook 恢复 true 后 D 才启动。另测 nonanimated B completion 可同步 ready，但仍不得在第一笔未进入真实 updater 前并发调用 Pageboy。
 
-- [ ] **Step 3：实现统一 reload-first drain**
+- [x] **Step 3：实现统一 reload-first drain**
 
 移除 did/cancel callback 中“先 perform reload、再丢弃真实 semantic”的旧逻辑；matching semantic 必须先提交真实 B，transaction 完整释放后才开始 pending reload。reload request payload 与 generation acknowledgement 保持现有 identifier 契约。
 
-- [ ] **Step 4：运行聚焦回归**
+- [x] **Step 4：运行聚焦回归**
 
 ```bash
 xcodebuild -quiet -scheme AnchorPager \
@@ -397,12 +400,14 @@ xcodebuild -quiet -scheme AnchorPager \
   -only-testing:AnchorPagerTests/AnchorPagerPagingAdapterTests test
 ```
 
-- [ ] **Step 5：自审并提交**
+- [x] **Step 5：自审并提交**
 
 ```bash
-git add Sources/AnchorPager/Paging/AnchorPagerPagingHostViewController.swift Tests/AnchorPagerTests/AnchorPagerPagingHostViewControllerTests.swift Tests/AnchorPagerTests/AnchorPagerPagingAdapterTests.swift
+git add Sources/AnchorPager/Paging/AnchorPagerPagingHostViewController.swift Tests/AnchorPagerTests/AnchorPagerPagingHostViewControllerTests.swift docs/architecture.md docs/task-list.md docs/superpowers/specs/2026-07-15-v0-7-interaction-selection-momentum-design.md docs/superpowers/plans/2026-07-15-v0-7-interaction-selection-momentum.md
 git commit -m "串行分页选择与重载终态"
 ```
+
+验收记录：selection/reload RED 同时暴露旧 generation pending selection 未清除和 empty shim 后 Host transaction 悬挂；GREEN 后 reload 到来同步丢弃未开始 selection，matching semantic 始终先提交，active 收齐 required acknowledgement 后优先启动 latest reload。真实 Pageboy public custom transition 验证动画 B 的 semantic 先到，只有真实 completion 令 interaction hook 恢复后才启动 D；真实非动画 updater 门禁继续验证 completion 同步 ready 不会在第一笔 updater 前并发执行。空态 shim 成功且 Adapter 已 ready、Host 仍缺 semantic 时只发送一次 matching structural cancel，旧 Adapter terminal/ready 不影响新 Adapter。Host + Adapter 66/66、Framework 344/344，均 0 fail、0 skip；结果包分别为 `/private/tmp/AnchorPagerV07Task4HostAdapterFinal-20260715-1830.xcresult` 与 `/private/tmp/AnchorPagerV07Task4FrameworkFinal-20260715-1832.xcresult`。自审确认 reload payload/generation acknowledgement、Public API、containment、appearance、Store 和业务 child ownership 均未改变。
 
 ---
 
