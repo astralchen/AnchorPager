@@ -8,6 +8,8 @@
 
 当前架构保留 `contentInsetAdjustmentBehavior = .never`，但由 `AnchorPagerHeaderTopBehavior` 独立拥有主容器 top inset：inside 等于本地顶部安全区遮挡，extends 为零。所有纵向协调统一使用 `logicalOffset = rawOffset + containerTopInset`；固定 viewport 内的 canonical content presentation surface 让 HeaderHost 保持完整高度，并让 Header 与 PagingHost 正常上移。container top 移动共享 viewport，plain bottom 只移动 Pageboy 页面 surface，真实 child bounce 仍由业务 child 表达。
 
+Example Header 的内部布局不属于框架 presentation owner。真实 container top 回弹期间，框架继续整体移动共享 viewport；Example 标题栈使用 `top >= safeArea.top + 20` 与 `bottom == safeArea.bottom - 20`，让动态顶部 safe area 只作为安全下限、底部 guide 作为稳定局部位置锚点，避免 safe-area top 变化抵消 Header 的可见位移。该约束不改变通用 Header API、高度测量或接入方对自身 Header 内容布局的所有权。
+
 ## 技术基线
 
 - Minimum toolchain：Swift 6.2
@@ -16,7 +18,7 @@
 
 tools version 负责 SwiftPM/编译器最低工具链门禁，`.v6` 只选择 Swift 6 language mode；两者不能混为一谈。
 
-2026-07-14 当前验收使用 Apple Swift 6.3.3、Xcode 26.6、iPhone 17 Pro / iOS 26.5：`swift package resolve` 通过；生产代码 HEAD `424a0a3` 对应 Framework 322/322，Example 41/41（11 单元 + 30 UI），全部 0 fail、0 skip；generic Simulator build 成功。三份最终结果均为 0 error、0 warning、0 analyzer warning。
+2026-07-15 当前验收使用 Apple Swift 6.3.3、Xcode 26.6、iPhone 17 Pro / iOS 26.5：`swift package resolve` 通过；Example Header 专项生产代码 HEAD `1f7e3f4` 对应 Framework 322/322，Example 41/41（11 单元 + 30 UI），全部 0 fail、0 skip；generic Simulator build 成功。三份最终结果均为 0 error、0 warning、0 analyzer warning，UIKit `LayoutConstraints` 查询无冲突。
 
 ## 模块划分
 

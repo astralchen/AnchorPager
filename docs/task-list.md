@@ -307,8 +307,8 @@
 - [x] v0.2 测试当时无滚动包装的安全可见底端（现由 plain root 物理底边测试取代）
 - [x] 测试示例工程 `AnchorPagerHeaderTopBehavior` 菜单显示、切换和 `extendsUnderTopSafeArea` 顶部遮挡覆盖
 - [x] 示例 Header 标题栈上下约束到 `safeAreaLayoutGuide`，两种顶部行为下保持 20 pt 内容间距
-- [x] 示例 Header 文本组顶部对齐，标题与副标题保持固定 8 pt 间距且负 offset 不拉伸 label
-- [ ] 示例 Header 改用顶部安全下限与底部稳定锚点，跨越完整顶部遮挡回弹时保持文字相对 Header 顶部距离不变
+- [x] 示例 Header 历史 follow-up：文本组曾采用顶部对齐，标题与副标题保持固定 8 pt 间距且负 offset 不拉伸 label；该纵向约束已由下一项取代
+- [x] 示例 Header 改用顶部安全下限与底部稳定锚点，跨越完整顶部遮挡回弹时保持文字相对 Header 顶部距离不变
 - [x] 测试 additionalSafeAreaInsets
 
 ## v0.3：Scroll Discovery 与 Inset Ownership 版
@@ -464,6 +464,10 @@
 - [x] 完成 Framework、Example、真实 UI、generic build 与运行时约束首轮全量验收：正式验收 HEAD `ce09f2b`，Framework 318/318、Example 41/41（11 单元 + 30 UI）、generic build，0 fail、0 skip、0 error/warning/analyzer warning；Header 真实手势日志无约束冲突
 - [x] fresh-pass 覆盖 `7885d9e...424a0a3`：2 个 Important 与 2 个 Minor 均按 RED/GREEN 修复到 `5ba84d4`、`424a0a3`，终态 Critical 0、Important 0、Minor 0
 - [x] 最终生产 HEAD `424a0a3` 全量验收：Framework 322/322、Example 41/41（11 单元 + 30 UI）、generic Simulator build，0 fail、0 skip、0 error/warning/analyzer warning；恢复 v0.5 Task 7 Ready
+- [x] Example Header 顶部回弹内容稳定专项完成关系梳理、设计与计划：框架继续整体移动共享 viewport，Example 只调整自身标题栈纵向约束并增加只读显示帧探针
+- [x] 旧顶部等式/底部上限约束的隔离真实 UI RED 精确记录 `headerContentTopDeltaMax = 116 pt`；正式顶部安全下限/底部稳定等式下 Example 单元 target 与两条聚焦 UI 全部 GREEN，生产提交 `1f7e3f4`
+- [x] Example Header 专项最终验收：Framework 322/322、Example 41/41（11 单元 + 30 UI）、generic Simulator build，0 fail、0 skip；三份 xcresult 0 error/warning/analyzer warning，UIKit `LayoutConstraints` 无冲突
+- [x] Example Header 专项 fresh-pass `afaefce...1f7e3f4`：Public、framework、containment、scroll/inset/gesture/bounce/logging owner 均未改变，终态 Critical 0、Important 0、Minor 0；v0.5 Task 7 与 v0.6 保持 Ready
 
 ## v0.6：顶部 Overscroll 事件处理版
 
@@ -680,7 +684,7 @@
 - [x] v0.2 follow-up：主容器 scroll range 与 Header/paging viewport 已解耦，移除 `visibleY + contentOffset` 约束反馈闭环，修复顶部行为切换后下拉回弹残留空白；验证记录见 `docs/superpowers/plans/2026-07-10-header-scroll-viewport.md`
 - [x] v0.2 follow-up：保留 Header 双顶部行为并统一分段栏基线；automatic Header 使用中立测量，负 offset 使用 viewport presentation translation，修复视觉 bounce 消失和回弹后高度增长；验证记录见 `docs/superpowers/plans/2026-07-11-dual-header-top-behavior-bounce-stability.md`
 - [x] v0.2 follow-up：示例 Header 蓝色背景保持顶部行为语义，标题栈上下改用 safe area 并保留 20 pt 间距；验证记录见 `docs/superpowers/plans/2026-07-11-example-header-safe-area-content.md`
-- [x] v0.2 follow-up：示例 Header 标题栈 bottom 改为 safe area 上限约束，文本组顶部对齐并在下拉中保持固定 8 pt 间距；验证记录见 `docs/superpowers/plans/2026-07-11-example-header-safe-area-content.md`
+- [x] v0.2 历史 follow-up（当前约束已取代）：示例 Header 标题栈 bottom 曾改为 safe area 上限约束，文本组顶部对齐并在下拉中保持固定 8 pt 间距；历史验证见 `docs/superpowers/plans/2026-07-11-example-header-safe-area-content.md`
 - [x] v0.2 Header 与布局稳定版已完成；后续从 v0.3 Scroll Discovery 与 Inset Ownership 版继续
 - [x] v0.3–v0.5 固定分页视口、optional bar height、inset ownership 与纵向 owner 基础不变量已确认；v0.5 代理所有权、canonical distance 和顶部下拉边界改由 `docs/superpowers/specs/2026-07-13-v0-5-scroll-coordination-design.md` 草案收口
 - [x] v0.3 Scroll Discovery 与 Inset Ownership 版已完成；验收记录见 `docs/superpowers/plans/2026-07-11-v0-3-fixed-paging-inset-ownership.md`

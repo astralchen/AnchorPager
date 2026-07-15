@@ -4,6 +4,9 @@
 > `2026-07-15-example-header-bounce-stable-content-layout-design.md` 取代。早期问题、RED/GREEN 与
 > bootstrap 记录继续保留为历史；新的正式语义是顶部安全下限、底部稳定等式，并要求真实 container 回弹期间
 > 文字相对 Header 顶部距离保持不变。
+>
+> **最终取代记录：** 新语义已在生产提交 `1f7e3f4` 实施并完成真实手势与全量验收。下文
+> `top == safeArea.top + 20`、`bottom <= safeArea.bottom - 20` 只描述历史实现，不是当前约束。
 
 ## 背景
 
@@ -130,3 +133,11 @@ hugging、固定 Header 高度或修改框架布局掩盖问题。
 ## 2026-07-14 首次零高度布局修订
 
 真实启动日志显示示例标题栈约束本身符合本设计，但框架首次中立测量先把 Header host required height 设为 `0`，再执行 layout，造成 `top == safeArea.top + 20`、`bottom <= safeArea.bottom - 20` 与零高度冲突。不得通过降低示例内容约束优先级、删除底部安全间距或示例专用分支消除告警。修复必须位于框架 bootstrap measurement：先取得 fitting seed，再执行中立正式测量。详细设计见 `2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement-design.md`。
+
+## 2026-07-15 最终取代实施记录
+
+- 当前正式约束为 `top >= safeArea.top + 20`、`bottom == safeArea.bottom - 20`；顶部 guide 只表达安全下限，底部 guide 稳定标题栈在 Header 本地坐标中的位置。
+- 隔离旧约束的真实 container 拖拽 RED 记录到 `headerContentTopDeltaMax = 116 pt`，同时 Header 高度和 container top presentation 门禁保持成立，证明失败只来自内部文字漂移。
+- 生产提交 `1f7e3f4` 后，Example 单元 target 和两条聚焦真实 UI 均 GREEN；完整验收为 Framework 322/322、Example 41/41（11 单元 + 30 UI）与 generic Simulator build 全部通过。
+- 三份 xcresult 均为 0 error、0 warning、0 analyzer warning，UIKit `LayoutConstraints` 查询无冲突；fresh-pass 为 Critical 0、Important 0、Minor 0。
+- AnchorPager Header 高度模型、共享 viewport presentation、Pageboy containment、child inset/gesture/bounce ownership 与日志均未修改。
