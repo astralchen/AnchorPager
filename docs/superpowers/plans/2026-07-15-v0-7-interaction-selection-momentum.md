@@ -8,7 +8,7 @@
 
 **Tech Stack:** Swift 6.2、Swift 6 language mode、UIKit、iOS 14+、Swift Package Manager、Tabman 4.0.1、Pageboy 5.0.2、XCTest/XCUITest、Xcode 26.6、iPhone 17 Pro / iOS 26.5 Simulator。
 
-**当前状态：** 专项设计与 Pageboy executor-ready 补充契约已确认；本计划待用户复核，生产实现尚未开始。
+**当前状态：** 专项设计与 Pageboy executor-ready 补充契约已确认；用户已复核并授权实施。Task 0–2 已完成，正在继续执行 Host selection transaction。
 
 ## Global Constraints
 
@@ -201,7 +201,12 @@ git commit -m "建立分页选择事务值语义"
 
 **Files:**
 - Modify: `Sources/AnchorPager/Paging/AnchorPagerPagingAdapter.swift`
+- Modify: `Sources/AnchorPager/Paging/AnchorPagerPagingHostViewController.swift`
 - Modify: `Tests/AnchorPagerTests/AnchorPagerPagingAdapterTests.swift`
+- Modify: `Tests/AnchorPagerTests/AnchorPagerPagingHostViewControllerTests.swift`
+- Modify: `Tests/AnchorPagerTests/AnchorPagerViewControllerTests.swift`
+
+计划复核补充：Adapter delegate 与执行入口是 Paging 层的同步编译契约，改为 identifier-aware 后必须在本任务同步迁移 Host 调用点，并调整依赖旧 completion/readiness 顺序的 Host/ViewController 测试。这里仅建立 Host identifier 分配与签名桥接；一笔 active + 一笔 latest pending 的 admission、matching terminal 和 drain 所有权仍完整留在 Task 3，不在 Adapter 建立第二套队列。
 
 **Interfaces:**
 
@@ -257,19 +262,19 @@ func executeSelection(
 ) -> Bool
 ```
 
-- [ ] **Step 1：写 Adapter callback provenance RED**
+- [x] **Step 1：写 Adapter callback provenance RED**
 
 覆盖：execute 时保存唯一 matching identifier；will/did/cancel/completion 全部携带同一 identifier；没有 executing context 的 interactive will 同步向 Host 申请 identifier；duplicate will 复用 identifier；旧 completion 不清除新 context；target mismatch 只记录 stale 日志。
 
-- [ ] **Step 2：写 Tabman bar 旁路 RED**
+- [x] **Step 2：写 Tabman bar 旁路 RED**
 
 直接调用 `adapter.bar(_:didRequestScrollTo:)`，断言只收到 `didRequestBarSelectionAt`，未调用 `super`、未直接改变 Pageboy current index、未创建无 identifier execution。
 
-- [ ] **Step 3：写 executor-ready 顺序 RED**
+- [x] **Step 3：写 executor-ready 顺序 RED**
 
 真实动画 request completion 到达时只发送 completion acknowledgement；在 Adapter 继承的 `isUserInteractionEnabled` 恢复为 true 前不发送 ready；恢复 true 后只发送一次 matching ready。false、重复 true、无 matching identifier、teardown 后迟到 true 均无效。
 
-- [ ] **Step 4：运行 RED**
+- [x] **Step 4：运行 RED**
 
 ```bash
 xcodebuild -quiet -scheme AnchorPager \
@@ -279,20 +284,22 @@ xcodebuild -quiet -scheme AnchorPager \
 
 预期：因新 delegate/execute/bar/ready 契约缺失而失败。
 
-- [ ] **Step 5：实现最小 Adapter executor**
+- [x] **Step 5：实现最小 Adapter executor**
 
 删除 Adapter 的 explicit queue/latest-wins 职责，只保留一笔 `ExecutingSelection`；覆写 `bar(_:didRequestScrollTo:)` 且不调用 super；覆写 Pageboy open `isUserInteractionEnabled`，只在 matching animated completion 已到达后发布 ready。非动画 completion 同步发布 completion + ready，不等待属性 hook。
 
-- [ ] **Step 6：保留 reload/teardown 兼容点**
+- [x] **Step 6：保留 reload/teardown 兼容点**
 
 `prepareForRemoval()` 先 structural-cancel executing/ready context，再使用现有 Pageboy 5.0.2 delete-last-page shim；不改变 post-order containment teardown、bar inset terminal 和 appearance suppression。
 
-- [ ] **Step 7：运行 Adapter 全量、自审并提交**
+- [x] **Step 7：运行 Adapter 全量、自审并提交**
 
 ```bash
-git add Sources/AnchorPager/Paging/AnchorPagerPagingAdapter.swift Tests/AnchorPagerTests/AnchorPagerPagingAdapterTests.swift
+git add Sources/AnchorPager/Paging/AnchorPagerPagingAdapter.swift Sources/AnchorPager/Paging/AnchorPagerPagingHostViewController.swift Tests/AnchorPagerTests/AnchorPagerPagingAdapterTests.swift Tests/AnchorPagerTests/AnchorPagerPagingHostViewControllerTests.swift Tests/AnchorPagerTests/AnchorPagerViewControllerTests.swift docs/architecture.md docs/task-list.md docs/superpowers/plans/2026-07-15-v0-7-interaction-selection-momentum.md
 git commit -m "收口 Pageboy 选择执行边界"
 ```
+
+验收记录：RED 首先因新 delegate、`executeSelection` 与 executor-ready 契约缺失而编译失败；GREEN 后 Adapter/Host 聚焦测试通过，Framework 全量 335/335、0 fail、0 skip，结果包为 `/private/tmp/AnchorPagerV07Task2FrameworkFinal-20260715-1606.xcresult`。自审确认 Public API、Pageboy containment、reload/teardown、appearance suppression、业务 child delegate/pan/bounce/inset ownership 均未改变；Adapter 只保留一笔第三方 execution，Host active/latest queue 仍未提前实现。
 
 ---
 

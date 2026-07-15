@@ -476,7 +476,12 @@ final class AnchorPagerViewControllerTests: XCTestCase {
             direction: .forward,
             animated: true
         )
-        adapter.finishProgrammaticTransition(at: 1, finished: true)
+        adapter.finishProgrammaticTransition(
+            requestIdentifier: 1,
+            targetIndex: 1,
+            finished: true
+        )
+        adapter.isUserInteractionEnabled = true
         let pagingHost = try XCTUnwrap(installedPagingHost(in: pager))
         pagingHost.pagingAdapter(
             adapter,

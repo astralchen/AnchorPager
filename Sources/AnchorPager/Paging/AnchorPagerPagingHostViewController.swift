@@ -78,6 +78,8 @@ final class AnchorPagerPagingHostViewController: UIViewController {
     private var finishingReloadRequestIdentifier: AnchorPagerPagingReloadRequestIdentifier?
     private var isStartingReloadRequest = false
     private var isPagePresentationSurfaceUnavailable = false
+    // Task 3 会把 identifier 与 active/latest pending transaction 一并收口到 Host。
+    private var nextSelectionRequestIdentifier: AnchorPagerPagingSelectionRequestIdentifier = 1
 
     override func loadView() {
         let view = UIView()
@@ -173,6 +175,15 @@ final class AnchorPagerPagingHostViewController: UIViewController {
 
     @discardableResult
     func setSelectedIndex(_ index: Int, animated: Bool) -> Bool {
+        executeSelection(index: index, animated: animated, source: .api)
+    }
+
+    @discardableResult
+    private func executeSelection(
+        index: Int,
+        animated: Bool,
+        source: AnchorPagerPagingSelectionSource
+    ) -> Bool {
         guard pendingReloadRequest == nil,
               activeReloadRequest == nil,
               !isStartingReloadRequest else {
@@ -183,7 +194,19 @@ final class AnchorPagerPagingHostViewController: UIViewController {
             )
             return false
         }
-        return activeAdapter?.setSelectedIndex(index, animated: animated) ?? false
+        guard let activeAdapter else { return false }
+        let requestIdentifier = nextSelectionRequestIdentifier
+        nextSelectionRequestIdentifier += 1
+        let request = AnchorPagerPagingSelectionRequest(
+            identifier: requestIdentifier,
+            targetIndex: index,
+            animated: animated,
+            source: source
+        )
+        return activeAdapter.executeSelection(
+            request,
+            previousIndex: activeAdapter.currentIndex ?? index
+        )
     }
 
     private func installAdapter() -> AnchorPagerPagingAdapter {
@@ -280,6 +303,76 @@ final class AnchorPagerPagingHostViewController: UIViewController {
 }
 
 extension AnchorPagerPagingHostViewController: AnchorPagerPagingAdapterDelegate {
+    func pagingAdapter(
+        _ adapter: AnchorPagerPagingAdapter,
+        didRequestBarSelectionAt index: Int
+    ) {
+        guard adapter === activeAdapter else { return }
+        _ = executeSelection(index: index, animated: true, source: .bar)
+    }
+
+    func pagingAdapter(
+        _ adapter: AnchorPagerPagingAdapter,
+        didBeginInteractiveSelectionAt index: Int,
+        animated: Bool
+    ) -> AnchorPagerPagingSelectionRequestIdentifier? {
+        guard adapter === activeAdapter else { return nil }
+        let requestIdentifier = nextSelectionRequestIdentifier
+        nextSelectionRequestIdentifier += 1
+        return requestIdentifier
+    }
+
+    func pagingAdapter(
+        _ adapter: AnchorPagerPagingAdapter,
+        willSelect index: Int,
+        animated: Bool,
+        requestIdentifier: AnchorPagerPagingSelectionRequestIdentifier
+    ) {
+        guard adapter === activeAdapter else { return }
+        pagingAdapter(adapter, willSelect: index, animated: animated)
+    }
+
+    func pagingAdapter(
+        _ adapter: AnchorPagerPagingAdapter,
+        didSelect index: Int,
+        animated: Bool,
+        requestIdentifier: AnchorPagerPagingSelectionRequestIdentifier
+    ) {
+        guard adapter === activeAdapter else { return }
+        pagingAdapter(adapter, didSelect: index, animated: animated)
+    }
+
+    func pagingAdapter(
+        _ adapter: AnchorPagerPagingAdapter,
+        didCancelSelectionAt index: Int,
+        returningTo previousIndex: Int,
+        requestIdentifier: AnchorPagerPagingSelectionRequestIdentifier
+    ) {
+        guard adapter === activeAdapter else { return }
+        pagingAdapter(
+            adapter,
+            didCancelSelectionAt: index,
+            returningTo: previousIndex
+        )
+    }
+
+    func pagingAdapter(
+        _ adapter: AnchorPagerPagingAdapter,
+        didComplete requestIdentifier: AnchorPagerPagingSelectionRequestIdentifier,
+        finished: Bool,
+        currentIndex: Int?
+    ) {
+        guard adapter === activeAdapter else { return }
+    }
+
+    func pagingAdapter(
+        _ adapter: AnchorPagerPagingAdapter,
+        executorDidBecomeReadyFor requestIdentifier: AnchorPagerPagingSelectionRequestIdentifier
+    ) {
+        guard adapter === activeAdapter else { return }
+    }
+
+    // Task 2 的签名兼容入口；Task 3 建立 transaction 后由 matching callback 直接提交。
     func pagingAdapter(
         _ adapter: AnchorPagerPagingAdapter,
         willSelect index: Int,

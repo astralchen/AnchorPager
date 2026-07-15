@@ -227,6 +227,7 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
     func testAdapterForwardsSelectionEventsAndIgnoresUnidentifiedReloadCallback() {
         let adapter = AnchorPagerPagingAdapter()
         let delegate = RecordingPagingDelegate()
+        delegate.nextInteractiveRequestIdentifier = 1
         adapter.eventDelegate = delegate
         reload(
             adapter,
@@ -237,13 +238,22 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
 
         adapter.pageboyViewController(adapter, willScrollToPageAt: 1, direction: .forward, animated: true)
         adapter.pageboyViewController(adapter, didScrollToPageAt: 1, direction: .forward, animated: true)
+        delegate.nextInteractiveRequestIdentifier = 2
+        adapter.pageboyViewController(adapter, willScrollToPageAt: 1, direction: .forward, animated: true)
         adapter.pageboyViewController(adapter, didCancelScrollToPageAt: 1, returnToPageAt: 0)
         let current = adapter.viewController(for: adapter, at: 0)!
         adapter.pageboyViewController(adapter, didReloadWith: current, currentPageIndex: 0)
 
         XCTAssertEqual(
             delegate.events,
-            [.willSelect(1, true), .didSelect(1, true), .didCancel(1, 0)]
+            [
+                .interactiveBegin(1, true),
+                .identifiedWillSelect(1, true, 1),
+                .identifiedDidSelect(1, true, 1),
+                .interactiveBegin(1, true),
+                .identifiedWillSelect(1, true, 2),
+                .identifiedDidCancel(1, 0, 2),
+            ]
         )
     }
 
@@ -259,13 +269,16 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
             viewControllers: [UIViewController(), UIViewController()],
             selectedIndex: 0
         )
-        let didAcceptRequest = adapter.setSelectedIndex(1, animated: true)
+        let didAcceptRequest = adapter.executeSelection(
+            selectionRequest(identifier: 11, targetIndex: 1, animated: true),
+            previousIndex: 0
+        )
 
         XCTAssertTrue(didAcceptRequest)
-        XCTAssertFalse(delegate.events.contains(.didSelect(1, true)))
+        XCTAssertFalse(delegate.events.contains(.identifiedDidSelect(1, true, 11)))
         adapter.pageboyViewController(adapter, didScrollToPageAt: 1, direction: .forward, animated: true)
 
-        XCTAssertTrue(delegate.events.contains(.didSelect(1, true)))
+        XCTAssertTrue(delegate.events.contains(.identifiedDidSelect(1, true, 11)))
     }
 
     @MainActor
@@ -281,7 +294,10 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
         AnchorPagerLogger.sink = { events.append($0) }
         defer { AnchorPagerLogger.sink = nil }
 
-        let didAcceptRequest = adapter.setSelectedIndex(4, animated: false)
+        let didAcceptRequest = adapter.executeSelection(
+            selectionRequest(identifier: 12, targetIndex: 4, animated: false),
+            previousIndex: 0
+        )
 
         XCTAssertFalse(didAcceptRequest)
         XCTAssertTrue(events.contains(.init(category: .paging, level: .debug, event: "paging.setSelectedIndex.outOfRange")))
@@ -299,15 +315,21 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
             viewControllers: [UIViewController(), UIViewController(), UIViewController()],
             selectedIndex: 0
         )
-        let didAcceptFirstRequest = adapter.setSelectedIndex(1, animated: true)
-        let didAcceptSecondRequest = adapter.setSelectedIndex(2, animated: true)
+        let didAcceptFirstRequest = adapter.executeSelection(
+            selectionRequest(identifier: 13, targetIndex: 1, animated: true),
+            previousIndex: 0
+        )
+        let didAcceptSecondRequest = adapter.executeSelection(
+            selectionRequest(identifier: 14, targetIndex: 2, animated: true),
+            previousIndex: 0
+        )
 
         XCTAssertTrue(didAcceptFirstRequest)
         XCTAssertFalse(didAcceptSecondRequest)
         adapter.pageboyViewController(adapter, didScrollToPageAt: 1, direction: .forward, animated: true)
 
-        XCTAssertTrue(delegate.events.contains(.didSelect(1, true)))
-        XCTAssertFalse(delegate.events.contains(.didSelect(2, true)))
+        XCTAssertTrue(delegate.events.contains(.identifiedDidSelect(1, true, 13)))
+        XCTAssertFalse(delegate.events.contains(.identifiedDidSelect(2, true, 14)))
     }
 
     @MainActor
@@ -326,27 +348,294 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
             selectedIndex: 0
         )
 
-        let didAcceptFirstRequest = adapter.setSelectedIndex(1, animated: false)
-        let didAcceptSecondRequest = adapter.setSelectedIndex(2, animated: false)
+        let didAcceptFirstRequest = adapter.executeSelection(
+            selectionRequest(identifier: 15, targetIndex: 1, animated: false),
+            previousIndex: 0
+        )
+        let didAcceptSecondRequest = adapter.executeSelection(
+            selectionRequest(identifier: 16, targetIndex: 2, animated: false),
+            previousIndex: 0
+        )
 
         XCTAssertTrue(didAcceptFirstRequest)
         XCTAssertFalse(didAcceptSecondRequest)
         XCTAssertTrue(logEvents.contains(
             .init(category: .paging, level: .debug, event: "paging.selection.reject")
         ))
-        XCTAssertTrue(delegate.events.contains(.willSelect(1, false)))
-        XCTAssertFalse(delegate.events.contains(.willSelect(2, false)))
+        XCTAssertTrue(delegate.events.contains(.identifiedWillSelect(1, false, 15)))
+        XCTAssertFalse(delegate.events.contains(.identifiedWillSelect(2, false, 16)))
 
         RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.1))
 
-        XCTAssertTrue(delegate.events.contains(.didSelect(1, false)))
-        XCTAssertFalse(delegate.events.contains(.didSelect(2, false)))
+        XCTAssertTrue(delegate.events.contains(.identifiedDidSelect(1, false, 15)))
+        XCTAssertFalse(delegate.events.contains(.identifiedDidSelect(2, false, 16)))
         XCTAssertTrue(adapter.isReadyForReload)
+    }
+
+    @MainActor
+    func testIdentifierAwareExecutionForwardsMatchingWillDidAndCompletion() {
+        let adapter = AnchorPagerPagingAdapter()
+        let delegate = RecordingPagingDelegate()
+        adapter.eventDelegate = delegate
+        adapter.loadViewIfNeeded()
+        reload(
+            adapter,
+            titles: ["First", "Second"],
+            viewControllers: [UIViewController(), UIViewController()],
+            selectedIndex: 0
+        )
+        let request = AnchorPagerPagingSelectionRequest(
+            identifier: 41,
+            targetIndex: 1,
+            animated: true,
+            source: .api
+        )
+
+        XCTAssertTrue(adapter.executeSelection(request, previousIndex: 0))
+        XCTAssertTrue(delegate.events.contains(.identifiedWillSelect(1, true, 41)))
+
+        adapter.pageboyViewController(
+            adapter,
+            didScrollToPageAt: 1,
+            direction: .forward,
+            animated: true
+        )
+        adapter.finishProgrammaticTransition(
+            requestIdentifier: 41,
+            targetIndex: 1,
+            finished: true
+        )
+
+        XCTAssertTrue(delegate.events.contains(.identifiedDidSelect(1, true, 41)))
+        XCTAssertTrue(delegate.events.contains(.completion(41, true, adapter.currentIndex)))
+    }
+
+    @MainActor
+    func testInteractiveWillRequestsIdentifierAndDuplicateWillReusesItForCancel() {
+        let adapter = AnchorPagerPagingAdapter()
+        let delegate = RecordingPagingDelegate()
+        delegate.nextInteractiveRequestIdentifier = 52
+        adapter.eventDelegate = delegate
+        adapter.loadViewIfNeeded()
+        reload(
+            adapter,
+            titles: ["First", "Second"],
+            viewControllers: [UIViewController(), UIViewController()],
+            selectedIndex: 0
+        )
+
+        adapter.pageboyViewController(
+            adapter,
+            willScrollToPageAt: 1,
+            direction: .forward,
+            animated: true
+        )
+        adapter.pageboyViewController(
+            adapter,
+            willScrollToPageAt: 1,
+            direction: .forward,
+            animated: true
+        )
+        adapter.pageboyViewController(
+            adapter,
+            didCancelScrollToPageAt: 1,
+            returnToPageAt: 0
+        )
+
+        XCTAssertEqual(delegate.events.filter {
+            if case .interactiveBegin = $0 { return true }
+            return false
+        }, [.interactiveBegin(1, true)])
+        XCTAssertEqual(delegate.events.filter {
+            if case .identifiedWillSelect = $0 { return true }
+            return false
+        }, [
+            .identifiedWillSelect(1, true, 52),
+            .identifiedWillSelect(1, true, 52),
+        ])
+        XCTAssertTrue(delegate.events.contains(.identifiedDidCancel(1, 0, 52)))
+    }
+
+    @MainActor
+    func testStaleCompletionAndTargetMismatchDoNotClearMatchingExecution() {
+        let adapter = AnchorPagerPagingAdapter()
+        let delegate = RecordingPagingDelegate()
+        adapter.eventDelegate = delegate
+        adapter.loadViewIfNeeded()
+        reload(
+            adapter,
+            titles: ["First", "Second", "Third"],
+            viewControllers: [UIViewController(), UIViewController(), UIViewController()],
+            selectedIndex: 0
+        )
+        var logEvents: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { logEvents.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+        let activeRequest = AnchorPagerPagingSelectionRequest(
+            identifier: 61,
+            targetIndex: 1,
+            animated: true,
+            source: .api
+        )
+        let nextRequest = AnchorPagerPagingSelectionRequest(
+            identifier: 62,
+            targetIndex: 2,
+            animated: true,
+            source: .api
+        )
+
+        XCTAssertTrue(adapter.executeSelection(activeRequest, previousIndex: 0))
+        adapter.pageboyViewController(
+            adapter,
+            didScrollToPageAt: 2,
+            direction: .forward,
+            animated: true
+        )
+        adapter.finishProgrammaticTransition(
+            requestIdentifier: 99,
+            targetIndex: 1,
+            finished: true
+        )
+
+        XCTAssertFalse(adapter.executeSelection(nextRequest, previousIndex: 0))
+        XCTAssertFalse(delegate.events.contains(.completion(99, true, adapter.currentIndex)))
+        XCTAssertTrue(logEvents.contains(
+            .init(category: .paging, level: .debug, event: "paging.selection.staleTerminal")
+        ))
+    }
+
+    @MainActor
+    func testTabmanBarRequestDoesNotStartPageboyExecutionDirectly() {
+        let adapter = AnchorPagerPagingAdapter()
+        let delegate = RecordingPagingDelegate()
+        adapter.eventDelegate = delegate
+        adapter.loadViewIfNeeded()
+        reload(
+            adapter,
+            titles: ["First", "Second"],
+            viewControllers: [UIViewController(), UIViewController()],
+            selectedIndex: 0
+        )
+        let initialIndex = adapter.currentIndex
+
+        adapter.bar(AnchorPagerTabBarAdapter.makeDefaultBar(), didRequestScrollTo: 1)
+
+        XCTAssertTrue(delegate.events.contains(.barRequest(1)))
+        XCTAssertEqual(adapter.currentIndex, initialIndex)
+        XCTAssertTrue(adapter.isReadyForReload)
+        XCTAssertFalse(delegate.events.contains {
+            if case .identifiedWillSelect = $0 { return true }
+            return false
+        })
+    }
+
+    @MainActor
+    func testAnimatedCompletionWaitsForSingleMatchingExecutorReadyHook() {
+        let adapter = AnchorPagerPagingAdapter()
+        let delegate = RecordingPagingDelegate()
+        adapter.eventDelegate = delegate
+        var logEvents: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { logEvents.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+        adapter.loadViewIfNeeded()
+        reload(
+            adapter,
+            titles: ["First", "Second"],
+            viewControllers: [UIViewController(), UIViewController()],
+            selectedIndex: 0
+        )
+        let request = AnchorPagerPagingSelectionRequest(
+            identifier: 71,
+            targetIndex: 1,
+            animated: true,
+            source: .api
+        )
+        XCTAssertTrue(adapter.executeSelection(request, previousIndex: 0))
+
+        adapter.isUserInteractionEnabled = false
+        adapter.finishProgrammaticTransition(
+            requestIdentifier: 71,
+            targetIndex: 1,
+            finished: true
+        )
+
+        XCTAssertTrue(delegate.events.contains(.completion(71, true, adapter.currentIndex)))
+        XCTAssertFalse(delegate.events.contains(.executorReady(71)))
+
+        adapter.isUserInteractionEnabled = false
+        XCTAssertFalse(delegate.events.contains(.executorReady(71)))
+        adapter.isUserInteractionEnabled = true
+        adapter.isUserInteractionEnabled = true
+
+        XCTAssertEqual(delegate.events.filter { $0 == .executorReady(71) }.count, 1)
+        XCTAssertEqual(logEvents.filter {
+            $0 == .init(
+                category: .paging,
+                level: .debug,
+                event: "paging.selection.executorReady"
+            )
+        }.count, 1)
+    }
+
+    @MainActor
+    func testNonanimatedCompletionPublishesReadySynchronouslyAndTeardownClearsLateHook() {
+        let adapter = AnchorPagerPagingAdapter()
+        let delegate = RecordingPagingDelegate()
+        adapter.eventDelegate = delegate
+        adapter.loadViewIfNeeded()
+        reload(
+            adapter,
+            titles: ["First", "Second"],
+            viewControllers: [UIViewController(), UIViewController()],
+            selectedIndex: 0
+        )
+        let request = AnchorPagerPagingSelectionRequest(
+            identifier: 81,
+            targetIndex: 1,
+            animated: false,
+            source: .api
+        )
+        XCTAssertTrue(adapter.executeSelection(request, previousIndex: 0))
+        adapter.finishProgrammaticTransition(
+            requestIdentifier: 81,
+            targetIndex: 1,
+            finished: true
+        )
+
+        XCTAssertTrue(delegate.events.contains(.completion(81, true, adapter.currentIndex)))
+        XCTAssertTrue(delegate.events.contains(.executorReady(81)))
+
+        let animatedRequest = AnchorPagerPagingSelectionRequest(
+            identifier: 82,
+            targetIndex: 1,
+            animated: true,
+            source: .api
+        )
+        reload(
+            adapter,
+            titles: ["First", "Second"],
+            viewControllers: [UIViewController(), UIViewController()],
+            selectedIndex: 0
+        )
+        XCTAssertTrue(adapter.executeSelection(animatedRequest, previousIndex: 0))
+        adapter.isUserInteractionEnabled = false
+        adapter.finishProgrammaticTransition(
+            requestIdentifier: 82,
+            targetIndex: 1,
+            finished: true
+        )
+        _ = adapter.prepareForRemoval()
+        adapter.isUserInteractionEnabled = true
+
+        XCTAssertFalse(delegate.events.contains(.executorReady(82)))
     }
 
     @MainActor
     func testAdapterLogsMissingDuplicateAndOutOfOrderPageboyCallbacks() {
         let adapter = AnchorPagerPagingAdapter()
+        let delegate = RecordingPagingDelegate()
+        delegate.nextInteractiveRequestIdentifier = 101
+        adapter.eventDelegate = delegate
         reload(
             adapter,
             titles: ["First", "Second"],
@@ -508,6 +797,9 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
         let first = UIViewController()
         let second = UIViewController()
         let adapter = AnchorPagerPagingAdapter()
+        let delegate = RecordingPagingDelegate()
+        delegate.nextInteractiveRequestIdentifier = 91
+        adapter.eventDelegate = delegate
         reload(
             adapter,
             titles: ["First", "Second"],
@@ -547,7 +839,10 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
             viewControllers: [UIViewController(), UIViewController()],
             selectedIndex: 0
         )
-        XCTAssertTrue(adapter.setSelectedIndex(1, animated: true))
+        XCTAssertTrue(adapter.executeSelection(
+            selectionRequest(identifier: 92, targetIndex: 1, animated: true),
+            previousIndex: 0
+        ))
 
         adapter.pageboyViewController(
             adapter,
@@ -558,7 +853,14 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
 
         XCTAssertFalse(adapter.isReadyForReload)
 
-        adapter.finishProgrammaticTransition(at: 1, finished: true)
+        adapter.finishProgrammaticTransition(
+            requestIdentifier: 92,
+            targetIndex: 1,
+            finished: true
+        )
+
+        XCTAssertFalse(adapter.isReadyForReload)
+        adapter.isUserInteractionEnabled = true
 
         XCTAssertTrue(adapter.isReadyForReload)
     }
@@ -713,6 +1015,20 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
             selectedIndex: selectedIndex
         )
     }
+
+    private func selectionRequest(
+        identifier: AnchorPagerPagingSelectionRequestIdentifier,
+        targetIndex: Int,
+        animated: Bool,
+        source: AnchorPagerPagingSelectionSource = .api
+    ) -> AnchorPagerPagingSelectionRequest {
+        AnchorPagerPagingSelectionRequest(
+            identifier: identifier,
+            targetIndex: targetIndex,
+            animated: animated,
+            source: source
+        )
+    }
 }
 
 @MainActor
@@ -778,6 +1094,13 @@ private final class RecordingPagingDelegate: AnchorPagerPagingAdapterDelegate {
         case didSelect(Int, Bool)
         case didCancel(Int, Int)
         case didReload(Int)
+        case barRequest(Int)
+        case interactiveBegin(Int, Bool)
+        case identifiedWillSelect(Int, Bool, Int)
+        case identifiedDidSelect(Int, Bool, Int)
+        case identifiedDidCancel(Int, Int, Int)
+        case completion(Int, Bool, Int?)
+        case executorReady(Int)
     }
 
     enum Callback: Equatable {
@@ -788,6 +1111,66 @@ private final class RecordingPagingDelegate: AnchorPagerPagingAdapterDelegate {
     var events: [Event] = []
     var barInsets: [UIEdgeInsets] = []
     var callbackOrder: [Callback] = []
+    var nextInteractiveRequestIdentifier: AnchorPagerPagingSelectionRequestIdentifier?
+
+    func pagingAdapter(
+        _ adapter: AnchorPagerPagingAdapter,
+        didRequestBarSelectionAt index: Int
+    ) {
+        events.append(.barRequest(index))
+    }
+
+    func pagingAdapter(
+        _ adapter: AnchorPagerPagingAdapter,
+        didBeginInteractiveSelectionAt index: Int,
+        animated: Bool
+    ) -> AnchorPagerPagingSelectionRequestIdentifier? {
+        events.append(.interactiveBegin(index, animated))
+        return nextInteractiveRequestIdentifier
+    }
+
+    func pagingAdapter(
+        _ adapter: AnchorPagerPagingAdapter,
+        willSelect index: Int,
+        animated: Bool,
+        requestIdentifier: AnchorPagerPagingSelectionRequestIdentifier
+    ) {
+        events.append(.identifiedWillSelect(index, animated, requestIdentifier))
+    }
+
+    func pagingAdapter(
+        _ adapter: AnchorPagerPagingAdapter,
+        didSelect index: Int,
+        animated: Bool,
+        requestIdentifier: AnchorPagerPagingSelectionRequestIdentifier
+    ) {
+        events.append(.identifiedDidSelect(index, animated, requestIdentifier))
+    }
+
+    func pagingAdapter(
+        _ adapter: AnchorPagerPagingAdapter,
+        didCancelSelectionAt index: Int,
+        returningTo previousIndex: Int,
+        requestIdentifier: AnchorPagerPagingSelectionRequestIdentifier
+    ) {
+        events.append(.identifiedDidCancel(index, previousIndex, requestIdentifier))
+    }
+
+    func pagingAdapter(
+        _ adapter: AnchorPagerPagingAdapter,
+        didComplete requestIdentifier: AnchorPagerPagingSelectionRequestIdentifier,
+        finished: Bool,
+        currentIndex: Int?
+    ) {
+        events.append(.completion(requestIdentifier, finished, currentIndex))
+    }
+
+    func pagingAdapter(
+        _ adapter: AnchorPagerPagingAdapter,
+        executorDidBecomeReadyFor requestIdentifier: AnchorPagerPagingSelectionRequestIdentifier
+    ) {
+        events.append(.executorReady(requestIdentifier))
+    }
 
     func pagingAdapter(
         _ adapter: AnchorPagerPagingAdapter,

@@ -308,7 +308,14 @@ final class AnchorPagerPagingHostViewControllerTests: XCTestCase {
         XCTAssertFalse(delegate.events.contains(.reload(.page(index: 0))))
         XCTAssertFalse(delegate.events.contains(.didSelect(1, true)))
 
-        adapter.finishProgrammaticTransition(at: 1, finished: true)
+        adapter.finishProgrammaticTransition(
+            requestIdentifier: 1,
+            targetIndex: 1,
+            finished: true
+        )
+
+        XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 3)
+        adapter.isUserInteractionEnabled = true
 
         XCTAssertTrue(host.activeAdapter === adapter)
         XCTAssertEqual(adapter.numberOfViewControllers(in: adapter), 1)

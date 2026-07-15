@@ -9,12 +9,42 @@ protocol AnchorPagerPageProviding: AnyObject {
 
 @MainActor
 protocol AnchorPagerPagingAdapterDelegate: AnyObject {
-    func pagingAdapter(_ adapter: AnchorPagerPagingAdapter, willSelect index: Int, animated: Bool)
-    func pagingAdapter(_ adapter: AnchorPagerPagingAdapter, didSelect index: Int, animated: Bool)
+    func pagingAdapter(
+        _ adapter: AnchorPagerPagingAdapter,
+        didRequestBarSelectionAt index: Int
+    )
+    func pagingAdapter(
+        _ adapter: AnchorPagerPagingAdapter,
+        didBeginInteractiveSelectionAt index: Int,
+        animated: Bool
+    ) -> AnchorPagerPagingSelectionRequestIdentifier?
+    func pagingAdapter(
+        _ adapter: AnchorPagerPagingAdapter,
+        willSelect index: Int,
+        animated: Bool,
+        requestIdentifier: AnchorPagerPagingSelectionRequestIdentifier
+    )
+    func pagingAdapter(
+        _ adapter: AnchorPagerPagingAdapter,
+        didSelect index: Int,
+        animated: Bool,
+        requestIdentifier: AnchorPagerPagingSelectionRequestIdentifier
+    )
     func pagingAdapter(
         _ adapter: AnchorPagerPagingAdapter,
         didCancelSelectionAt index: Int,
-        returningTo previousIndex: Int
+        returningTo previousIndex: Int,
+        requestIdentifier: AnchorPagerPagingSelectionRequestIdentifier
+    )
+    func pagingAdapter(
+        _ adapter: AnchorPagerPagingAdapter,
+        didComplete requestIdentifier: AnchorPagerPagingSelectionRequestIdentifier,
+        finished: Bool,
+        currentIndex: Int?
+    )
+    func pagingAdapter(
+        _ adapter: AnchorPagerPagingAdapter,
+        executorDidBecomeReadyFor requestIdentifier: AnchorPagerPagingSelectionRequestIdentifier
     )
     func pagingAdapter(
         _ adapter: AnchorPagerPagingAdapter,
@@ -47,8 +77,8 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
     private var defaultSelectedIndex = 0
     private var committedSelectedIndex = 0
     private var pendingPageboySelectionIndex: Int?
-    private var pendingProgrammaticSelection: ProgrammaticSelection?
-    private var isProgrammaticTransitionCompletionPending = false
+    private var executingSelection: ExecutingSelection?
+    private var executorReadyRequestIdentifier: AnchorPagerPagingSelectionRequestIdentifier?
     private var installedBar: TMBar?
     private var barHeightConstraint: NSLayoutConstraint?
     private var requestedBarHeight: CGFloat?
@@ -57,10 +87,9 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
     // 只在对应同步 reloadData 调用栈内存在，避免晚到回调借用后续 request 标识。
     private var reloadCallbackRequestIdentifier: AnchorPagerPagingReloadRequestIdentifier?
 
-    private struct ProgrammaticSelection: Equatable {
-        let index: Int
+    private struct ExecutingSelection: Equatable {
+        let request: AnchorPagerPagingSelectionRequest
         let previousIndex: Int
-        let animated: Bool
     }
 
     /// 当前是否可以同步执行 Pageboy reload 或空态 teardown。
@@ -69,8 +98,14 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
     /// 不得修改 data source 或第三方状态。
     var isReadyForReload: Bool {
         pendingPageboySelectionIndex == nil &&
-            pendingProgrammaticSelection == nil &&
-            !isProgrammaticTransitionCompletionPending
+            executingSelection == nil &&
+            executorReadyRequestIdentifier == nil
+    }
+
+    override var isUserInteractionEnabled: Bool {
+        didSet {
+            publishExecutorReadyIfPossible()
+        }
     }
 
     override init(nibName nibNameOrNil: String?, bundle nibBundleOrNil: Bundle?) {
@@ -169,9 +204,7 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
             defaultSelectedIndex = 0
         }
         committedSelectedIndex = defaultSelectedIndex
-        pendingPageboySelectionIndex = nil
-        pendingProgrammaticSelection = nil
-        isProgrammaticTransitionCompletionPending = false
+        cancelSelectionExecutionStructurally()
 
         if isViewLoaded {
             let previousRequestIdentifier = reloadCallbackRequestIdentifier
@@ -206,9 +239,7 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
         configuredPageCount = 0
         defaultSelectedIndex = 0
         committedSelectedIndex = 0
-        pendingPageboySelectionIndex = nil
-        pendingProgrammaticSelection = nil
-        isProgrammaticTransitionCompletionPending = false
+        cancelSelectionExecutionStructurally()
 
         guard isViewLoaded else { return true }
 
@@ -247,39 +278,62 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
     }
 
     @discardableResult
-    func setSelectedIndex(_ index: Int, animated: Bool) -> Bool {
-        guard (0..<configuredPageCount).contains(index) else {
+    func executeSelection(
+        _ request: AnchorPagerPagingSelectionRequest,
+        previousIndex: Int
+    ) -> Bool {
+        guard request.source.isExplicit else {
+            AnchorPagerLogger.log(.debug, category: .paging, event: "paging.selection.reject")
+            return false
+        }
+        guard (0..<configuredPageCount).contains(request.targetIndex) else {
             AnchorPagerLogger.log(.debug, category: .paging, event: "paging.setSelectedIndex.outOfRange")
             return false
         }
-        guard pendingProgrammaticSelection == nil,
-              !isProgrammaticTransitionCompletionPending else {
+        guard executingSelection == nil,
+              executorReadyRequestIdentifier == nil else {
             AnchorPagerLogger.log(.debug, category: .paging, event: "paging.selection.reject")
             return false
         }
 
         AnchorPagerLogger.log(.info, category: .paging, event: "paging.setSelectedIndex.request")
-        let previousProgrammaticSelection = pendingProgrammaticSelection
-        let previousProgrammaticTransitionCompletionPending =
-            isProgrammaticTransitionCompletionPending
-        let requestedSelection = ProgrammaticSelection(
-            index: index,
-            previousIndex: committedSelectedIndex,
-            animated: animated
+        executingSelection = ExecutingSelection(
+            request: request,
+            previousIndex: previousIndex
         )
-        pendingProgrammaticSelection = requestedSelection
-        isProgrammaticTransitionCompletionPending = true
-
-        let didStartScroll = scrollToPage(.at(index: index), animated: animated) { [weak self] _, _, finished in
-            self?.finishProgrammaticTransition(at: index, finished: finished)
+        var isResolvingPageboyAcceptance = true
+        var deferredCompletion: Bool?
+        let didStartScroll = scrollToPage(
+            .at(index: request.targetIndex),
+            animated: request.animated
+        ) { [weak self] _, _, finished in
+            if isResolvingPageboyAcceptance {
+                deferredCompletion = finished
+                return
+            }
+            self?.finishProgrammaticTransition(
+                requestIdentifier: request.identifier,
+                targetIndex: request.targetIndex,
+                finished: finished
+            )
         }
+        isResolvingPageboyAcceptance = false
         if !didStartScroll {
-            pendingProgrammaticSelection = previousProgrammaticSelection
-            isProgrammaticTransitionCompletionPending =
-                previousProgrammaticTransitionCompletionPending
+            if executingSelection?.request.identifier == request.identifier {
+                executingSelection = nil
+            }
             AnchorPagerLogger.log(.debug, category: .paging, event: "paging.setSelectedIndex.rejected")
+            notifyReloadReadinessIfNeeded()
+            return false
         }
-        return didStartScroll
+        if let deferredCompletion {
+            finishProgrammaticTransition(
+                requestIdentifier: request.identifier,
+                targetIndex: request.targetIndex,
+                finished: deferredCompletion
+            )
+        }
+        return true
     }
 
     func numberOfViewControllers(in pageboyViewController: PageboyViewController) -> Int {
@@ -304,6 +358,10 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
         return TMBarItem(title: title)
     }
 
+    override func bar(_ bar: TMBar, didRequestScrollTo index: PageIndex) {
+        eventDelegate?.pagingAdapter(self, didRequestBarSelectionAt: index)
+    }
+
     override func pageboyViewController(
         _ pageboyViewController: PageboyViewController,
         willScrollToPageAt index: PageIndex,
@@ -317,9 +375,20 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
             animated: animated
         )
         guard reloadSelectionCallbackSuppressionDepth == 0 else { return }
+        guard let requestIdentifier = requestIdentifierForWillSelect(
+            at: index,
+            animated: animated
+        ) else {
+            return
+        }
         AnchorPagerLogger.log(.info, category: .paging, event: "paging.willSelect")
         recordWillSelectCallback(at: index)
-        eventDelegate?.pagingAdapter(self, willSelect: index, animated: animated)
+        eventDelegate?.pagingAdapter(
+            self,
+            willSelect: index,
+            animated: animated,
+            requestIdentifier: requestIdentifier
+        )
     }
 
     override func pageboyViewController(
@@ -337,9 +406,18 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
         guard reloadSelectionCallbackSuppressionDepth == 0 else { return }
         AnchorPagerLogger.log(.info, category: .paging, event: "paging.didSelect")
         recordTerminalSelectionCallback(at: index)
+        guard let execution = matchingExecution(at: index) else {
+            logStaleSelectionTerminal()
+            return
+        }
         committedSelectedIndex = index
-        clearProgrammaticSelectionIfNeeded(at: index)
-        eventDelegate?.pagingAdapter(self, didSelect: index, animated: animated)
+        eventDelegate?.pagingAdapter(
+            self,
+            didSelect: index,
+            animated: animated,
+            requestIdentifier: execution.request.identifier
+        )
+        finishInteractiveExecutionIfNeeded(execution)
     }
 
     override func pageboyViewController(
@@ -355,14 +433,17 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
         guard reloadSelectionCallbackSuppressionDepth == 0 else { return }
         AnchorPagerLogger.log(.info, category: .paging, event: "paging.didCancel")
         recordTerminalSelectionCallback(at: index)
-        let didFinishProgrammaticSelection = finishProgrammaticSelection(at: index, finished: false)
-        if !didFinishProgrammaticSelection {
-            eventDelegate?.pagingAdapter(
-                self,
-                didCancelSelectionAt: index,
-                returningTo: previousIndex
-            )
+        guard let execution = matchingExecution(at: index) else {
+            logStaleSelectionTerminal()
+            return
         }
+        eventDelegate?.pagingAdapter(
+            self,
+            didCancelSelectionAt: index,
+            returningTo: previousIndex,
+            requestIdentifier: execution.request.identifier
+        )
+        finishInteractiveExecutionIfNeeded(execution)
     }
 
     override func pageboyViewController(
@@ -408,57 +489,145 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
 
     private func recordTerminalSelectionCallback(at index: Int) {
         guard let pendingPageboySelectionIndex else {
-            if pendingProgrammaticSelection?.index == index {
+            if executingSelection?.request.targetIndex == index {
                 return
             }
             AnchorPagerLogger.log(.debug, category: .paging, event: "paging.callback.missingWillSelect")
             return
         }
 
-        if pendingPageboySelectionIndex != index {
+        guard pendingPageboySelectionIndex == index else {
             AnchorPagerLogger.log(.debug, category: .paging, event: "paging.callback.outOfOrder")
+            return
         }
 
         self.pendingPageboySelectionIndex = nil
     }
 
-    private func clearProgrammaticSelectionIfNeeded(at index: Int) {
-        guard pendingProgrammaticSelection?.index == index else { return }
-        pendingProgrammaticSelection = nil
+    func finishProgrammaticTransition(
+        requestIdentifier: AnchorPagerPagingSelectionRequestIdentifier,
+        targetIndex: Int,
+        finished: Bool
+    ) {
+        guard let execution = executingSelection,
+              execution.request.source.isExplicit,
+              execution.request.identifier == requestIdentifier,
+              execution.request.targetIndex == targetIndex else {
+            logStaleSelectionTerminal()
+            return
+        }
+
+        executingSelection = nil
+        if pendingPageboySelectionIndex == targetIndex {
+            pendingPageboySelectionIndex = nil
+        }
+        if execution.request.animated {
+            executorReadyRequestIdentifier = requestIdentifier
+        }
+        eventDelegate?.pagingAdapter(
+            self,
+            didComplete: requestIdentifier,
+            finished: finished,
+            currentIndex: currentIndex
+        )
+        if !execution.request.animated {
+            publishExecutorReady(requestIdentifier)
+        }
+        notifyReloadReadinessIfNeeded()
     }
 
-    func finishProgrammaticTransition(at index: Int, finished: Bool) {
-        isProgrammaticTransitionCompletionPending = false
-        _ = finishProgrammaticSelection(at: index, finished: finished)
+    private func requestIdentifierForWillSelect(
+        at index: Int,
+        animated: Bool
+    ) -> AnchorPagerPagingSelectionRequestIdentifier? {
+        if let execution = executingSelection {
+            guard execution.request.targetIndex == index else {
+                logStaleSelectionTerminal()
+                return nil
+            }
+            return execution.request.identifier
+        }
+
+        guard let requestIdentifier = eventDelegate?.pagingAdapter(
+            self,
+            didBeginInteractiveSelectionAt: index,
+            animated: animated
+        ) else {
+            AnchorPagerLogger.log(.debug, category: .paging, event: "paging.selection.reject")
+            return nil
+        }
+        let request = AnchorPagerPagingSelectionRequest(
+            identifier: requestIdentifier,
+            targetIndex: index,
+            animated: animated,
+            source: .interactive
+        )
+        executingSelection = ExecutingSelection(
+            request: request,
+            previousIndex: committedSelectedIndex
+        )
+        return requestIdentifier
+    }
+
+    private func matchingExecution(at index: Int) -> ExecutingSelection? {
+        guard let executingSelection,
+              executingSelection.request.targetIndex == index else {
+            return nil
+        }
+        return executingSelection
+    }
+
+    private func finishInteractiveExecutionIfNeeded(_ execution: ExecutingSelection) {
+        guard execution.request.source == .interactive,
+              executingSelection == execution else {
+            return
+        }
+        executingSelection = nil
+        notifyReloadReadinessIfNeeded()
+    }
+
+    private func publishExecutorReadyIfPossible() {
+        guard isUserInteractionEnabled,
+              let requestIdentifier = executorReadyRequestIdentifier else {
+            return
+        }
+        executorReadyRequestIdentifier = nil
+        publishExecutorReady(requestIdentifier)
+        notifyReloadReadinessIfNeeded()
+    }
+
+    private func publishExecutorReady(
+        _ requestIdentifier: AnchorPagerPagingSelectionRequestIdentifier
+    ) {
+        AnchorPagerLogger.log(
+            .debug,
+            category: .paging,
+            event: "paging.selection.executorReady"
+        )
+        eventDelegate?.pagingAdapter(
+            self,
+            executorDidBecomeReadyFor: requestIdentifier
+        )
+    }
+
+    private func cancelSelectionExecutionStructurally() {
+        pendingPageboySelectionIndex = nil
+        executingSelection = nil
+        executorReadyRequestIdentifier = nil
+    }
+
+    private func notifyReloadReadinessIfNeeded() {
         if isReadyForReload {
             eventDelegate?.pagingAdapterDidBecomeReadyForReload(self)
         }
     }
 
-    @discardableResult
-    private func finishProgrammaticSelection(at index: Int, finished: Bool) -> Bool {
-        guard let pendingProgrammaticSelection,
-              pendingProgrammaticSelection.index == index else {
-            return false
-        }
-
-        self.pendingProgrammaticSelection = nil
-        if finished {
-            committedSelectedIndex = index
-            eventDelegate?.pagingAdapter(
-                self,
-                didSelect: index,
-                animated: pendingProgrammaticSelection.animated
-            )
-        } else {
-            AnchorPagerLogger.log(.debug, category: .paging, event: "paging.setSelectedIndex.cancel")
-            eventDelegate?.pagingAdapter(
-                self,
-                didCancelSelectionAt: index,
-                returningTo: pendingProgrammaticSelection.previousIndex
-            )
-        }
-        return true
+    private func logStaleSelectionTerminal() {
+        AnchorPagerLogger.log(
+            .debug,
+            category: .paging,
+            event: "paging.selection.staleTerminal"
+        )
     }
 
     private func installBarIfNeeded() {
