@@ -4,6 +4,8 @@
 
 **状态：** 已确认，待实施与验收
 
+**实施计划：** `docs/superpowers/plans/2026-07-15-example-header-bounce-stable-content-layout.md`
+
 **适用范围：** Example `ExampleHeaderView` 安全区内容约束、默认
 `.extendsUnderTopSafeArea`、container 顶部原生回弹、Header 内部文字局部位置与相关自动化验证。
 
