@@ -523,7 +523,8 @@
 
 - [x] 完成 AnchorPager/Tabman 4.0.1/Pageboy 5.0.2 源码审查，确认连续非动画选择窗口、Tabman bar 默认旁路、Pageboy delegate ownership 和 paging surface 内部观察边界
 - [x] 确认 v0.7 专项设计：Host 统一 active/latest pending selection request，Adapter 只执行第三方分页，Interaction Coordinator 只做跨域仲裁，Scroll/Overscroll 保持唯一 offset/policy owner
-- [ ] 完成 v0.7 详细实施计划并由用户复核
+- [x] 完成 v0.7 详细实施计划，覆盖逐任务 RED/GREEN、任务级提交、真实 UI、全量门禁与 fresh-pass
+- [ ] 用户复核并确认 v0.7 详细实施计划
 - [ ] 复用 v0.5 已建立的 current container/current child 最小纵向 simultaneous recognition，不重复建立第二套纵向 handoff
 - [ ] 先以 RED 覆盖同一调用栈连续 `animated: false` 的 Pageboy 假接受/无 completion 窗口
 - [ ] PagingHost 建立一笔 active + 一笔 latest pending selection request，不建立第二套 generation owner 或旁路 terminal
