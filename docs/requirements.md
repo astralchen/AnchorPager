@@ -183,6 +183,8 @@ public enum AnchorPagerHeaderTopBehavior: Sendable, Equatable {
 }
 ```
 
+`AnchorPagerHeaderConfiguration` 的 `topBehavior` 默认参数为 `.extendsUnderTopSafeArea`；需要安全区域内背景时必须显式选择 `.insideSafeArea`。
+
 两种顶部行为只决定主容器顶部 inset 与 Header 背景是否延伸到顶部系统区域，不决定折叠时缩小
 Header。业务 Header 根视图在稳定滚动和 bounce 期间必须保持完整解析高度；正常折叠只允许移动
 AnchorPager 自有 canonical content presentation surface。固定 viewport 是唯一屏幕裁剪边界，container
@@ -244,7 +246,7 @@ extension UIViewController {
 
 1. Header content 支持 UIView 和 UIViewController。
 2. Header 使用 UIViewController 时，必须通过标准 UIKit containment 管理。
-3. Header 默认显示在安全区域内。
+3. Header 默认延伸到顶部系统区域；需要让 Header 背景从安全区域下方开始时显式使用 insideSafeArea。
 4. Header 默认使用 automatic height，最小高度为 0，不设置固定最大高度。
 5. automatic 高度根据 Header 纯内容测量结果决定，测量不得包含 Header 当前展示位置带来的顶部 safe area 或 layout margins 增量。
 6. Header 是 UIView 时，默认使用 Auto Layout fitting size、当前 bounds 或 intrinsicContentSize 计算高度。
@@ -432,7 +434,7 @@ README.md
 ## 20. 默认行为
 
 1. Header 默认使用 automatic height，最小高度为 0，不设置固定最大高度。
-2. Header 默认 topBehavior 为 insideSafeArea。
+2. Header 默认 topBehavior 为 extendsUnderTopSafeArea；insideSafeArea 继续作为显式可选模式。
 3. 分段栏高度默认由内部分页适配器自适应；调用方可以通过可选显式高度覆盖。
 4. 默认支持点击分段栏、API 选择、横向滑动切页。
 5. 默认启用 UIViewController.anchorPagerDefaultScrollView 自动查找。

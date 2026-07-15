@@ -2,7 +2,7 @@
 
 **日期：** 2026-07-14
 
-**状态：** 设计已确认，实施待开始
+**状态：** 实现与聚焦 RED/GREEN 已完成；全量验收、自审和 fresh-pass 待完成
 
 **适用范围：** `AnchorPagerHeaderConfiguration` 默认值、`AnchorPagerConfiguration.default`、`AnchorPagerViewController` 无参数配置、Example 初始顶部行为、默认配置测试与接入文档。
 
@@ -183,6 +183,19 @@ Example 继续从 `AnchorPagerConfiguration.default` 创建配置，不在示例
 4. 捕获默认启动与 inside 切换路径运行时日志，确认没有 UIKit 约束冲突。
 5. 执行 Public API/第三方类型/业务 child delegate、pan、bounce 配置静态扫描。
 6. 完成代码自审和 fresh-pass；Critical/Important 清零后才能标记完成。
+
+## 实施进度
+
+生产实现与测试已在提交 `3bdcfb6` 完成。唯一生产变化是把 `AnchorPagerHeaderConfiguration.init` 的默认参数改为 `.extendsUnderTopSafeArea` 并同步 DocC；没有修改 LayoutEngine、container geometry、ScrollCoordinator、OverscrollCoordinator、paging adapter 或 child ownership。
+
+TDD 证据：
+
+1. Framework 新默认契约在实现前精确失败，实际值为旧 `.insideSafeArea`；Example 单元菜单状态和真实 UI 零 top inset 断言同样先失败。
+2. 修改单一默认源后，Framework 精确默认契约 1/1 通过，Example 11 项单元测试与 5 项相关 UI 测试全部通过。
+3. 控制器类回归暴露出 3 个隐式依赖旧默认值的 inside 专项测试；逐项补充显式 `.insideSafeArea` 前置条件后，`AnchorPagerViewControllerTests` 101/101 通过，生产几何逻辑未增加兼容分支。
+4. `git diff --check` 与实现范围自审通过，`Examples/AnchorPagerExample.xcodeproj/project.pbxproj` 的用户改动未暂存、未提交。
+
+全量 Framework、Example/generic build、运行时约束扫描、静态门禁和 fresh-pass 结果仍待最终验收，不在此阶段预填。
 
 ## 架构停机条件
 

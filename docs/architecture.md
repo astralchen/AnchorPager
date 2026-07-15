@@ -57,6 +57,8 @@ Public API 保持领域无关，命名参考 UIKit。当前公开类型包括：
 
 空页时 `selectedIndex` 保持 `0`，`effectiveSelectedIndex` 为 `nil`。`setSelectedIndex(_:animated:)` 越界时 no-op，Debug 下通过内部断言路径报告。
 
+`AnchorPagerHeaderConfiguration` 的默认 `topBehavior` 为 `.extendsUnderTopSafeArea`。该默认只由 Header 配置初始化器定义；`AnchorPagerHeaderConfiguration.default`、`AnchorPagerConfiguration.default`、Pager 无参数初始化和 Example 均沿同一构造链继承，不保存第二份默认事实。显式 `.insideSafeArea` 仍是完整支持的运行时模式。
+
 可见状态下的程序化切页采用确认后提交语义：`AnchorPagerViewController` 只在内部 adapter 收到 Pageboy/Tabman 的完成回调后更新 public `selectedIndex` 并通知 delegate；取消或回弹不会提前提交。若 Pageboy 当前忙碌导致 adapter 拒绝新的程序化请求，v0.1 不做请求排队，public 状态保持旧值，并写入 rejected 日志。adapter 会保留已被接受但尚未完成的上一笔请求，避免后续被拒绝的请求清掉正在进行的 transition。
 
 ## Tabman/Pageboy 边界
@@ -117,7 +119,7 @@ Header host 只负责 Header 内容和 containment。它可以接收内部 top o
 
 `AnchorPagerViewController` 负责把 UIKit safe area 转为本地遮挡。top obstruction 取 `safeAreaLayoutGuide.layoutFrame.minY - view.bounds.minY`、`view.safeAreaInsets.top` 和 `additionalSafeAreaInsets.top` 的非负最大值；bottom obstruction 取 `view.bounds.maxY - safeAreaLayoutGuide.layoutFrame.maxY`、`view.safeAreaInsets.bottom` 和 `additionalSafeAreaInsets.bottom` 的非负最大值。这个策略覆盖 root、navigation controller、tab bar controller、toolbar 和未入 window 的 additional safe area 测试路径。
 
-AnchorPager 自有主容器 `verticalScrollView` 的 `contentInsetAdjustmentBehavior` 固定为 `.never`，横纵 scroll indicator 均隐藏，delegate 与 `contentInset` 由 AnchorPager 独占。`.insideSafeArea` 的 top inset 等于本地顶部 obstruction，`.extendsUnderTopSafeArea` 为 `0`，left/bottom/right 始终为 `0`。主容器 scroll range 只表示 Header 折叠距离，不代表页面内容进度；当前真实 child scroll view 是唯一用户可见 indicator owner，无滚动页没有 indicator owner。真实 child scroll view 由独立 managed inset coordinator 接管，不与主容器复用同一份 inset。
+AnchorPager 自有主容器 `verticalScrollView` 的 `contentInsetAdjustmentBehavior` 固定为 `.never`，横纵 scroll indicator 均隐藏，delegate 与 `contentInset` 由 AnchorPager 独占。默认 `.extendsUnderTopSafeArea` 的 top inset 为 `0`；显式 `.insideSafeArea` 的 top inset 等于本地顶部 obstruction，left/bottom/right 始终为 `0`。主容器 scroll range 只表示 Header 折叠距离，不代表页面内容进度；当前真实 child scroll view 是唯一用户可见 indicator owner，无滚动页没有 indicator owner。真实 child scroll view 由独立 managed inset coordinator 接管，不与主容器复用同一份 inset。
 
 主容器 raw 与逻辑坐标由唯一纯 `AnchorPagerContainerScrollGeometry` 转换。设 top inset 为 `I`、纯内容可折叠距离为 `D`、viewport 高度为 `H`：`logical = raw + I`、`raw = logical - I`，展开/折叠 raw 边界分别为 `-I` 与 `D-I`，`scrollRangeView` 高度为 `H + D - I`。ScrollCoordinator 的稳定区间、boundary、handoff 和写入全部使用同一 geometry；LayoutEngine 只消费 `0...D` 逻辑 offset，不读取 raw offset。
 

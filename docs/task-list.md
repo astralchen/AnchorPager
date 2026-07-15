@@ -127,7 +127,7 @@
 - [x] Header viewController 移除时使用 `willMove(toParent: nil)`、移除 view、`removeFromParent`
 - [x] 提供基础 Header 高度测量
 - [x] 默认 Header height mode 为 automatic，min 为 0，max 为 nil
-- [x] 默认 Header top behavior 为 insideSafeArea
+- [x] v0.1 历史默认 Header top behavior 为 insideSafeArea；当前默认已在后续专项改为 extendsUnderTopSafeArea
 - [x] 为 Header view 承载加入 header 日志
 - [x] 为 Header viewController add/remove 加入 header 和 lifecycle 日志
 - [x] 为 Header 基础测量结果加入 layout 日志
@@ -690,6 +690,9 @@
 - [x] v0.4 generation atomicity Task 3：staged public/provider/bar terminal、pre-load 与跨层 superseded request 已完成
 - [x] 最低工具链已提升为 Swift 6.2，语言模式保持 Swift 6，iOS 14 运行基线不变
 - [x] v0.4 最终独立复审已完成，Critical/Important/Minor 均为零；允许进入 v0.5 设计与计划阶段
+- [x] Header 默认顶部行为专项设计已确认；Public 单一默认源已改为 extendsUnderTopSafeArea，显式 insideSafeArea、固定 Header/paging/bounce 架构保持不变
+- [x] Header 默认顶部行为 Task 1 已完成聚焦 RED/GREEN：Framework 默认契约、101 项控制器回归、Example 11 项单元与 5 项相关 UI 测试通过；生产实现提交 `3bdcfb6`
+- [ ] Header 默认顶部行为全量 Framework/Example/generic build、运行时约束扫描与 fresh-pass 待专项 Task 3 完成
 - [x] 实现时遵循测试先行
 - [x] 每个任务完成后运行对应测试
 - [x] 每个任务完成时确认是否需要 UI 测试

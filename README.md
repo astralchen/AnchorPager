@@ -8,6 +8,8 @@ AnchorPager 是一个 UIKit 容器框架，用于组合可变 Header、吸顶分
 
 2026-07-14 主容器 top inset 与固定高度 Header 专项已在最终生产 HEAD `424a0a3` 收口：`.insideSafeArea` 使用本地顶部遮挡作为真实 `contentInset.top`，`.extendsUnderTopSafeArea` 使用 `0`；业务 Header 根视图在正常折叠中保持完整高度，由 AnchorPager 自有 presentation surface 上移。fresh-pass 发现的 safe-area/bounds active boundary 清理、缺失 `willSelect` 的 plain selection terminal 清理、geometry 迁移日志和 Public DocC 共 2 个 Important、2 个 Minor 均已通过 RED/GREEN 修复，终态 Critical 0、Important 0、Minor 0。Framework 322/322、Example 41/41（11 项单元测试 + 30 项 UI 测试）与 generic Simulator build 全部通过，0 fail、0 skip、0 error/warning/analyzer warning；v0.5 Task 7 与 v0.6 已恢复 Ready。
 
+当前 `AnchorPagerHeaderTopBehavior` 默认使用 `.extendsUnderTopSafeArea`：未显式配置时，Header 背景从容器顶部开始并覆盖顶部系统区域；需要让 Header 背景从安全区域下方开始时，仍可显式选择 `.insideSafeArea`。这只是默认选择变化，不改变固定高度 Header、bar 吸顶基线或 viewport 裁剪语义。
+
 ## 安装
 
 构建 AnchorPager 需要 Swift 6.2 或更高版本工具链；Package 使用 Swift 6 language mode，运行时最低支持 iOS 14。
@@ -113,6 +115,9 @@ Header 使用 `UIViewController` 时，AnchorPager 内部通过标准 UIKit cont
 ```swift
 var configuration = AnchorPagerConfiguration.default
 configuration.header.heightMode = .automatic(min: 44, max: 180)
+// 默认 topBehavior 为 .extendsUnderTopSafeArea。
+
+// 如需让 Header 背景从顶部安全区域下方开始：
 configuration.header.topBehavior = .insideSafeArea
 
 let pager = AnchorPagerViewController(configuration: configuration)
@@ -132,7 +137,7 @@ configuration.bar.height = 56  // 可选：显式覆盖
 - `.fixed(max:min:)`：使用 `max` 作为展开高度，`min` 作为折叠高度。
 - `.ranged(min:max:)`：使用 Header 测量高度，并限制在 min/max 范围内。
 
-Header height mode 表示不包含顶部安全区遮挡的纯内容高度，可折叠距离也只由内容的展开/折叠高度决定。`AnchorPagerHeaderTopBehavior.insideSafeArea` 下，Header frame 从本地顶部 safe area 或系统栏遮挡下方开始，高度始终为完整展开内容高度；`.extendsUnderTopSafeArea` 下，Header frame 从容器 bounds 顶部开始，高度始终为“顶部遮挡 + 完整展开内容高度”。正常折叠只让固定高度 Header 向上移动，不修改业务 Header 根视图高度。两种模式的分段栏和 child 内容基线一致，切换只改变 Header 外框是否延伸到顶部系统区域。例如展开内容高度为 `108`、顶部遮挡为 `116` 时，extends 模式的 `headerFrame.height == 224`，折叠期间该高度保持不变。
+Header height mode 表示不包含顶部安全区遮挡的纯内容高度，可折叠距离也只由内容的展开/折叠高度决定。默认 `.extendsUnderTopSafeArea`；只有显式选择 `AnchorPagerHeaderTopBehavior.insideSafeArea` 时，Header frame 才从本地顶部 safe area 或系统栏遮挡下方开始，高度始终为完整展开内容高度。`.extendsUnderTopSafeArea` 下，Header frame 从容器 bounds 顶部开始，高度始终为“顶部遮挡 + 完整展开内容高度”。正常折叠只让固定高度 Header 向上移动，不修改业务 Header 根视图高度。两种模式的分段栏和 child 内容基线一致，切换只改变 Header 外框是否延伸到顶部系统区域。例如展开内容高度为 `108`、顶部遮挡为 `116` 时，extends 模式的 `headerFrame.height == 224`，折叠期间该高度保持不变。默认 extends 不代表取消折叠时的物理屏幕边界裁剪。
 
 automatic/ranged Header 会在顶部遮挡下方的中立几何中测量，避免 Header 当前展示位置的 safe area 或 `layoutMarginsGuide` 被重复计入内容高度。测量缓存只属于当前 Header 内容身份；内容更换时旧缓存失效，首次正式中立布局前先以不发布状态的 compressed fitting 取得非负 seed，因此非空约束内容不会以 required `height == 0` 参与布局。该测量只在结构性布局路径执行；滚动热路径继续复用当前 Header 最近一次有效纯内容高度。
 
