@@ -2,13 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 完成 v0.7 的统一交互状态、Host 选择事务、Tabman bar 路由、Pageboy executor-ready、双向跨 owner 惯性和系统返回/业务横向手势优先级，同时保持现有 Public API、Pageboy containment、Store generation、纵向 offset 与 overscroll policy 所有权不变。
+**Goal:** 完成 v0.7 的统一交互状态、Host 选择事务、Tabman bar 路由、Pageboy executor-ready、双向跨 owner 惯性和系统返回优先级，完成业务横向手势可行性验收并如实收口边界，同时保持现有 Public API、Pageboy containment、Store generation、纵向 offset 与 overscroll policy 所有权不变。
 
 **Architecture:** `AnchorPagerPagingHostViewController` 独占 selection/reload request payload 与 active/latest-pending 事务；`AnchorPagerPagingAdapter` 只执行 Tabman/Pageboy、标准化 matching callback 并观察 paging surface；`AnchorPagerInteractionCoordinator` 只保存单一跨域状态。`AnchorPagerViewController` 作为装配层按“active Pageboy → size → reload → Header layout → selection”顺序触发 drain，但不接管 Host payload。`AnchorPagerScrollCoordinator` 继续是协调期唯一 offset writer，并通过纯衰减模型与 `CADisplayLink` driver 完成 container/child 双向剩余速度合成；`AnchorPagerOverscrollCoordinator` 仍是唯一 boundary policy owner。
 
 **Tech Stack:** Swift 6.2、Swift 6 language mode、UIKit、iOS 14+、Swift Package Manager、Tabman 4.0.1、Pageboy 5.0.2、XCTest/XCUITest、Xcode 26.6、iPhone 17 Pro / iOS 26.5 Simulator。
 
-**当前状态：** 专项设计与 Pageboy executor-ready 补充契约已确认；用户已复核并授权实施。Task 0–9 已完成，下一步把 pan velocity 接入 ScrollCoordinator 并完成双向跨 owner 合成。
+**当前状态：** Task 0–13 已完成并按任务提交。Task 14 的双向惯性、系统返回与纵横竞争真实 UI 已通过；业务横向 child 自动优先方案经真实 UIKit RED 否定并完成架构收口，正在执行 v0.5/v0.6 边界回归与任务级验收。
 
 ## Global Constraints
 
@@ -594,7 +594,7 @@ git commit -m "观察 Pageboy 分页手势表面"
 
 ---
 
-### Task 8：安装 system/page/current-child 手势失败关系
+### Task 8：安装 system/page 手势失败关系并验证 current-child 假设
 
 **Files:**
 - Create: `Sources/AnchorPager/Gesture/AnchorPagerGesturePriorityCoordinator.swift`
@@ -615,7 +615,6 @@ final class AnchorPagerGesturePriorityCoordinator {
 
     func bindPagingPan(_ pan: UIPanGestureRecognizer?)
     func bindInteractivePopGesture(_ gesture: UIGestureRecognizer?)
-    func bindCommittedScrollView(_ scrollView: UIScrollView?)
     func refresh()
     func invalidate()
 }
@@ -623,7 +622,7 @@ final class AnchorPagerGesturePriorityCoordinator {
 
 - [x] **Step 1：写 failure matrix RED**
 
-验证 `pagingPan -> interactivePop`；只有 committed scroll view 水平范围满足 `contentSize.width + adjustedContentInset.left + adjustedContentInset.right > bounds.width + 0.5` 时安装 `pagingPan -> childPan`；plain nil、普通纵向 child、不相关 cached page 不安装。
+验证 `pagingPan -> interactivePop`。首轮 Framework 假设还覆盖 committed 水平 scroll 的 `pagingPan -> childPan`；该假设必须由 Task 14 真实 UIKit winner 验收，不能仅凭 relation recorder 判定完成。
 
 - [x] **Step 2：写 delegate/configuration RED**
 
@@ -653,7 +652,7 @@ git add Sources/AnchorPager/Gesture/AnchorPagerGesturePriorityCoordinator.swift 
 git commit -m "明确横向与系统手势优先级"
 ```
 
-验收记录：RED 因 `AnchorPagerGesturePriorityCoordinator` 与 ViewController 装配入口缺失而编译失败。GREEN 使用可注入 `FailureInstaller` 固定 `pagingPan -> interactivePop` 与仅 committed current 具备真实水平范围时的 `pagingPan -> childPan`；plain nil、普通纵向 current、不相关 cached page 均不安装。关系记录弱持有双方 identity，同一 pair 单调去重；paging surface replacement 为新 pan 建立当前有效关系，已安装 pair 不用 KVC/private API 模拟删除。delegate/configuration 源码隔离和运行时 identity 均覆盖，空 reload 清空当前 paging/committed binding，matching reload/selection/cancel terminal 只重绑 Store committed identity。两条 ViewController 初跑失败经 xcresult 定位为测试 weak data source 临时对象已释放，修正夹具后生产逻辑无需变化。Coordinator + ViewController 最终聚焦 118/118、0 fail、0 skip，结果包 `/private/tmp/AnchorPagerV07Task8FocusedFinal-20260715-1832.xcresult`；Framework 全量 380/380、0 fail、0 skip，结果包 `/private/tmp/AnchorPagerV07Task8FrameworkFinal-20260715-1833.xcresult`；两份 xcresult 均为 0 error、0 warning、0 analyzer warning。自审确认未扩大 Public API，未改变 Tabman/Pageboy containment、Host/Store generation、纵向 simultaneous pair、业务 child delegate/pan/bounce/isScrollEnabled、offset writer 或 overscroll policy owner；真实导航栈/横向 child UI 验收留在 Task 13。
+验收记录：RED 因 `AnchorPagerGesturePriorityCoordinator` 与 ViewController 装配入口缺失而编译失败。首轮 Framework GREEN 使用可注入 `FailureInstaller` 固定 `pagingPan -> interactivePop`，并验证了 committed current 水平 scroll 的候选 `pagingPan -> childPan` 关系；plain nil、普通纵向 current、不相关 cached page 均不安装。relation recorder、delegate/configuration 隔离和全量测试只能证明 API 调用与所有权未被篡改，不能证明真实 UIKit winner。Task 14 的真实手势验收确认 direct relation 在 containment 前后均形成同向嵌套失败环，业务 pan 不进入 `.began`、offset 保持 0；候选 child relation 因此从生产实现与现行契约撤回，只保留已通过导航栈真实验收的 interactive-pop relation。历史结果包 `/private/tmp/AnchorPagerV07Task8FocusedFinal-20260715-1832.xcresult` 与 `/private/tmp/AnchorPagerV07Task8FrameworkFinal-20260715-1833.xcresult` 仅作为阶段性证据，不再代表业务横向优先能力。
 
 ---
 
@@ -972,14 +971,20 @@ git commit -m "验收分页选择与事务竞争"
 
 ---
 
-### Task 14：真实惯性、系统返回与业务横向手势 UI 验收
+### Task 14：真实惯性、系统返回与业务横向可行性 UI 验收
 
 **Files:**
+- Modify: `Sources/AnchorPager/Core/AnchorPagerScrollCoordinator.swift`
+- Modify: `Sources/AnchorPager/Gesture/AnchorPagerGesturePriorityCoordinator.swift`
+- Modify: `Sources/AnchorPager/Public/AnchorPagerViewController.swift`
+- Modify: `Tests/AnchorPagerTests/AnchorPagerGesturePriorityCoordinatorTests.swift`
+- Modify: `Tests/AnchorPagerTests/AnchorPagerScrollCoordinatorTests.swift`
+- Modify: `Tests/AnchorPagerTests/AnchorPagerViewControllerTests.swift`
 - Modify: `Examples/AnchorPagerExample/AnchorPagerExampleUITests/AnchorPagerExampleUITests.swift`
 - Modify: `Examples/AnchorPagerExample/AnchorPagerExample/ExamplePagerViewController.swift`（仅测试装配缺口）
 - Modify: `Examples/AnchorPagerExample/AnchorPagerExample/ExampleScrollCoordinationState.swift`（仅探针缺口）
 
-- [ ] **Step 1：写双向惯性 RED**
+- [x] **Step 1：写双向惯性 RED**
 
 新增：
 
@@ -992,19 +997,23 @@ testTopModesAndBottomBoundariesDoNotCrossContaminateMomentumOwner()
 
 以真实 `press(...thenDragTo:withVelocity:)` 触发，probe 断言跨过 handoff 两侧、canonical total 同向、最大反跳 ≤ 0.5pt、stable invariant violation ≤ 0.5pt、最终 owner/offset 合法、Header/bar/page presentation 无跳变。
 
-- [ ] **Step 2：写系统返回 RED**
+- [x] **Step 2：写系统返回 RED**
 
 push 第二个 AnchorPager，在 leading edge 右滑；第一页和非第一页分别验证 interactive pop 优先，导航栈返回且 Pageboy selection trace 不变。
 
-- [ ] **Step 3：写横向业务 scroll RED**
+- [x] **Step 3：完成横向业务 scroll 可行性 RED 并收口不支持边界**
 
 在“横向页”上半命中真实业务 scroll，断言业务 contentOffset.x 改变而 Pageboy 不切页；在下半页面区域横滑，断言 Pageboy 切页。前后读取 probe，确认业务 scroll delegate、pan delegate、isScrollEnabled、bounces、alwaysBounceVertical 身份/值不变。
 
-- [ ] **Step 4：写横纵竞争 RED**
+真实 RED 固定两项结论。第一，`pagingPan -> childPan` 无论在 committed 后还是 pre-containment 前安装，都会与 UIKit 同向嵌套 scroll 的层级仲裁形成依赖环，Pageboy 仍获胜。第二，分别尝试业务子树 guard、共同祖先 hit-region guard、simultaneous/non-preventing guard 后，业务 pan 仍未进入 `.began`、offset 保持 0；在不替换既有 recognizer delegate、不 reset 手势、不依赖私有层级且不阻塞页面其他区域的约束下，没有可安全交付的自动方案。因此撤回 direct child relation 和全部 guard 生产代码，现阶段明确不支持任意业务横向 child 自动优先；未来若支持，需先设计显式接入契约。业务 delegate、pan delegate、`isScrollEnabled`、bounce 和 offset 始终未被框架修改。
+
+同一轮 RED 还发现 synthetic handoff 与目标 owner 的迟到原生减速竞争：切换时必须先以 guarded、非动画写入把目标 owner 锁回法定 handoff boundary，再由 canonical overflow 写出目标位置；之后目标 owner 的迟到原生 offset callback 必须恢复 driver 当前 canonical stable pair，不能与 driver 共同写 offset。该纵向修复保留并以 Framework/真实 UI 验收。
+
+- [x] **Step 4：写横纵竞争 RED**
 
 在长页做斜向快速手势，断言 UIKit 只形成一个合法主 interaction terminal；无 duplicate selection、无双 owner、无残留 synthetic driver。
 
-- [ ] **Step 5：运行新增 UI tests 并修到 GREEN**
+- [x] **Step 5：运行新增 UI tests 并修到 GREEN**
 
 ```bash
 xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj \
@@ -1013,20 +1022,25 @@ xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj \
   -parallel-testing-enabled NO \
   -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testFastUpwardFlingHandsRemainingVelocityFromContainerToChild \
   -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testFastDownwardFlingHandsRemainingVelocityFromChildToContainer \
-  -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testLeadingEdgeInteractivePopWinsOverPageboyPaging \
-  -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testHorizontalBusinessScrollWinsOnlyInsideItsHitRegion test
+  -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testLeadingEdgeInteractivePopWinsOverPageboyPaging test
 ```
 
-- [ ] **Step 6：运行全部 v0.5/v0.6 边界 UI 回归**
+- [x] **Step 6：运行全部 v0.5/v0.6 边界 UI 回归**
 
 复跑单次上下 handoff、plain top/bottom、real child container/child/none top、real child bottom、页面切换 rebind、顶部行为与 Header 内容稳定测试。
 
-- [ ] **Step 7：自审并提交**
+- [x] **Step 7：自审并提交**
 
 ```bash
-git add Examples/AnchorPagerExample/AnchorPagerExample/ExamplePagerViewController.swift Examples/AnchorPagerExample/AnchorPagerExample/ExampleScrollCoordinationState.swift Examples/AnchorPagerExample/AnchorPagerExampleUITests/AnchorPagerExampleUITests.swift
-git commit -m "验收惯性与横向手势优先级"
+git add Sources/AnchorPager/Core/AnchorPagerScrollCoordinator.swift Sources/AnchorPager/Gesture/AnchorPagerGesturePriorityCoordinator.swift Sources/AnchorPager/Public/AnchorPagerViewController.swift Tests/AnchorPagerTests/AnchorPagerGesturePriorityCoordinatorTests.swift Tests/AnchorPagerTests/AnchorPagerScrollCoordinatorTests.swift Tests/AnchorPagerTests/AnchorPagerViewControllerTests.swift Examples/AnchorPagerExample/AnchorPagerExampleUITests/AnchorPagerExampleUITests.swift README.md AGENTS.md docs
+git commit -m "验收惯性与系统返回手势"
 ```
+
+验收记录：纵向真实 fling 首轮暴露 synthetic handoff 后接收 owner 的原生减速仍可能迟到写入，形成 canonical total 反跳。Framework RED 固定双向接收 owner 晚到 callback 与非动画边界写入，GREEN 在切入 synthetic 时先锁定接收 owner 法定边界、随后由唯一 driver 写 canonical overflow；synthetic 期间旧 native owner 只锁回旧边界，接收 owner 则恢复 driver 当前 stable pair，均不产生伪 transition 日志。Framework 聚焦 187/187、0 fail、0 skip，结果包 `/private/tmp/AnchorPagerV07Task14FocusedCleanup2-20260715.xcresult`。
+
+真实 navigation UI 验证第一页和非第一页 leading-edge interactive pop 均优先于 Pageboy，selection trace 不变；纵向双向惯性、plain 无 synthetic child、三种顶部 mode/双底部 owner 排他和斜向竞争共 6/6、0 fail、0 skip，结果包 `/private/tmp/AnchorPagerV07Task14UIFinal-20260715.xcresult`。三种 mode 初跑仅 `.child` 未命中，probe 全零证明起点 `y=0.28` 位于 Header/bar 而非 child；把统一起点移至 child 内容内的 `y=0.34` 后通过，未修改生产 owner 逻辑或阈值。Example 单元 16/16、结果包 `/private/tmp/AnchorPagerV07Task14ExampleUnitCleanup-20260715.xcresult`；v0.5/v0.6 handoff、plain/real-child 边界、页面 rebind、顶部行为与 Header 稳定回归 15/15、结果包 `/private/tmp/AnchorPagerV07Task14BoundaryRegression-20260715.xcresult`，均 0 fail、0 skip。
+
+业务横向 child 真实 RED 否定 direct relation、业务子树 guard、共同祖先 hit-region guard 与 simultaneous/non-preventing guard：业务 pan 始终未进入 `.began`、offset 为 0。按架构止损条件已删除全部 guard、动态 geometry refresh 和诊断代码，并从 GesturePriorityCoordinator 撤回 committed child identity/relation；生产只保留已通过真实导航栈验证的 `pagingPan -> interactivePop`。自审确认 Public API、Tabman/Pageboy containment、Host/Store generation、业务 scroll/pan delegate、bounce/`isScrollEnabled`、纵向 simultaneous pair和 Overscroll policy owner 均未改变；ScrollCoordinator 仍是 synthetic 唯一 offset writer，日志只增加固定 `gesture.priority.interactivePop`，且有注入 sink 测试。业务横向自动优先当前不支持，限制已同步到设计、架构、路线、README 与任务清单；Task 15 继续负责全量门禁与整分支 fresh-pass。
 
 ---
 

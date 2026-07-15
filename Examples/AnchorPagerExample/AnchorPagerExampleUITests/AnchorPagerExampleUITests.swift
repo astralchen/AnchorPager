@@ -662,6 +662,215 @@ final class AnchorPagerExampleUITests: XCTestCase {
     }
 
     @MainActor
+    func testFastUpwardFlingHandsRemainingVelocityFromContainerToChild() throws {
+        let app = launchLongPage()
+        let probe = scrollCoordinationStateProbe(in: app)
+        probe.tap()
+
+        fastDrag(
+            in: app,
+            from: CGVector(dx: 0.5, dy: 0.72),
+            to: CGVector(dx: 0.5, dy: 0.64)
+        )
+
+        let state = try XCTUnwrap(waitForScrollState(from: probe, timeout: 5) {
+            $0.page == "long" && $0.containerToChild
+                && $0.collapse >= 0.99 && $0.distance > 1
+        })
+        XCTAssertGreaterThan(state.samples, 2)
+        let probeValue = (probe.value as? String) ?? "nil"
+        XCTAssertLessThanOrEqual(state.reversalMax, 0.5, "probe：\(probeValue)")
+        XCTAssertLessThanOrEqual(state.invariantMax, 0.5, "probe：\(probeValue)")
+        XCTAssertEqual(
+            state.canonical,
+            state.headerCollapse + state.distance,
+            accuracy: 1
+        )
+        XCTAssertTrue(state.hasZeroPresentationMetrics)
+    }
+
+    @MainActor
+    func testFastDownwardFlingHandsRemainingVelocityFromChildToContainer() throws {
+        let app = launchPage(index: 2, mode: "none")
+        let probe = scrollCoordinationStateProbe(in: app)
+        drag(in: app, from: 0.76, to: 0.34)
+        XCTAssertNotNil(waitForScrollState(from: probe, timeout: 5) {
+            $0.collapse >= 0.99 && $0.distance > 10 && $0.distance < 350
+        })
+        probe.tap()
+
+        fastDrag(
+            in: app,
+            from: CGVector(dx: 0.5, dy: 0.18),
+            to: CGVector(dx: 0.5, dy: 0.86)
+        )
+
+        let state = try XCTUnwrap(waitForScrollState(from: probe, timeout: 5) {
+            $0.page == "long" && $0.childToContainer
+                && $0.distance < 0.5 && $0.collapse < 0.99
+        }, "probe：\((probe.value as? String) ?? "nil")")
+        XCTAssertGreaterThan(state.samples, 2)
+        XCTAssertLessThanOrEqual(state.reversalMax, 0.5)
+        XCTAssertLessThanOrEqual(state.invariantMax, 0.5)
+        XCTAssertEqual(
+            state.canonical,
+            state.headerCollapse + state.distance,
+            accuracy: 1
+        )
+        XCTAssertTrue(
+            state.hasZeroPresentationMetrics,
+            "probe：\((probe.value as? String) ?? "nil")"
+        )
+    }
+
+    @MainActor
+    func testPlainPageFlingNeverCreatesSyntheticChildOwner() throws {
+        let app = launchPage(index: 3, mode: "none")
+        let probe = scrollCoordinationStateProbe(in: app)
+        probe.tap()
+
+        fastDrag(
+            in: app,
+            from: CGVector(dx: 0.5, dy: 0.82),
+            to: CGVector(dx: 0.5, dy: 0.16)
+        )
+
+        let state = try XCTUnwrap(waitForScrollState(from: probe, timeout: 5) {
+            $0.page == "plain" && !$0.hasScrollTarget
+                && $0.collapse >= 0.99 && $0.samples > 2
+        })
+        XCTAssertEqual(state.distance, 0, accuracy: 0.5)
+        XCTAssertFalse(state.containerToChild)
+        XCTAssertFalse(state.childToContainer)
+        XCTAssertLessThanOrEqual(state.invariantMax, 0.5)
+        XCTAssertLessThan(state.childTopMax, 0.5)
+        XCTAssertLessThan(state.childBottomMax, 0.5)
+    }
+
+    @MainActor
+    func testTopModesAndBottomBoundariesDoNotCrossContaminateMomentumOwner() throws {
+        for mode in ["none", "container", "child"] {
+            let app = launchPage(index: 2, mode: mode)
+            let probe = scrollCoordinationStateProbe(in: app)
+            probe.tap()
+            fastDrag(
+                in: app,
+                from: CGVector(dx: 0.5, dy: 0.34),
+                to: CGVector(dx: 0.5, dy: 0.76)
+            )
+            let state = try XCTUnwrap(waitForScrollState(from: probe, timeout: 5) {
+                switch mode {
+                case "none":
+                    $0.containerTopMax < 0.5 && $0.childTopMax < 0.5
+                case "container":
+                    $0.containerTopMax > 1 && $0.childTopMax < 0.5
+                default:
+                    $0.childTopMax > 1 && $0.containerTopMax < 0.5
+                }
+            }, "mode=\(mode);probe=\((probe.value as? String) ?? "nil")")
+            XCTAssertFalse(state.containerToChild)
+            XCTAssertFalse(state.childToContainer)
+            XCTAssertLessThanOrEqual(state.invariantMax, 0.5)
+            app.terminate()
+        }
+
+        let realChildApp = launchPage(index: 2, mode: "container")
+        let realChildProbe = scrollCoordinationStateProbe(in: realChildApp)
+        let lastRow = realChildApp.staticTexts["长页 - 30"]
+        for _ in 0..<6 where !lastRow.isHittable {
+            drag(in: realChildApp, from: 0.76, to: 0.24)
+        }
+        XCTAssertTrue(lastRow.isHittable)
+        realChildProbe.tap()
+        fastDrag(
+            in: realChildApp,
+            from: CGVector(dx: 0.5, dy: 0.78),
+            to: CGVector(dx: 0.5, dy: 0.20)
+        )
+        let childBottom = try XCTUnwrap(waitForScrollState(
+            from: realChildProbe,
+            timeout: 5
+        ) {
+            $0.childBottomMax > 1 && $0.containerBottomMax < 0.5
+        })
+        XCTAssertLessThan(childBottom.barMax, 0.5)
+        realChildApp.terminate()
+
+        let plainApp = launchPage(index: 3, mode: "none")
+        let plainProbe = scrollCoordinationStateProbe(in: plainApp)
+        drag(in: plainApp, from: 0.76, to: 0.24)
+        XCTAssertNotNil(waitForScrollState(from: plainProbe) { $0.collapse >= 0.99 })
+        plainProbe.tap()
+        fastDrag(
+            in: plainApp,
+            from: CGVector(dx: 0.5, dy: 0.78),
+            to: CGVector(dx: 0.5, dy: 0.20)
+        )
+        let plainBottom = try XCTUnwrap(waitForScrollState(
+            from: plainProbe,
+            timeout: 5
+        ) {
+            $0.containerBottomMax > 1 && $0.childBottomMax < 0.5
+        })
+        XCTAssertLessThan(plainBottom.barMax, 0.5)
+    }
+
+    @MainActor
+    func testLeadingEdgeInteractivePopWinsOverPageboyPaging() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        for pageTitle in ["无内容页", "长页"] {
+            pushAnchorPagerExample(in: app)
+            app.descendants(matching: .any)[pageTitle].tap()
+            let trace = selectionTraceProbe(in: app)
+            reset(trace: trace)
+
+            leadingEdgeDrag(in: app, targetX: 0.16)
+
+            XCTAssertFalse(app.tabBars.buttons["AnchorPager"].exists)
+            XCTAssertEqual(selectionEventSequence(from: trace), [])
+
+            leadingEdgeDrag(in: app, targetX: 0.88)
+
+            XCTAssertTrue(app.tabBars.buttons["AnchorPager"].waitForExistence(timeout: 5))
+        }
+    }
+
+    @MainActor
+    func testDiagonalGestureProducesOneLegalInteractionTerminal() throws {
+        let app = launchInteractionPage(initialIndex: 2)
+        let trace = selectionTraceProbe(in: app)
+        let probe = scrollCoordinationStateProbe(in: app)
+        reset(trace: trace)
+        probe.tap()
+
+        fastDrag(
+            in: app,
+            from: CGVector(dx: 0.72, dy: 0.82),
+            to: CGVector(dx: 0.34, dy: 0.16)
+        )
+        let vertical = try XCTUnwrap(waitForScrollState(from: probe, timeout: 5) {
+            $0.page == "long" && ($0.collapse > 0.1 || $0.distance > 1)
+        })
+        XCTAssertEqual(selectionEventSequence(from: trace), [])
+        XCTAssertLessThanOrEqual(vertical.invariantMax, 0.5)
+
+        probe.tap()
+        fastDrag(
+            in: app,
+            from: CGVector(dx: 0.86, dy: 0.64),
+            to: CGVector(dx: 0.14, dy: 0.48)
+        )
+        XCTAssertTrue(app.staticTexts["plain-page-content"].waitForExistence(timeout: 5))
+        XCTAssertEqual(waitForSelectionTrace(from: trace, matching: [3]), [3])
+        XCTAssertNotNil(waitForScrollState(from: probe, timeout: 5) {
+            $0.page == "plain" && !$0.hasScrollTarget
+                && $0.invariantMax <= 0.5 && $0.hasZeroPresentationMetrics
+        })
+    }
+
+    @MainActor
     func testLaunchArgumentSelectsPageThroughPublicAPI() throws {
         let app = XCUIApplication()
         app.launchArguments = ["--anchorPagerInitialIndex", "3"]
@@ -989,8 +1198,37 @@ final class AnchorPagerExampleUITests: XCTestCase {
     }
 
     @MainActor
+    private func fastDrag(
+        in app: XCUIApplication,
+        from startOffset: CGVector,
+        to endOffset: CGVector
+    ) {
+        let start = app.coordinate(withNormalizedOffset: startOffset)
+        let end = app.coordinate(withNormalizedOffset: endOffset)
+        start.press(
+            forDuration: 0.05,
+            thenDragTo: end,
+            withVelocity: .fast,
+            thenHoldForDuration: 0.02
+        )
+    }
+
+    @MainActor
+    private func leadingEdgeDrag(in app: XCUIApplication, targetX: CGFloat) {
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.01, dy: 0.62))
+        let end = app.coordinate(withNormalizedOffset: CGVector(dx: targetX, dy: 0.62))
+        start.press(
+            forDuration: 0.1,
+            thenDragTo: end,
+            withVelocity: targetX > 0.5 ? .fast : .slow,
+            thenHoldForDuration: 0.05
+        )
+    }
+
+    @MainActor
     private func waitForScrollState(
         from probe: XCUIElement,
+        timeout: TimeInterval = 3,
         matching predicate: @escaping (ScrollCoordinationState) -> Bool
     ) -> ScrollCoordinationState? {
         let expectation = XCTNSPredicateExpectation(
@@ -1002,11 +1240,12 @@ final class AnchorPagerExampleUITests: XCTestCase {
             },
             object: nil
         )
-        guard XCTWaiter.wait(for: [expectation], timeout: 3) == .completed else {
+        guard XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed else {
             return nil
         }
         return ScrollCoordinationState(value: probe.value as? String)
     }
+
 }
 
 private struct ScrollCoordinationState {
@@ -1030,6 +1269,12 @@ private struct ScrollCoordinationState {
     let childBottomMax: CGFloat
     let headerContentTop: CGFloat
     let headerContentTopDeltaMax: CGFloat
+    let canonical: CGFloat
+    let reversalMax: CGFloat
+    let invariantMax: CGFloat
+    let containerToChild: Bool
+    let childToContainer: Bool
+    let samples: Int
 
     var hasZeroPresentationMetrics: Bool {
         abs(containerCurrent) < 0.5
@@ -1090,7 +1335,17 @@ private struct ScrollCoordinationState {
               let headerContentTopValue = fields["headerContentTop"],
               let headerContentTop = Double(headerContentTopValue),
               let headerContentTopDeltaMaxValue = fields["headerContentTopDeltaMax"],
-              let headerContentTopDeltaMax = Double(headerContentTopDeltaMaxValue) else {
+              let headerContentTopDeltaMax = Double(headerContentTopDeltaMaxValue),
+              let canonicalValue = fields["canonical"],
+              let canonical = Double(canonicalValue),
+              let reversalMaxValue = fields["reversalMax"],
+              let reversalMax = Double(reversalMaxValue),
+              let invariantMaxValue = fields["invariantMax"],
+              let invariantMax = Double(invariantMaxValue),
+              let containerToChildValue = fields["containerToChild"],
+              let childToContainerValue = fields["childToContainer"],
+              let samplesValue = fields["samples"],
+              let samples = Int(samplesValue) else {
             return nil
         }
         self.page = page
@@ -1113,5 +1368,11 @@ private struct ScrollCoordinationState {
         self.childBottomMax = CGFloat(childBottomMax)
         self.headerContentTop = CGFloat(headerContentTop)
         self.headerContentTopDeltaMax = CGFloat(headerContentTopDeltaMax)
+        self.canonical = CGFloat(canonical)
+        self.reversalMax = CGFloat(reversalMax)
+        self.invariantMax = CGFloat(invariantMax)
+        self.containerToChild = containerToChildValue == "1"
+        self.childToContainer = childToContainerValue == "1"
+        self.samples = samples
     }
 }

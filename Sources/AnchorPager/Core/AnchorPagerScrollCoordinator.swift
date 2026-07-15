@@ -549,14 +549,18 @@ private extension AnchorPagerScrollCoordinator {
     func handleDecelerationNativeCallback(
         source: AnchorPagerVerticalPanSource
     ) -> Bool {
-        guard var context = decelerationContext,
-              sourceMatchesNativeOwner(source, context.nativeOwner) else {
-            return false
-        }
+        guard var context = decelerationContext else { return false }
 
         if context.phase == .synthetic {
-            lockLateNativeOwnerAtHandoffBoundary(context.nativeOwner)
+            if sourceMatchesNativeOwner(source, context.nativeOwner) {
+                lockLateNativeOwnerAtHandoffBoundary(context.nativeOwner)
+            } else {
+                restoreSyntheticCanonicalPosition(context)
+            }
             return true
+        }
+        guard sourceMatchesNativeOwner(source, context.nativeOwner) else {
+            return false
         }
         guard context.nativeBoundaryReached
             || nativeOwnerBoundaryReached(context.nativeOwner) else {
@@ -601,6 +605,18 @@ private extension AnchorPagerScrollCoordinator {
         }
     }
 
+    private func restoreSyntheticCanonicalPosition(_ context: DecelerationContext) {
+        apply(
+            AnchorPagerScrollPositionResolver.resolveCanonicalTotal(
+                context.canonicalTotal,
+                containerCollapsedOffset: containerGeometry.collapsibleDistance,
+                childMaximumDistance: childMaximumDistance,
+                fallback: currentStablePosition()
+            ),
+            logsPositionTransitions: false
+        )
+    }
+
     func consumeDecelerationSample(
         _ sample: AnchorPagerVerticalDecelerationModel.Sample,
         interactionIdentifier: Int
@@ -627,6 +643,7 @@ private extension AnchorPagerScrollCoordinator {
                 return
             }
             context.phase = .synthetic
+            stopCompetingNativeDeceleration(targetFor: context.nativeOwner)
             let boundaryTotal = containerGeometry.collapsibleDistance
             let projectedTotal = context.initialCanonicalTotal
                 + context.accumulatedModelDelta
@@ -687,6 +704,29 @@ private extension AnchorPagerScrollCoordinator {
         }
     }
 
+    private func stopCompetingNativeDeceleration(targetFor nativeOwner: Owner) {
+        let target: UIScrollView
+        let targetOffsetY: CGFloat
+        switch nativeOwner {
+        case .container:
+            guard let committedChildScrollView else { return }
+            target = committedChildScrollView
+            targetOffsetY = childTopOffset
+        case .child:
+            target = containerScrollView
+            targetOffsetY = containerGeometry.rawOffset(
+                forLogicalOffset: containerGeometry.collapsibleDistance
+            )
+        }
+
+        isApplyingGuardedOffsets = true
+        defer { isApplyingGuardedOffsets = false }
+        target.setContentOffset(
+            CGPoint(x: target.contentOffset.x, y: targetOffsetY),
+            animated: false
+        )
+    }
+
     func decelerationDriverDidCancel(interactionIdentifier: Int) {
         guard decelerationContext?.interactionIdentifier == interactionIdentifier else {
             return
@@ -744,7 +784,8 @@ private extension AnchorPagerScrollCoordinator {
 
     func apply(
         _ position: AnchorPagerScrollPositionResolver.Position,
-        transitionBaseline: AnchorPagerScrollPositionResolver.Position? = nil
+        transitionBaseline: AnchorPagerScrollPositionResolver.Position? = nil,
+        logsPositionTransitions: Bool = true
     ) {
         guard !isApplyingGuardedOffsets else { return }
 
@@ -778,7 +819,9 @@ private extension AnchorPagerScrollCoordinator {
             writeContainer()
         }
 
-        logTransitions(from: previous, to: position)
+        if logsPositionTransitions {
+            logTransitions(from: previous, to: position)
+        }
         transitionOwnerIfNeeded(to: nextOwner)
     }
 

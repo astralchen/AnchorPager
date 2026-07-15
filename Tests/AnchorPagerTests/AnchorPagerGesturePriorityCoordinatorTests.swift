@@ -4,162 +4,126 @@ import XCTest
 
 @MainActor
 final class AnchorPagerGesturePriorityCoordinatorTests: XCTestCase {
-    func testFailureMatrixInstallsSystemAndHorizontalCurrentRelationsOnce() {
+    func testFailureMatrixInstallsOnlySystemBackRelationOnce() {
         let recorder = FailureRelationRecorder()
         let coordinator = makeCoordinator(recorder: recorder)
         let pagingPan = UIPanGestureRecognizer()
         let interactivePop = UIScreenEdgePanGestureRecognizer()
-        let currentScrollView = makeScrollView(contentWidth: 640)
-        let cachedScrollView = makeScrollView(contentWidth: 900)
 
         coordinator.bindPagingPan(pagingPan)
         coordinator.bindInteractivePopGesture(interactivePop)
-        coordinator.bindCommittedScrollView(currentScrollView)
         coordinator.refresh()
         coordinator.refresh()
 
         XCTAssertEqual(
             recorder.relations,
-            [
-                .init(gesture: pagingPan, required: interactivePop),
-                .init(
-                    gesture: pagingPan,
-                    required: currentScrollView.panGestureRecognizer
-                ),
-            ]
+            [.init(gesture: pagingPan, required: interactivePop)]
         )
+    }
+
+    func testBusinessChildPanIsNeverAddedToFailureMatrix() {
+        let recorder = FailureRelationRecorder()
+        let coordinator = makeCoordinator(recorder: recorder)
+        let pagingPan = UIPanGestureRecognizer()
+        let childScrollView = UIScrollView()
+        childScrollView.contentSize.width = 900
+
+        coordinator.bindPagingPan(pagingPan)
+        coordinator.refresh()
+
         XCTAssertFalse(
             recorder.contains(
                 gesture: pagingPan,
-                required: cachedScrollView.panGestureRecognizer
+                required: childScrollView.panGestureRecognizer
             )
         )
     }
 
-    func testPlainAndVerticalCurrentDoNotInstallChildRelation() {
-        let recorder = FailureRelationRecorder()
-        let coordinator = makeCoordinator(recorder: recorder)
-        let pagingPan = UIPanGestureRecognizer()
-        let verticalScrollView = makeScrollView(contentWidth: 320)
-
-        coordinator.bindPagingPan(pagingPan)
-        coordinator.bindCommittedScrollView(nil)
-        coordinator.refresh()
-        coordinator.bindCommittedScrollView(verticalScrollView)
-        coordinator.refresh()
-
-        XCTAssertTrue(recorder.relations.isEmpty)
-
-        verticalScrollView.contentSize.width = 319
-        verticalScrollView.contentInset.left = 1
-        verticalScrollView.contentInset.right = 1
-        coordinator.refresh()
-
-        XCTAssertEqual(
-            recorder.relations,
-            [
-                .init(
-                    gesture: pagingPan,
-                    required: verticalScrollView.panGestureRecognizer
-                )
-            ]
-        )
-    }
-
-    func testSurfaceReplacementRebuildsCurrentRelationsAndKeepsInstalledPairMonotonic() {
+    func testSurfaceReplacementBuildsRelationForNewPagingPan() {
         let recorder = FailureRelationRecorder()
         let coordinator = makeCoordinator(recorder: recorder)
         let firstPagingPan = UIPanGestureRecognizer()
         let secondPagingPan = UIPanGestureRecognizer()
         let interactivePop = UIScreenEdgePanGestureRecognizer()
-        let currentScrollView = makeScrollView(contentWidth: 640)
 
-        coordinator.bindPagingPan(firstPagingPan)
         coordinator.bindInteractivePopGesture(interactivePop)
-        coordinator.bindCommittedScrollView(currentScrollView)
+        coordinator.bindPagingPan(firstPagingPan)
         coordinator.refresh()
-
-        currentScrollView.contentSize.width = 320
-        coordinator.refresh()
-        XCTAssertEqual(recorder.relations.count, 2)
-
         coordinator.bindPagingPan(secondPagingPan)
         coordinator.refresh()
+
         XCTAssertEqual(
             recorder.relations,
             [
                 .init(gesture: firstPagingPan, required: interactivePop),
-                .init(
-                    gesture: firstPagingPan,
-                    required: currentScrollView.panGestureRecognizer
-                ),
                 .init(gesture: secondPagingPan, required: interactivePop),
             ]
         )
+    }
 
-        currentScrollView.contentSize.width = 640
+    func testNewSystemRelationLogsOnce() {
+        let recorder = FailureRelationRecorder()
+        let coordinator = makeCoordinator(recorder: recorder)
+        let pagingPan = UIPanGestureRecognizer()
+        let interactivePop = UIScreenEdgePanGestureRecognizer()
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+
+        coordinator.bindPagingPan(pagingPan)
+        coordinator.bindInteractivePopGesture(interactivePop)
         coordinator.refresh()
-        coordinator.bindPagingPan(firstPagingPan)
         coordinator.refresh()
 
-        XCTAssertEqual(recorder.relations.count, 4)
-        XCTAssertTrue(
-            recorder.contains(
-                gesture: secondPagingPan,
-                required: currentScrollView.panGestureRecognizer
-            )
+        XCTAssertEqual(
+            events,
+            [
+                .init(
+                    category: .gesture,
+                    level: .info,
+                    event: "gesture.priority.interactivePop"
+                )
+            ]
         )
     }
 
-    func testBindingRefreshAndInvalidatePreserveAllDelegateAndScrollConfiguration() {
+    func testBindingRefreshAndInvalidatePreserveRecognizerDelegates() {
         let recorder = FailureRelationRecorder()
         let coordinator = makeCoordinator(recorder: recorder)
         let pagingPan = UIPanGestureRecognizer()
         let interactivePop = UIScreenEdgePanGestureRecognizer()
         let pagingDelegate = GestureDelegate()
         let popDelegate = GestureDelegate()
-        let scrollDelegate = ScrollDelegate()
         pagingPan.delegate = pagingDelegate
         interactivePop.delegate = popDelegate
-        let currentScrollView = makeScrollView(contentWidth: 640)
-        currentScrollView.delegate = scrollDelegate
-        currentScrollView.isScrollEnabled = false
-        currentScrollView.bounces = false
-        currentScrollView.alwaysBounceVertical = true
-        let childPanDelegate = currentScrollView.panGestureRecognizer.delegate
 
         coordinator.bindPagingPan(pagingPan)
         coordinator.bindInteractivePopGesture(interactivePop)
-        coordinator.bindCommittedScrollView(currentScrollView)
         coordinator.refresh()
         coordinator.invalidate()
         coordinator.invalidate()
 
         XCTAssertTrue(pagingPan.delegate === pagingDelegate)
         XCTAssertTrue(interactivePop.delegate === popDelegate)
-        XCTAssertTrue(currentScrollView.delegate === scrollDelegate)
-        XCTAssertTrue(currentScrollView.panGestureRecognizer.delegate === childPanDelegate)
-        XCTAssertFalse(currentScrollView.isScrollEnabled)
-        XCTAssertFalse(currentScrollView.bounces)
-        XCTAssertTrue(currentScrollView.alwaysBounceVertical)
+        XCTAssertNil(coordinator.pagingPanForTesting)
     }
 
-    func testBindingsAndInstalledRelationsDoNotRetainGesturesOrScrollViews() {
+    func testBindingsAndInstalledRelationsDoNotRetainGestures() {
         let recorder = FailureRelationRecorder()
         let coordinator = makeCoordinator(recorder: recorder)
         var pagingPan: UIPanGestureRecognizer? = UIPanGestureRecognizer()
-        var scrollView: UIScrollView? = makeScrollView(contentWidth: 640)
+        var interactivePop: UIGestureRecognizer? = UIScreenEdgePanGestureRecognizer()
         weak let weakPagingPan = pagingPan
-        weak let weakScrollView = scrollView
+        weak let weakInteractivePop = interactivePop
 
         coordinator.bindPagingPan(pagingPan)
-        coordinator.bindCommittedScrollView(scrollView)
+        coordinator.bindInteractivePopGesture(interactivePop)
         coordinator.refresh()
         pagingPan = nil
-        scrollView = nil
+        interactivePop = nil
 
         XCTAssertNil(weakPagingPan)
-        XCTAssertNil(weakScrollView)
+        XCTAssertNil(weakInteractivePop)
         coordinator.invalidate()
     }
 
@@ -176,9 +140,8 @@ final class AnchorPagerGesturePriorityCoordinatorTests: XCTestCase {
         XCTAssertFalse(source.contains("setValue("))
         XCTAssertFalse(source.contains("value(forKey:"))
         XCTAssertFalse(source.contains("_UI"))
-        XCTAssertFalse(source.contains("isScrollEnabled ="))
-        XCTAssertFalse(source.contains(".bounces ="))
-        XCTAssertFalse(source.contains(".alwaysBounceVertical ="))
+        XCTAssertFalse(source.contains("UIScrollView"))
+        XCTAssertFalse(source.contains("contentOffset"))
     }
 
     private func makeCoordinator(
@@ -187,14 +150,6 @@ final class AnchorPagerGesturePriorityCoordinatorTests: XCTestCase {
         AnchorPagerGesturePriorityCoordinator { gesture, required in
             recorder.record(gesture: gesture, required: required)
         }
-    }
-
-    private func makeScrollView(contentWidth: CGFloat) -> UIScrollView {
-        let scrollView = UIScrollView(
-            frame: CGRect(x: 0, y: 0, width: 320, height: 640)
-        )
-        scrollView.contentSize = CGSize(width: contentWidth, height: 1_200)
-        return scrollView
     }
 
     private func packageRoot() throws -> URL {
@@ -242,6 +197,3 @@ private final class FailureRelationRecorder {
 
 @MainActor
 private final class GestureDelegate: NSObject, UIGestureRecognizerDelegate {}
-
-@MainActor
-private final class ScrollDelegate: NSObject, UIScrollViewDelegate {}

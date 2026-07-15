@@ -1171,9 +1171,6 @@ open class AnchorPagerViewController: UIViewController {
         gesturePriorityCoordinator.bindInteractivePopGesture(
             navigationController?.interactivePopGestureRecognizer
         )
-        gesturePriorityCoordinator.bindCommittedScrollView(
-            pageStateStore.committedCurrentScrollView
-        )
         gesturePriorityCoordinator.refresh()
     }
 

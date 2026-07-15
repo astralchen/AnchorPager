@@ -566,8 +566,8 @@
 - [x] child-to-container 使用同一 driver 合成跨 owner 边界后的剩余 delta，稳定端点停止且不创建 overscroll owner
 - [x] 新手势、selection、reload、layout、尺寸变化、geometry、identity、mode 与 teardown 同步取消 synthetic deceleration；旧 driver tick 不能取消替换后的事务
 - [x] 系统返回手势优先级明确：Pageboy paging pan 让 navigation interactive-pop gesture 优先
-- [x] child 横向 content scroll 手势优先级明确：只消费 Store committed current 的真实水平范围
-- [x] Pageboy paging pan 对 interactive-pop 和具备横向范围的 committed current child pan 建立公开失败依赖，不设置任何 delegate
+- [x] child 横向 content scroll 可行性边界明确：真实 UI 否定 direct relation 与隐式 guard，不把未经验证的自动优先能力留在生产代码
+- [x] Pageboy paging pan 只对 interactive-pop 建立公开失败依赖；不持有业务 scroll identity，不设置任何既有 delegate
 - [x] 为 interaction state begin 加入 gesture 日志
 - [x] 为重要 update 边界加入 gesture 日志
 - [x] 为 finish 和 cancel 加入 gesture 日志
@@ -583,9 +583,9 @@
 - [x] 测试动画 completion/executor-ready 收齐后才推进 latest，并由真实页面、public trace 与 appearance 三方一致性验收
 - [x] 测试非相邻页面只形成 source/target appearance 与单次 public didSelect
 - [x] 测试双向跨 owner 惯性连续、旧 owner 晚到 callback 锁边界且保持 ScrollCoordinator 唯一 synthetic offset writer
-- [ ] 测试横向分页与纵向拖拽竞争
-- [ ] 测试系统返回手势与横向分页手势优先级
-- [ ] 使用真实横向业务 scroll child 验证 child/Pageboy 优先级和 delegate 身份不变
+- [x] 测试横向分页与纵向拖拽竞争
+- [x] 测试系统返回手势与横向分页手势优先级
+- [x] 使用真实横向业务 scroll child 完成可行性 RED：确认自动优先级当前不可安全交付，delegate/configuration 身份始终不变并撤回无效生产关系
 
 ## v0.8：状态栏点击与尺寸变化版
 

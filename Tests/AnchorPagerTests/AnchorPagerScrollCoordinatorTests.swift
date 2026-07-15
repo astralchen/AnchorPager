@@ -1033,6 +1033,34 @@ final class AnchorPagerScrollCoordinatorTests: XCTestCase {
         XCTAssertNil(fixture.coordinator.activeBoundaryForTesting)
     }
 
+    func testSyntheticContainerToChildRejectsLateNativeTargetChildWrite() throws {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        let child = try XCTUnwrap(fixture.child as? RecordingScrollView)
+        fixture.container.contentOffset.y = 80
+        fixture.startDeceleration(source: .container, velocityY: -1_000)
+        let driver = try XCTUnwrap(fixture.decelerationDrivers.drivers.first)
+
+        driver.emit(.init(delta: 15, velocity: 900, isFinished: false))
+        fixture.container.contentOffset.y = 100
+        fixture.coordinator.containerDidScroll()
+        fixture.child.contentOffset.y = -fixture.child.contentInset.top + 3
+        driver.emit(.init(delta: 10, velocity: 800, isFinished: false))
+        XCTAssertEqual(fixture.childDistance, 5, accuracy: 0.001)
+        XCTAssertEqual(child.nonanimatedContentOffsetWriteCount, 1)
+        XCTAssertEqual(
+            try XCTUnwrap(child.lastNonanimatedContentOffset).y,
+            -fixture.child.contentInset.top,
+            accuracy: 0.001
+        )
+
+        fixture.child.contentOffset.y = -fixture.child.contentInset.top
+
+        XCTAssertEqual(fixture.container.contentOffset.y, 100, accuracy: 0.001)
+        XCTAssertEqual(fixture.childDistance, 5, accuracy: 0.001)
+        XCTAssertEqual(fixture.coordinator.decelerationPhaseForTesting, .synthetic)
+        XCTAssertNil(fixture.coordinator.activeBoundaryForTesting)
+    }
+
     func testChildToContainerDecelerationConsumesOnlyModelOverflowPastBoundary() throws {
         let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
         fixture.container.contentOffset.y = 100
@@ -1070,6 +1098,31 @@ final class AnchorPagerScrollCoordinatorTests: XCTestCase {
         fixture.child.contentOffset.y = -fixture.child.contentInset.top + 10
         XCTAssertEqual(fixture.childDistance, 0, accuracy: 0.001)
         XCTAssertEqual(fixture.container.contentOffset.y, 70, accuracy: 0.001)
+        XCTAssertNil(fixture.coordinator.activeBoundaryForTesting)
+    }
+
+    func testSyntheticChildToContainerRejectsLateNativeTargetContainerWrite() throws {
+        let fixture = Fixture(collapsedOffset: 100, childMaximumDistance: 500)
+        fixture.container.contentOffset.y = 100
+        fixture.child.contentOffset.y = -fixture.child.contentInset.top + 50
+        let token = fixture.coordinator.bindingTokenForTesting
+        fixture.startDeceleration(
+            source: .child(token: token),
+            velocityY: 1_000
+        )
+        let driver = try XCTUnwrap(fixture.decelerationDrivers.drivers.first)
+
+        driver.emit(.init(delta: -30, velocity: -900, isFinished: false))
+        fixture.child.contentOffset.y = -fixture.child.contentInset.top
+        driver.emit(.init(delta: -30, velocity: -800, isFinished: false))
+        XCTAssertEqual(fixture.container.contentOffset.y, 90, accuracy: 0.001)
+
+        fixture.container.contentOffset.y = 100
+        fixture.coordinator.containerDidScroll()
+
+        XCTAssertEqual(fixture.container.contentOffset.y, 90, accuracy: 0.001)
+        XCTAssertEqual(fixture.childDistance, 0, accuracy: 0.001)
+        XCTAssertEqual(fixture.coordinator.decelerationPhaseForTesting, .synthetic)
         XCTAssertNil(fixture.coordinator.activeBoundaryForTesting)
     }
 
@@ -1404,7 +1457,7 @@ private final class Fixture {
     ) {
         let decelerationDrivers = RecordingDecelerationDriverFactory()
         self.decelerationDrivers = decelerationDrivers
-        child = UIScrollView()
+        child = RecordingScrollView()
         container.bounds = CGRect(x: 0, y: 0, width: 320, height: 640)
         container.contentInset.top = topInset
         container.contentOffset.y = -topInset
@@ -1461,6 +1514,20 @@ private final class Fixture {
             translationY: 0,
             velocityY: velocityY
         )
+    }
+}
+
+@MainActor
+private final class RecordingScrollView: UIScrollView {
+    private(set) var nonanimatedContentOffsetWriteCount = 0
+    private(set) var lastNonanimatedContentOffset: CGPoint?
+
+    override func setContentOffset(_ contentOffset: CGPoint, animated: Bool) {
+        if !animated {
+            nonanimatedContentOffsetWriteCount += 1
+            lastNonanimatedContentOffset = contentOffset
+        }
+        super.setContentOffset(contentOffset, animated: animated)
     }
 }
 

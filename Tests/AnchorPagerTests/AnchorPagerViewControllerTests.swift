@@ -69,7 +69,7 @@ final class AnchorPagerViewControllerTests: XCTestCase {
     }
 
     @MainActor
-    func testGesturePriorityUsesPagingSurfaceSystemBackAndCommittedHorizontalChild() throws {
+    func testGesturePriorityUsesPagingSurfaceAndSystemBackOnly() throws {
         let child = ScrollChildViewController()
         child.loadViewIfNeeded()
         child.scrollView.contentSize = CGSize(width: 900, height: 1_200)
@@ -107,14 +107,11 @@ final class AnchorPagerViewControllerTests: XCTestCase {
                 to: interactivePop
             )
         )
-        XCTAssertTrue(
+        XCTAssertFalse(
             coordinator.hasInstalledRelationForTesting(
                 from: pagingPan,
                 to: child.scrollView.panGestureRecognizer
             )
-        )
-        XCTAssertTrue(
-            coordinator.committedScrollViewForTesting === child.scrollView
         )
         XCTAssertTrue(pagingPan.delegate === pagingDelegate)
         XCTAssertTrue(interactivePop.delegate === popDelegate)
@@ -127,7 +124,6 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         pager.reloadData()
 
         XCTAssertNil(coordinator.pagingPanForTesting)
-        XCTAssertNil(coordinator.committedScrollViewForTesting)
     }
 
     @MainActor
@@ -174,7 +170,6 @@ final class AnchorPagerViewControllerTests: XCTestCase {
                 to: cached.scrollView.panGestureRecognizer
             )
         )
-        XCTAssertTrue(coordinator.committedScrollViewForTesting === current.scrollView)
     }
 
     func testVerticalCoordinationSourcesNeverAssignBusinessOrPanDelegates() throws {
@@ -3631,10 +3626,6 @@ final class AnchorPagerViewControllerTests: XCTestCase {
             pendingPage.scrollView,
             insteadOf: oldFirst.scrollView
         )
-        XCTAssertTrue(
-            fixture.pager.gesturePriorityCoordinatorForTesting
-                .committedScrollViewForTesting === pendingPage.scrollView
-        )
     }
 
     @MainActor
@@ -3650,10 +3641,6 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         fixture.assertOnlyScrollViewIsBound(
             oldSecond.scrollView,
             insteadOf: pendingPage.scrollView
-        )
-        XCTAssertTrue(
-            fixture.pager.gesturePriorityCoordinatorForTesting
-                .committedScrollViewForTesting === oldSecond.scrollView
         )
     }
 
@@ -3674,10 +3661,6 @@ final class AnchorPagerViewControllerTests: XCTestCase {
         fixture.assertOnlyScrollViewIsBound(
             oldFirst.scrollView,
             insteadOf: pendingPage.scrollView
-        )
-        XCTAssertTrue(
-            fixture.pager.gesturePriorityCoordinatorForTesting
-                .committedScrollViewForTesting === oldFirst.scrollView
         )
     }
 

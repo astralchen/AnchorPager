@@ -242,7 +242,9 @@ log stream --predicate 'subsystem == "com.anchorpager.AnchorPager"'
 
 ## 当前限制
 
-v0.5 连续纵向 handoff、无滚动页直接承载、stable/native boundary 分离、两类底部回弹路径、plain bottom 页面 surface/bar 分层、Header 安装前 bootstrap seed、主容器真实 top inset/固定高度 Header presentation 和 v0.6 三种顶部模式均已完成最终验收与 fresh-pass。更后续的跨滚动区域减速速度合成、完整交互状态、状态栏点击顶滚和尺寸变化后的滚动位置恢复尚未实现；refresh control 或业务刷新任务不属于 AnchorPager。Tabman/Pageboy 仅出现在 internal adapter 层，Public API 不暴露第三方类型。
+v0.5 连续纵向 handoff、无滚动页直接承载、stable/native boundary 分离、两类底部回弹路径、plain bottom 页面 surface/bar 分层、Header 安装前 bootstrap seed、主容器真实 top inset/固定高度 Header presentation、v0.6 三种顶部模式，以及 v0.7 统一交互状态、快速选择事务、系统返回优先级和双向跨 owner 惯性均已实现。状态栏点击顶滚和尺寸变化后的滚动位置恢复留给 v0.8；refresh control 或业务刷新任务不属于 AnchorPager。Tabman/Pageboy 仅出现在 internal adapter 层，Public API 不暴露第三方类型。
+
+当前不保证页面内部任意横向 `UIScrollView` 自动优先于 Pageboy。真实 UIKit 验收证明 direct failure relation 与无侵入 guard 都无法在不接管既有 delegate、不重置手势、不依赖私有层级且不阻塞页面其他区域的前提下稳定改变同向嵌套 scroll winner；框架因此不安装业务 child failure relation。需要该组合时，应暂时由接入方调整页面交互布局，后续版本若提供能力将先定义显式接入契约。
 
 在 Xcode 26.3 / Swift 6.2.4 的 x86_64 iPhone 17 Simulator 验证中，把控制器同步析构改为
 `isolated deinit` 会在生命周期析构后稳定触发 allocator `pointer being freed was not allocated` 崩溃。
