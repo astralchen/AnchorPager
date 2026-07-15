@@ -17,6 +17,42 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
     }
 
     @MainActor
+    func testAdapterPublishesStablePagingSurfaceAndClearsItBeforeRemoval() throws {
+        let adapter = AnchorPagerPagingAdapter()
+        let delegate = RecordingPagingDelegate()
+        adapter.eventDelegate = delegate
+        reload(
+            adapter,
+            titles: ["Page"],
+            viewControllers: [UIViewController()],
+            selectedIndex: 0
+        )
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = adapter
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+
+        window.layoutIfNeeded()
+        adapter.view.layoutIfNeeded()
+        adapter.view.layoutIfNeeded()
+
+        let surface = try XCTUnwrap(adapter.pagingSurface)
+        XCTAssertTrue(surface.pageViewController.parent === adapter)
+        XCTAssertTrue(surface.panGestureRecognizer === surface.scrollView.panGestureRecognizer)
+        XCTAssertEqual(delegate.pagingSurfaceChanges.count, 1)
+        XCTAssertTrue(
+            delegate.pagingSurfaceChanges[0]?.panGestureRecognizer
+                === surface.panGestureRecognizer
+        )
+
+        XCTAssertTrue(adapter.prepareForRemoval())
+
+        XCTAssertNil(adapter.pagingSurface)
+        XCTAssertEqual(delegate.pagingSurfaceChanges.count, 2)
+        XCTAssertNil(delegate.pagingSurfaceChanges[1])
+    }
+
+    @MainActor
     func testExplicitBarHeightConstrainsActualTabmanBarAndReportsInsets() {
         let adapter = AnchorPagerPagingAdapter()
         let delegate = RecordingPagingDelegate()
@@ -1112,6 +1148,22 @@ private final class RecordingPagingDelegate: AnchorPagerPagingAdapterDelegate {
     var barInsets: [UIEdgeInsets] = []
     var callbackOrder: [Callback] = []
     var nextInteractiveRequestIdentifier: AnchorPagerPagingSelectionRequestIdentifier?
+    var pagingSurfaceChanges: [AnchorPagerPagingSurfaceObservation.Surface?] = []
+    var pagingPanStates: [UIGestureRecognizer.State] = []
+
+    func pagingAdapter(
+        _ adapter: AnchorPagerPagingAdapter,
+        didUpdatePagingSurface surface: AnchorPagerPagingSurfaceObservation.Surface?
+    ) {
+        pagingSurfaceChanges.append(surface)
+    }
+
+    func pagingAdapter(
+        _ adapter: AnchorPagerPagingAdapter,
+        pagingPanDidChange state: UIGestureRecognizer.State
+    ) {
+        pagingPanStates.append(state)
+    }
 
     func pagingAdapter(
         _ adapter: AnchorPagerPagingAdapter,

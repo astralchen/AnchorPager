@@ -530,7 +530,7 @@
 - [x] PagingHost 建立一笔 active + 一笔 latest pending selection request，不建立第二套 generation owner 或旁路 terminal
 - [x] selection request 使用 Host 单调 identifier，并区分 api、bar、interactive source
 - [x] Adapter 覆写 Tabman bar 请求入口，禁止 bar 点击旁路 Host transaction
-- [ ] Adapter 建立可撤销 Pageboy paging surface/pan observation，不替换第三方 scroll/pan delegate
+- [x] Adapter 建立可撤销 Pageboy paging surface/pan observation，不替换第三方 scroll/pan delegate；containment discovery、identity replacement、teardown/deinit、统一生命周期日志与源码隔离均已自动化覆盖
 - [x] 动画 programmatic completion 与 Pageboy executor-ready 分离，禁止在 completion 调用栈内 drain latest selection
 - [x] Adapter 覆写 Pageboy open `isUserInteractionEnabled`，恢复为 true 后只 acknowledgement matching executor-ready identifier
 - [x] 创建 `Sources/AnchorPager/Gesture/AnchorPagerInteractionState.swift`

@@ -8,7 +8,7 @@
 
 **Tech Stack:** Swift 6.2、Swift 6 language mode、UIKit、iOS 14+、Swift Package Manager、Tabman 4.0.1、Pageboy 5.0.2、XCTest/XCUITest、Xcode 26.6、iPhone 17 Pro / iOS 26.5 Simulator。
 
-**当前状态：** 专项设计与 Pageboy executor-ready 补充契约已确认；用户已复核并授权实施。Task 0–6 已完成，下一步建立可撤销 Pageboy paging surface/pan observation。
+**当前状态：** 专项设计与 Pageboy executor-ready 补充契约已确认；用户已复核并授权实施。Task 0–7 已完成，下一步安装 system/page/current-child 手势失败关系。
 
 ## Global Constraints
 
@@ -562,19 +562,19 @@ final class AnchorPagerPagingSurfaceObservation: NSObject {
 }
 ```
 
-- [ ] **Step 1：写 containment discovery RED**
+- [x] **Step 1：写 containment discovery RED**
 
 只通过 `UIPageViewController` containment 和其 UIScrollView 子树识别 surface；不匹配私有类名。重复 refresh 同 identity 不重复 target；identity replacement 先解绑旧 pan；invalidate/deinit 幂等。
 
-- [ ] **Step 2：写 delegate ownership RED**
+- [x] **Step 2：写 delegate ownership RED**
 
 保存 Pageboy scroll/pan delegate identity，refresh、pan callback、replacement、invalidate 全程不变；源码扫描禁止 `.delegate =`、`isScrollEnabled =`、bounce 写入。
 
-- [ ] **Step 3：实现观察并装配 Adapter**
+- [x] **Step 3：实现观察并装配 Adapter**
 
 Adapter 在 `viewDidLoad`、`viewDidLayoutSubviews`、reload terminal 和 teardown 后刷新/清理 observation；只向 Host/ViewController 暴露 internal pan identity 和生命周期事件，不泄漏 Public API。
 
-- [ ] **Step 4：运行聚焦测试**
+- [x] **Step 4：运行聚焦测试**
 
 ```bash
 xcodebuild -quiet -scheme AnchorPager \
@@ -583,12 +583,14 @@ xcodebuild -quiet -scheme AnchorPager \
   -only-testing:AnchorPagerTests/AnchorPagerPagingAdapterTests test
 ```
 
-- [ ] **Step 5：自审并提交**
+- [x] **Step 5：自审并提交**
 
 ```bash
 git add Sources/AnchorPager/Paging/AnchorPagerPagingSurfaceObservation.swift Sources/AnchorPager/Paging/AnchorPagerPagingAdapter.swift Tests/AnchorPagerTests/AnchorPagerPagingSurfaceObservationTests.swift Tests/AnchorPagerTests/AnchorPagerPagingAdapterTests.swift
 git commit -m "观察 Pageboy 分页手势表面"
 ```
+
+验收记录：首轮 RED 因 `AnchorPagerPagingSurfaceObservation`、Adapter surface identity 与 pan lifecycle delegate 入口缺失而编译失败；生命周期日志补充 RED 精确失败于缺少固定 `paging.surface.bind/unbind`。GREEN 仅通过公开 `UIPageViewController` containment 与最浅层 `UIScrollView` 子树发现 paging surface，同 identity refresh 幂等，replacement 先 remove 旧 target 再 add 新 target，invalidate/deinit 幂等；全程不设置 scroll/pan delegate、`isScrollEnabled`、`bounces` 或 `alwaysBounceVertical`。Adapter 在 view load/layout、reload terminal 与 teardown 刷新或清理，并只经 internal delegate 发布 surface identity/pan state。Observation + Adapter 最终聚焦 40/40、0 fail、0 skip，结果包 `/private/tmp/AnchorPagerV07Task7AdapterFinal-20260715-1820.xcresult`；Framework 全量 372/372、0 fail、0 skip，结果包 `/private/tmp/AnchorPagerV07Task7FrameworkFinal-20260715-1821.xcresult`；两份 xcresult 均为 0 error、0 warning、0 analyzer warning。自审确认 Public API、Tabman/Pageboy containment、Host/Store generation、业务 child delegate/pan/bounce/isScrollEnabled、纵向 simultaneous recognition、offset writer 与 overscroll policy owner 均未改变；真实 paging lifecycle 仲裁留在 Task 11。
 
 ---
 

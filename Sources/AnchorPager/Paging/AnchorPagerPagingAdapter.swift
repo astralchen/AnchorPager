@@ -11,6 +11,14 @@ protocol AnchorPagerPageProviding: AnyObject {
 protocol AnchorPagerPagingAdapterDelegate: AnyObject {
     func pagingAdapter(
         _ adapter: AnchorPagerPagingAdapter,
+        didUpdatePagingSurface surface: AnchorPagerPagingSurfaceObservation.Surface?
+    )
+    func pagingAdapter(
+        _ adapter: AnchorPagerPagingAdapter,
+        pagingPanDidChange state: UIGestureRecognizer.State
+    )
+    func pagingAdapter(
+        _ adapter: AnchorPagerPagingAdapter,
         didRequestBarSelectionAt index: Int
     )
     func pagingAdapter(
@@ -62,6 +70,14 @@ protocol AnchorPagerPagingAdapterDelegate: AnyObject {
 extension AnchorPagerPagingAdapterDelegate {
     func pagingAdapter(
         _ adapter: AnchorPagerPagingAdapter,
+        didUpdatePagingSurface surface: AnchorPagerPagingSurfaceObservation.Surface?
+    ) {}
+    func pagingAdapter(
+        _ adapter: AnchorPagerPagingAdapter,
+        pagingPanDidChange state: UIGestureRecognizer.State
+    ) {}
+    func pagingAdapter(
+        _ adapter: AnchorPagerPagingAdapter,
         didUpdateBarInsets barInsets: UIEdgeInsets
     ) {}
     func pagingAdapterDidBecomeReadyForReload(_ adapter: AnchorPagerPagingAdapter) {}
@@ -84,6 +100,7 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
     private var requestedBarHeight: CGFloat?
     private var lastReportedBarInsets: UIEdgeInsets?
     private var reloadSelectionCallbackSuppressionDepth = 0
+    private let pagingSurfaceObservation = AnchorPagerPagingSurfaceObservation()
     // 只在对应同步 reloadData 调用栈内存在，避免晚到回调借用后续 request 标识。
     private var reloadCallbackRequestIdentifier: AnchorPagerPagingReloadRequestIdentifier?
 
@@ -100,6 +117,11 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
         pendingPageboySelectionIndex == nil &&
             executingSelection == nil &&
             executorReadyRequestIdentifier == nil
+    }
+
+    /// 当前通过公开 UIKit containment 发现的 Pageboy 分页手势表面。
+    var pagingSurface: AnchorPagerPagingSurfaceObservation.Surface? {
+        pagingSurfaceObservation.surface
     }
 
     override var isUserInteractionEnabled: Bool {
@@ -132,10 +154,12 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
             reloadSelectionCallbackSuppressionDepth -= 1
         }
         installBarIfNeeded()
+        refreshPagingSurfaceObservation()
     }
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        refreshPagingSurfaceObservation()
 
         let resolvedInsets = sanitizedBarInsets(barInsets)
         guard lastReportedBarInsets != resolvedInsets else { return }
@@ -213,6 +237,7 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
             reloadData()
             reloadSelectionCallbackSuppressionDepth -= 1
             reloadCallbackRequestIdentifier = previousRequestIdentifier
+            refreshPagingSurfaceObservation()
             bars.forEach { bar in
                 if configuredPageCount > 0 {
                     bar.reloadData(at: 0...configuredPageCount - 1, context: .full)
@@ -263,6 +288,8 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
     }
 
     private func tearDownChildTreeForRemoval() {
+        pagingSurfaceObservation.invalidate()
+
         func tearDown(_ viewController: UIViewController) {
             for child in viewController.children {
                 tearDown(child)
@@ -456,6 +483,7 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
             didReloadWith: currentViewController,
             currentPageIndex: currentPageIndex
         )
+        refreshPagingSurfaceObservation()
         if let reloadCallbackRequestIdentifier {
             view.layoutIfNeeded()
             let terminalBarInsets = sanitizedBarInsets(barInsets)
@@ -473,6 +501,21 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
     private func configure() {
         automaticallyAdjustsChildInsets = false
         dataSource = self
+        pagingSurfaceObservation.onSurfaceChanged = { [weak self] surface in
+            guard let self else { return }
+            eventDelegate?.pagingAdapter(
+                self,
+                didUpdatePagingSurface: surface
+            )
+        }
+        pagingSurfaceObservation.onPanStateChanged = { [weak self] state in
+            guard let self else { return }
+            eventDelegate?.pagingAdapter(self, pagingPanDidChange: state)
+        }
+    }
+
+    private func refreshPagingSurfaceObservation() {
+        pagingSurfaceObservation.refresh(in: self)
     }
 
     private func recordWillSelectCallback(at index: Int) {
