@@ -530,6 +530,8 @@
 - [ ] selection request 使用 Host 单调 identifier，并区分 api、bar、interactive source
 - [ ] Adapter 覆写 Tabman bar 请求入口，禁止 bar 点击旁路 Host transaction
 - [ ] Adapter 建立可撤销 Pageboy paging surface/pan observation，不替换第三方 scroll/pan delegate
+- [ ] 动画 programmatic completion 与 Pageboy executor-ready 分离，禁止在 completion 调用栈内 drain latest selection
+- [ ] Adapter 覆写 Pageboy open `isUserInteractionEnabled`，恢复为 true 后只 acknowledgement matching executor-ready identifier
 - [ ] 创建 `Sources/AnchorPager/Gesture/AnchorPagerInteractionState.swift`
 - [ ] 创建 `Sources/AnchorPager/Gesture/AnchorPagerInteractionCoordinator.swift`
 - [ ] 创建 `Sources/AnchorPager/Gesture/AnchorPagerGesturePriorityCoordinator.swift`，只安装 public failure relation
@@ -550,7 +552,7 @@
 - [ ] 统一横向滑动 selection commit/cancel
 - [ ] selectedIndex 只在确认完成后提交
 - [ ] 非相邻页面切换使用 source/target 过渡语义
-- [ ] 快速连续 setSelectedIndex/bar 点击使用 active + latest pending，旧 completion 不清除新请求
+- [ ] 快速连续 setSelectedIndex/bar 点击使用 active + latest pending，旧 completion/executor-ready 不清除新请求
 - [ ] active 期间请求 committed source index 仍作为有效 latest intent
 - [ ] reloadData 非 idle 时执行 cancel 或延迟合并
 - [ ] reloadHeaderLayout 非 idle 时执行 cancel 或延迟合并
@@ -569,6 +571,7 @@
 - [ ] 测试 paging cancel 不提交 selectedIndex
 - [ ] 测试快速连续 setSelectedIndex
 - [ ] 测试连续 bar 点击与 API/bar 混合 latest pending
+- [ ] 测试动画 completion 返回前不启动 latest，Pageboy interaction hook 恢复后才推进
 - [ ] 测试非相邻页面切换
 - [ ] 测试双向跨 owner 惯性连续且保持唯一 offset writer/owner
 - [ ] 测试横向分页与纵向拖拽竞争
