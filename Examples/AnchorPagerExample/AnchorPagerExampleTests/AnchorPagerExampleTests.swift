@@ -26,12 +26,18 @@ struct AnchorPagerExampleTests {
             childBottomOverflow: 4,
             maximumChildBottomOverflow: 7,
             headerContentTopDistance: 88,
-            maximumHeaderContentTopDistanceDelta: 0.4
+            maximumHeaderContentTopDistanceDelta: 0.4,
+            canonicalTotal: 122,
+            maximumDirectionReversal: 6,
+            maximumStableInvariantViolation: 2,
+            didHandoffContainerToChild: true,
+            didHandoffChildToContainer: false,
+            momentumSampleCount: 9
         )
 
         #expect(
             state.accessibilityValue
-                == "page=long;hasScrollTarget=1;mode=container;collapse=1.00;containerTopInset=59.00;headerHeight=100.00;headerHeightDeltaMax=0.25;headerCollapse=80.00;distance=42.00;containerCurrent=1.25;containerTopMax=12.50;containerBottomMax=8.00;barCurrent=-0.25;barMax=0.75;childTopCurrent=2.00;childTopMax=5.00;childBottomCurrent=4.00;childBottomMax=7.00;headerContentTop=88.00;headerContentTopDeltaMax=0.40"
+                == "page=long;hasScrollTarget=1;mode=container;collapse=1.00;containerTopInset=59.00;headerHeight=100.00;headerHeightDeltaMax=0.25;headerCollapse=80.00;distance=42.00;containerCurrent=1.25;containerTopMax=12.50;containerBottomMax=8.00;barCurrent=-0.25;barMax=0.75;childTopCurrent=2.00;childTopMax=5.00;childBottomCurrent=4.00;childBottomMax=7.00;headerContentTop=88.00;headerContentTopDeltaMax=0.40;canonical=122.00;reversalMax=6.00;invariantMax=2.00;containerToChild=1;childToContainer=0;samples=9"
         )
     }
 
@@ -59,7 +65,7 @@ struct AnchorPagerExampleTests {
 
         #expect(
             state.accessibilityValue
-                == "page=plain;hasScrollTarget=0;mode=container;collapse=1.00;containerTopInset=0.00;headerHeight=100.00;headerHeightDeltaMax=0.00;headerCollapse=80.00;distance=0.00;containerCurrent=0.00;containerTopMax=0.00;containerBottomMax=0.00;barCurrent=0.00;barMax=0.00;childTopCurrent=0.00;childTopMax=0.00;childBottomCurrent=0.00;childBottomMax=0.00;headerContentTop=0.00;headerContentTopDeltaMax=0.00"
+                == "page=plain;hasScrollTarget=0;mode=container;collapse=1.00;containerTopInset=0.00;headerHeight=100.00;headerHeightDeltaMax=0.00;headerCollapse=80.00;distance=0.00;containerCurrent=0.00;containerTopMax=0.00;containerBottomMax=0.00;barCurrent=0.00;barMax=0.00;childTopCurrent=0.00;childTopMax=0.00;childBottomCurrent=0.00;childBottomMax=0.00;headerContentTop=0.00;headerContentTopDeltaMax=0.00;canonical=0.00;reversalMax=0.00;invariantMax=0.00;containerToChild=0;childToContainer=0;samples=0"
         )
     }
 
@@ -104,6 +110,133 @@ struct AnchorPagerExampleTests {
         #expect(state.maximumChildBottomOverflow == 0)
         #expect(state.headerContentTopDistance == 88)
         #expect(state.maximumHeaderContentTopDistanceDelta == 0)
+        #expect(state.canonicalTotal == 0)
+        #expect(state.maximumDirectionReversal == 0)
+        #expect(state.maximumStableInvariantViolation == 0)
+        #expect(state.didHandoffContainerToChild == false)
+        #expect(state.didHandoffChildToContainer == false)
+        #expect(state.momentumSampleCount == 0)
+    }
+
+    @Test func scrollCoordinationStateRecordsMomentumDirectionAndOwnership() {
+        var state = ExampleScrollCoordinationState(
+            page: "long",
+            hasScrollTarget: true,
+            mode: "container",
+            collapseProgress: 0,
+            containerTopInset: 0,
+            headerHeight: 100,
+            maximumHeaderHeightDelta: 0,
+            headerCollapseTranslation: 0,
+            childDistance: 0,
+            containerPresentation: 0,
+            maximumContainerTopPresentation: 0,
+            maximumContainerBottomPresentation: 0,
+            barPresentation: 0,
+            maximumBarPresentation: 0,
+            childTopOverflow: 0,
+            maximumChildTopOverflow: 0,
+            childBottomOverflow: 0,
+            maximumChildBottomOverflow: 0
+        )
+
+        state.recordMomentumSample(
+            containerDistance: 40,
+            childDistance: 0,
+            collapsedDistance: 100
+        )
+        state.recordMomentumSample(
+            containerDistance: 100,
+            childDistance: 10,
+            collapsedDistance: 100
+        )
+        state.recordMomentumSample(
+            containerDistance: 90,
+            childDistance: 0,
+            collapsedDistance: 100
+        )
+        state.recordMomentumSample(
+            containerDistance: 80,
+            childDistance: 5,
+            collapsedDistance: 100
+        )
+
+        #expect(abs(state.canonicalTotal - 85) < 0.001)
+        #expect(abs(state.maximumDirectionReversal - 20) < 0.001)
+        #expect(abs(state.maximumStableInvariantViolation - 20) < 0.001)
+        #expect(state.didHandoffContainerToChild)
+        #expect(state.didHandoffChildToContainer)
+        #expect(state.momentumSampleCount == 4)
+    }
+
+    @Test func selectionTraceSerializesAndResetsPublicTerminals() {
+        var trace = ExampleSelectionTrace()
+
+        trace.record(index: 1)
+        trace.record(index: 3)
+        trace.record(index: 2)
+
+        #expect(trace.serializedValue == "1,3,2")
+        trace.reset()
+        #expect(trace.serializedValue.isEmpty)
+    }
+
+    @Test func horizontalBusinessPageIsFifthAndKeepsDelegateConfiguration() throws {
+        let viewController = ExamplePagerViewController(arguments: [])
+        viewController.loadViewIfNeeded()
+        let pager = try #require(
+            viewController.children.compactMap { $0 as? AnchorPagerViewController }.first
+        )
+
+        #expect(pager.dataSource?.numberOfViewControllers(in: pager) == 5)
+        #expect(
+            pager.dataSource?.pagerViewController(
+                pager,
+                titleForViewControllerAt: 4
+            ) == "横向业务页"
+        )
+        let page = try #require(viewController.pageForTesting(at: 4))
+        page.loadViewIfNeeded()
+        page.view.frame = CGRect(x: 0, y: 0, width: 390, height: 700)
+        page.view.layoutIfNeeded()
+        let horizontalScrollView = try #require(
+            firstSubview(in: page.view, as: UIScrollView.self) {
+                $0.accessibilityIdentifier == "horizontal-business-scroll"
+            }
+        )
+        let probe = try #require(
+            firstSubview(in: page.view, as: UIView.self) {
+                $0.accessibilityIdentifier == "horizontal-business-probe"
+            }
+        )
+
+        #expect(page.anchorPagerScrollView === horizontalScrollView)
+        #expect(horizontalScrollView.contentSize.width > horizontalScrollView.bounds.width)
+        #expect(
+            probe.accessibilityValue
+                == "scrollDelegate=1;panDelegate=1;bounces=1;alwaysBounceVertical=0;isScrollEnabled=1;horizontalRange=1"
+        )
+    }
+
+    @Test func rapidSelectionControlOnlyInstallsForLaunchArgument() {
+        let normal = ExamplePagerViewController(arguments: [])
+        normal.loadViewIfNeeded()
+        let enabled = ExamplePagerViewController(arguments: [
+            "--anchorPagerRapidSelectionTargets",
+            "1,3,2",
+        ])
+        enabled.loadViewIfNeeded()
+
+        #expect(
+            firstSubview(in: normal.view, as: UIButton.self) {
+                $0.accessibilityIdentifier == "rapid-selection-trigger"
+            } == nil
+        )
+        #expect(
+            firstSubview(in: enabled.view, as: UIButton.self) {
+                $0.accessibilityIdentifier == "rapid-selection-trigger"
+            } != nil
+        )
     }
 
     @Test func scrollCoordinationStateRecordsStableHeaderGeometry() {

@@ -875,11 +875,11 @@ git commit -m "装配跨域交互生命周期"
 - 新增 selection event probe，记录 public didSelect 序列；launch argument 可在首个 visible terminal 后连续发出 API targets，不能调用 internal API。
 - 扩充纵向 probe：记录 canonical total、方向反转最大值、stable invariant violation、container→child/child→container handoff 是否出现、采样数；只序列化数值，不输出 view hierarchy 或业务内容。
 
-- [ ] **Step 1：先写 Example unit RED**
+- [x] **Step 1：先写 Example unit RED**
 
 覆盖新 probe serialization/reset、selection trace、横向页在第五页、业务 delegate/configuration baseline、momentum sample 的单调/反向/owner-conflict 计算。interaction UI test control 只在 launch argument 开启后安装，其 action 在同一调用栈调用公开 `setSelectedIndex`；reload/layout 竞争入口由真实 child `scrollViewDidScroll` 且 `isTracking == true` 时一次性触发公开 API，不使用 timer。
 
-- [ ] **Step 2：运行 RED**
+- [x] **Step 2：运行 RED**
 
 ```bash
 xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj \
@@ -888,11 +888,11 @@ xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj \
   -only-testing:AnchorPagerExampleTests test
 ```
 
-- [ ] **Step 3：最小实现示例与探针**
+- [x] **Step 3：最小实现示例与探针**
 
 复用现有可见页 CADisplayLink sampler，不创建第二个滚动采样 timer；隐藏 probe 不遮挡业务点击，不改变框架 Public API。
 
-- [ ] **Step 4：运行 Example unit GREEN 与 generic build**
+- [x] **Step 4：运行 Example unit GREEN 与 generic build**
 
 ```bash
 xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj \
@@ -904,12 +904,14 @@ xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj \
   -destination 'generic/platform=iOS Simulator' build
 ```
 
-- [ ] **Step 5：自审并提交**
+- [x] **Step 5：自审并提交**
 
 ```bash
-git add Examples/AnchorPagerExample/AnchorPagerExample/ExamplePagerViewController.swift Examples/AnchorPagerExample/AnchorPagerExample/ExampleScrollCoordinationState.swift Examples/AnchorPagerExample/AnchorPagerExampleTests/AnchorPagerExampleTests.swift
+git add Examples/AnchorPagerExample/AnchorPagerExample/ExamplePagerViewController.swift Examples/AnchorPagerExample/AnchorPagerExample/ExampleScrollCoordinationState.swift Examples/AnchorPagerExample/AnchorPagerExampleTests/AnchorPagerExampleTests.swift docs/architecture.md docs/task-list.md docs/superpowers/plans/2026-07-15-v0-7-interaction-selection-momentum.md
 git commit -m "扩展示例交互验收探针"
 ```
+
+验收记录：Example unit RED 首轮因新状态字段、selection trace、第五页与测试入口尚不存在而编译失败；最小实现后首次 GREEN 为 14/15，精确暴露横向内容 Auto Layout 已形成真实 `contentSize`、但 ownership probe 在 scroll 子布局完成前读取到旧值，补充 scroll layout 后通过。任务自审进一步把 stable invariant 从错误的“次数”修正为可供 UI 以 pt 阈值判断的最大 owner-conflict 偏差，并将隐藏 ownership probe 从可访问性父元素内部移为同级，避免后续 XCUI 被父元素屏蔽；对应单元测试同步更新。最终 Example unit 15/15、0 fail、0 skip，结果包 `/private/tmp/AnchorPagerV07Task12GreenFinal2-20260715-2210.xcresult`；generic Simulator build 成功，结果包 `/private/tmp/AnchorPagerV07Task12BuildFinal-20260715-2216.xcresult`；两份均为 0 error、0 warning、0 analyzer warning。自审确认第五页只追加在既有四页之后，业务 scroll/pan delegate 与 bounce/enable 配置仍由 Example 业务页设置，框架 Public API、Tabman/Pageboy containment、Store generation、child lifecycle、managed inset 与纵向 offset writer 均未改变；纵向 probe 复用既有可见页 `CADisplayLink` sampler，没有增加第二个 timer。
 
 ---
 

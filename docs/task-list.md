@@ -576,6 +576,7 @@
 - [x] PagingHost 以 matching selection/reload transaction 发出 programmatic/horizontal/layout lifecycle，semantic 与 required acknowledgements 未收齐前不释放 state
 - [x] ViewController 作为唯一跨域装配点执行 vertical/paging/layout/size 仲裁与统一 drain，不复制 Host payload 或 Scroll offset 状态
 - [x] 单元/集成测试覆盖 paging cancel 不提交、快速 API/bar latest、executor-ready 顺序、vertical/paging conflict admission 与 size suspended terminal；真实 UI 验收保留给 Task 13–14
+- [x] Example 在既有四页之后追加真实横向业务页，并提供 selection、业务 delegate/configuration 与双向惯性数值探针；探针复用既有可见页采样时钟且不扩大框架 Public API
 - [ ] 测试 paging cancel 不提交 selectedIndex
 - [ ] 测试快速连续 setSelectedIndex
 - [ ] 测试连续 bar 点击与 API/bar 混合 latest pending
