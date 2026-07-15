@@ -308,6 +308,7 @@
 - [x] 测试示例工程 `AnchorPagerHeaderTopBehavior` 菜单显示、切换和 `extendsUnderTopSafeArea` 顶部遮挡覆盖
 - [x] 示例 Header 标题栈上下约束到 `safeAreaLayoutGuide`，两种顶部行为下保持 20 pt 内容间距
 - [x] 示例 Header 文本组顶部对齐，标题与副标题保持固定 8 pt 间距且负 offset 不拉伸 label
+- [ ] 示例 Header 改用顶部安全下限与底部稳定锚点，跨越完整顶部遮挡回弹时保持文字相对 Header 顶部距离不变
 - [x] 测试 additionalSafeAreaInsets
 
 ## v0.3：Scroll Discovery 与 Inset Ownership 版

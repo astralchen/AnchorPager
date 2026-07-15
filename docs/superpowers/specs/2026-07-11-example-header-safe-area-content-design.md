@@ -1,5 +1,10 @@
 # ExampleHeaderView 安全区内容布局设计
 
+> **2026-07-15 取代说明：** 本文“顶部等式、底部上限、文本组顶部对齐”的当前约束已由
+> `2026-07-15-example-header-bounce-stable-content-layout-design.md` 取代。早期问题、RED/GREEN 与
+> bootstrap 记录继续保留为历史；新的正式语义是顶部安全下限、底部稳定等式，并要求真实 container 回弹期间
+> 文字相对 Header 顶部距离保持不变。
+
 ## 背景
 
 示例工程的 `ExampleHeaderView` 当前把标题栈四边约束到 `layoutMarginsGuide`。虽然 UIKit 默认会让布局边距
