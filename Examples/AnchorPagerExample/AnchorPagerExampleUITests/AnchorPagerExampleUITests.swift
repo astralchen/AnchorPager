@@ -16,6 +16,230 @@ final class AnchorPagerExampleUITests: XCTestCase {
     }
 
     @MainActor
+    func testSingleUpwardDragCollapsesHeaderThenContinuesIntoLongChild() throws {
+        let app = launchLongPage()
+        let stateProbe = scrollCoordinationStateProbe(in: app)
+
+        drag(in: app, from: 0.78, to: 0.18)
+
+        let state = waitForScrollState(from: stateProbe) {
+            $0.page == "long" && $0.collapse >= 0.99 && $0.distance > 1
+        }
+        XCTAssertNotNil(state)
+    }
+
+    @MainActor
+    func testSingleDownwardDragReturnsLongChildThenExpandsHeader() throws {
+        let app = launchLongPage()
+        let stateProbe = scrollCoordinationStateProbe(in: app)
+        drag(in: app, from: 0.78, to: 0.18)
+        let scrolled = waitForScrollState(from: stateProbe) {
+            $0.collapse >= 0.99 && $0.distance > 1
+        }
+        let initialDistance = try XCTUnwrap(scrolled?.distance)
+
+        drag(in: app, from: 0.22, to: 0.82)
+
+        let returned = waitForScrollState(from: stateProbe) {
+            $0.distance < initialDistance && $0.collapse < 0.99
+        }
+        XCTAssertNotNil(returned)
+    }
+
+    @MainActor
+    func testShortAndPlainPagesRemainStableAcrossVerticalDrag() throws {
+        let app = XCUIApplication()
+        app.launch()
+        let stateProbe = scrollCoordinationStateProbe(in: app)
+
+        drag(in: app, from: 0.76, to: 0.24)
+        XCTAssertNotNil(waitForScrollState(from: stateProbe) {
+            $0.page == "short" && $0.distance == 0
+        })
+
+        app.descendants(matching: .any)["无滚动页"].tap()
+        XCTAssertNotNil(waitForScrollState(from: stateProbe) {
+            $0.page == "plain" && !$0.hasScrollTarget && $0.distance == 0
+        })
+        drag(in: app, from: 0.76, to: 0.24)
+        XCTAssertNotNil(waitForScrollState(from: stateProbe) {
+            $0.page == "plain" && !$0.hasScrollTarget && $0.distance == 0
+        })
+    }
+
+    @MainActor
+    func testPlainPageRootReachesPhysicalBottomAndUsesContainerOnlyPan() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--anchorPagerInitialIndex", "3"]
+        app.launch()
+        let root = app.otherElements["plain-page-root"]
+        let stateProbe = scrollCoordinationStateProbe(in: app)
+        XCTAssertTrue(root.waitForExistence(timeout: 3))
+        let initialFrame = root.frame
+
+        XCTAssertGreaterThanOrEqual(initialFrame.maxY, app.frame.maxY - 1)
+        XCTAssertNotNil(waitForScrollState(from: stateProbe) {
+            $0.page == "plain" && !$0.hasScrollTarget && $0.distance == 0
+        })
+
+        drag(in: app, from: 0.76, to: 0.24)
+
+        XCTAssertNotNil(waitForScrollState(from: stateProbe) {
+            $0.page == "plain" && !$0.hasScrollTarget
+                && $0.collapse >= 0.99 && $0.distance == 0
+        })
+        let collapsedFrame = root.frame
+        XCTAssertGreaterThanOrEqual(collapsedFrame.maxY, app.frame.maxY - 1)
+        XCTAssertEqual(collapsedFrame.height, initialFrame.height, accuracy: 1)
+
+        drag(in: app, from: 0.76, to: 0.24)
+        XCTAssertEqual(root.frame, collapsedFrame)
+    }
+
+    @MainActor
+    func testPlainContainerTopBounceIsVisible() throws {
+        let app = launchPage(index: 3, mode: "container")
+        let probe = scrollCoordinationStateProbe(in: app)
+        XCTAssertNotNil(waitForScrollState(from: probe) {
+            $0.headerContentTop > 1 && $0.headerContentTopDeltaMax < 0.5
+        })
+        probe.tap()
+
+        drag(in: app, from: 0.30, to: 0.72)
+
+        let state = try XCTUnwrap(waitForScrollState(from: probe) {
+            $0.containerTopMax > 1 && abs($0.containerCurrent) < 0.5
+        })
+        XCTAssertFalse(state.hasScrollTarget)
+        XCTAssertEqual(state.mode, "container")
+        XCTAssertEqual(state.childTopMax, 0, accuracy: 0.5)
+        XCTAssertGreaterThan(state.containerTopMax, 1)
+        XCTAssertLessThan(state.headerHeightDeltaMax, 0.5)
+        XCTAssertLessThan(state.headerContentTopDeltaMax, 0.5)
+    }
+
+    @MainActor
+    func testPlainContainerBottomBounceIsVisible() throws {
+        let app = launchPage(index: 3, mode: "none")
+        let probe = scrollCoordinationStateProbe(in: app)
+        let root = app.otherElements["plain-page-root"]
+        XCTAssertTrue(root.waitForExistence(timeout: 3))
+        drag(in: app, from: 0.76, to: 0.24)
+        XCTAssertNotNil(waitForScrollState(from: probe) {
+            $0.collapse >= 0.99
+        })
+        probe.tap()
+
+        drag(in: app, from: 0.76, to: 0.24)
+
+        let state = try XCTUnwrap(waitForScrollState(from: probe) {
+            $0.containerBottomMax > 1
+                && $0.barMax < 0.5
+                && abs($0.containerCurrent) < 0.5
+                && abs($0.barCurrent) < 0.5
+        })
+        XCTAssertFalse(state.hasScrollTarget)
+        XCTAssertGreaterThanOrEqual(root.frame.maxY, app.frame.maxY - 1)
+    }
+
+    @MainActor
+    func testRealChildContainerTopBounceIsVisible() throws {
+        let app = launchPage(index: 2, mode: "container")
+        let probe = scrollCoordinationStateProbe(in: app)
+
+        drag(in: app, from: 0.30, to: 0.72)
+
+        let state = try XCTUnwrap(waitForScrollState(from: probe) {
+            $0.containerTopMax > 1
+                && abs($0.containerCurrent) < 0.5
+                && abs($0.childTopCurrent) < 0.5
+        })
+        XCTAssertEqual(state.mode, "container")
+        XCTAssertLessThan(state.childTopMax, 0.5)
+        XCTAssertEqual(state.distance, 0, accuracy: 0.5)
+    }
+
+    @MainActor
+    func testRealChildTopBounceUsesChildMode() throws {
+        let app = launchPage(index: 2, mode: "child")
+        let probe = scrollCoordinationStateProbe(in: app)
+
+        drag(in: app, from: 0.30, to: 0.72)
+
+        let state = try XCTUnwrap(waitForScrollState(from: probe) {
+            $0.childTopMax > 1
+                && abs($0.childTopCurrent) < 0.5
+                && abs($0.containerCurrent) < 0.5
+        })
+        XCTAssertEqual(state.mode, "child")
+        XCTAssertLessThan(state.containerTopMax, 0.5)
+    }
+
+    @MainActor
+    func testNoneModeHasNoVisibleTopOwner() throws {
+        let app = launchPage(index: 2, mode: "none")
+        let probe = scrollCoordinationStateProbe(in: app)
+        probe.tap()
+
+        drag(in: app, from: 0.30, to: 0.72)
+
+        let state = try XCTUnwrap(waitForScrollState(from: probe) {
+            abs($0.containerCurrent) < 0.5 && abs($0.childTopCurrent) < 0.5
+        })
+        XCTAssertEqual(state.mode, "none")
+        XCTAssertLessThan(state.containerTopMax, 0.5)
+        XCTAssertLessThan(state.childTopMax, 0.5)
+        XCTAssertEqual(state.distance, 0, accuracy: 0.5)
+    }
+
+    @MainActor
+    func testRealChildBottomBounceUsesChild() throws {
+        let app = launchPage(index: 2, mode: "container")
+        let probe = scrollCoordinationStateProbe(in: app)
+        let lastRow = app.staticTexts["长页 - 30"]
+        for _ in 0..<6 where !lastRow.isHittable {
+            drag(in: app, from: 0.76, to: 0.24)
+        }
+        XCTAssertTrue(lastRow.isHittable)
+        probe.tap()
+
+        drag(in: app, from: 0.76, to: 0.24)
+
+        let state = try XCTUnwrap(waitForScrollState(from: probe) {
+            $0.childBottomMax > 1
+                && abs($0.childBottomCurrent) < 0.5
+                && abs($0.containerCurrent) < 0.5
+        })
+        XCTAssertLessThan(state.containerBottomMax, 0.5)
+        XCTAssertLessThan(state.barMax, 0.5)
+        XCTAssertGreaterThanOrEqual(state.collapse, 0.99)
+    }
+
+    @MainActor
+    func testSwitchingPagesRebindsVerticalOwnerWithoutJump() throws {
+        let app = launchLongPage()
+        let stateProbe = scrollCoordinationStateProbe(in: app)
+        drag(in: app, from: 0.78, to: 0.18)
+        let longState = try XCTUnwrap(waitForScrollState(from: stateProbe) {
+            $0.page == "long" && $0.collapse >= 0.99 && $0.distance > 1
+        })
+
+        app.descendants(matching: .any)["短页"].tap()
+        XCTAssertNotNil(waitForScrollState(from: stateProbe) {
+            $0.page == "short" && $0.distance == 0 && $0.collapse >= 0.99
+                && $0.mode == "container" && $0.hasZeroPresentationMetrics
+        })
+
+        app.descendants(matching: .any)["长页"].tap()
+        let restored = waitForScrollState(from: stateProbe) {
+            $0.page == "long" && abs($0.distance - longState.distance) < 2
+                && $0.collapse >= 0.99 && $0.mode == "container"
+                && $0.hasScrollTarget && $0.hasZeroPresentationMetrics
+        }
+        XCTAssertNotNil(restored)
+    }
+
+    @MainActor
     func testNavigationIconPushesAnchorPagerAndHidesTabBar() throws {
         let app = XCUIApplication()
         app.launch()
@@ -30,18 +254,90 @@ final class AnchorPagerExampleUITests: XCTestCase {
     func testHeaderTopBehaviorMenuSwitchesVisibleConfiguration() throws {
         let app = XCUIApplication()
         app.launch()
+        let probe = scrollCoordinationStateProbe(in: app)
 
-        let behaviorButton = app.navigationBars["AnchorPager"].buttons["Header 顶部行为"]
-        XCTAssertTrue(behaviorButton.waitForExistence(timeout: 3))
-        XCTAssertEqual(behaviorButton.value as? String, "安全区内")
-
-        behaviorButton.tap()
-
+        XCTAssertNotNil(waitForScrollState(from: probe) {
+            $0.containerTopInset < 0.5 && $0.headerHeight > 1
+        })
+        openSettingsSubmenu(named: "Header 顶部行为", in: app)
+        let safeAreaAction = app.buttons["安全区内"]
         let extendedAction = app.buttons["延伸到顶部"]
+        XCTAssertTrue(safeAreaAction.waitForExistence(timeout: 3))
         XCTAssertTrue(extendedAction.waitForExistence(timeout: 3))
-        extendedAction.tap()
+        XCTAssertTrue(extendedAction.isSelected)
+        safeAreaAction.tap()
 
-        XCTAssertEqual(behaviorButton.value as? String, "延伸到顶部")
+        openSettingsSubmenu(named: "Header 顶部行为", in: app)
+        XCTAssertTrue(app.buttons["安全区内"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["安全区内"].isSelected)
+        XCTAssertNotNil(waitForScrollState(from: probe) {
+            $0.containerTopInset > 1
+        })
+    }
+
+    @MainActor
+    func testInsideSafeAreaUsesTopInsetAndKeepsHeaderHeightDuringCollapse() throws {
+        let app = XCUIApplication()
+        app.launch()
+        selectHeaderTopBehavior(named: "安全区内", in: app)
+        let probe = scrollCoordinationStateProbe(in: app)
+        XCTAssertNotNil(waitForScrollState(from: probe) {
+            $0.containerTopInset > 1 && $0.headerHeight > 1
+        })
+        probe.tap()
+
+        drag(in: app, from: 0.62, to: 0.50)
+
+        let state = try XCTUnwrap(waitForScrollState(from: probe) {
+            $0.containerTopInset > 1
+                && $0.headerCollapse > 1
+                && $0.headerHeightDeltaMax < 0.5
+        })
+        XCTAssertGreaterThan(state.headerHeight, 1)
+        XCTAssertLessThan(state.headerHeightDeltaMax, 0.5)
+    }
+
+    @MainActor
+    func testExtendsUnderTopSafeAreaUsesZeroTopInsetAndPreservesBarPosition() throws {
+        let app = XCUIApplication()
+        app.launch()
+        selectHeaderTopBehavior(named: "安全区内", in: app)
+        let probe = scrollCoordinationStateProbe(in: app)
+        let barItem = app.descendants(matching: .any)["短页"]
+        XCTAssertTrue(barItem.waitForExistence(timeout: 3))
+        drag(in: app, from: 0.62, to: 0.50)
+        XCTAssertNotNil(waitForScrollState(from: probe) {
+            $0.containerTopInset > 1 && $0.headerCollapse > 1
+        })
+        let beforeBarMinY = barItem.frame.minY
+
+        selectHeaderTopBehavior(named: "延伸到顶部", in: app)
+
+        let state = try XCTUnwrap(waitForScrollState(from: probe) {
+            $0.containerTopInset < 0.5
+                && abs($0.barCurrent) < 0.5
+        })
+        XCTAssertEqual(barItem.frame.minY, beforeBarMinY, accuracy: 1)
+        XCTAssertLessThan(state.headerHeightDeltaMax, 0.5)
+    }
+
+    @MainActor
+    func testUnifiedSettingsMenuSwitchesTopOverscrollMode() throws {
+        let app = XCUIApplication()
+        app.launch()
+        let probe = scrollCoordinationStateProbe(in: app)
+        XCTAssertNotNil(waitForScrollState(from: probe) {
+            $0.mode == "container" && $0.hasZeroPresentationMetrics
+        })
+
+        openSettingsSubmenu(named: "顶部回弹模式", in: app)
+        let childAction = app.buttons["子页面"]
+        XCTAssertTrue(childAction.waitForExistence(timeout: 3))
+        childAction.tap()
+
+        XCTAssertNotNil(waitForScrollState(from: probe) {
+            $0.mode == "child" && $0.hasZeroPresentationMetrics
+        })
     }
 
     @MainActor
@@ -52,19 +348,14 @@ final class AnchorPagerExampleUITests: XCTestCase {
         let navigationBar = app.navigationBars["AnchorPager"]
         let title = app.staticTexts["AnchorPager Example"]
         let subtitle = app.staticTexts["Header UIView、显式 scroll view、无 scroll view child"]
-        let behaviorButton = navigationBar.buttons["Header 顶部行为"]
         XCTAssertTrue(navigationBar.waitForExistence(timeout: 3))
         XCTAssertTrue(title.waitForExistence(timeout: 3))
         XCTAssertTrue(subtitle.waitForExistence(timeout: 3))
-        XCTAssertTrue(behaviorButton.waitForExistence(timeout: 3))
         XCTAssertEqual(title.frame.minY, navigationBar.frame.maxY + 20, accuracy: 1)
         XCTAssertEqual(subtitle.frame.minY - title.frame.maxY, 8, accuracy: 1)
         XCTAssertLessThanOrEqual(title.frame.height, 44)
 
-        behaviorButton.tap()
-        let extendedAction = app.buttons["延伸到顶部"]
-        XCTAssertTrue(extendedAction.waitForExistence(timeout: 3))
-        extendedAction.tap()
+        selectHeaderTopBehavior(named: "安全区内", in: app)
 
         XCTAssertEqual(title.frame.minY, navigationBar.frame.maxY + 20, accuracy: 1)
         XCTAssertEqual(subtitle.frame.minY - title.frame.maxY, 8, accuracy: 1)
@@ -79,14 +370,9 @@ final class AnchorPagerExampleUITests: XCTestCase {
         let tabItem = app.descendants(matching: .any)["短页"]
         XCTAssertTrue(tabItem.waitForExistence(timeout: 3))
         let initialMinY = tabItem.frame.minY
-        let behaviorButton = app.navigationBars["AnchorPager"].buttons["Header 顶部行为"]
 
-        behaviorButton.tap()
-        XCTAssertTrue(app.buttons["延伸到顶部"].waitForExistence(timeout: 3))
-        app.buttons["延伸到顶部"].tap()
-        behaviorButton.tap()
-        XCTAssertTrue(app.buttons["安全区内"].waitForExistence(timeout: 3))
-        app.buttons["安全区内"].tap()
+        selectHeaderTopBehavior(named: "安全区内", in: app)
+        selectHeaderTopBehavior(named: "延伸到顶部", in: app)
 
         let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.40))
         let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.56))
@@ -126,7 +412,7 @@ final class AnchorPagerExampleUITests: XCTestCase {
     }
 
     @MainActor
-    func testAdaptiveBarKeepsRealScrollAndFallbackPagesVisible() throws {
+    func testAdaptiveBarKeepsRealScrollAndPlainPagesVisible() throws {
         let app = XCUIApplication()
         app.launch()
 
@@ -138,18 +424,16 @@ final class AnchorPagerExampleUITests: XCTestCase {
     }
 
     @MainActor
-    func testLongPageBottomStaysAboveTabBarWhileHeaderIsExpanded() throws {
+    func testLongPageBottomStaysAboveTabBarAfterNestedScrolling() throws {
         let app = XCUIApplication()
         app.launchArguments = ["--anchorPagerInitialIndex", "2"]
         app.launch()
 
-        let headerTitle = app.staticTexts["AnchorPager Example"]
         let lastRow = app.staticTexts["长页 - 30"]
         let tabBar = app.tabBars.firstMatch
-        XCTAssertTrue(headerTitle.waitForExistence(timeout: 3))
+        let stateProbe = scrollCoordinationStateProbe(in: app)
         XCTAssertTrue(lastRow.waitForExistence(timeout: 3))
         XCTAssertTrue(tabBar.waitForExistence(timeout: 3))
-        let expandedHeaderMinY = headerTitle.frame.minY
 
         let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.72))
         let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.24))
@@ -164,7 +448,9 @@ final class AnchorPagerExampleUITests: XCTestCase {
             object: nil
         )
         XCTAssertEqual(XCTWaiter.wait(for: [bottomIsVisible], timeout: 3), .completed)
-        XCTAssertEqual(headerTitle.frame.minY, expandedHeaderMinY, accuracy: 1)
+        XCTAssertNotNil(waitForScrollState(from: stateProbe) {
+            $0.page == "long" && $0.collapse >= 0.99 && $0.distance > 0
+        })
     }
 
     @MainActor
@@ -232,6 +518,11 @@ final class AnchorPagerExampleUITests: XCTestCase {
 
         app.descendants(matching: .any)["短页"].tap()
         XCTAssertTrue(app.staticTexts["短页 - 1"].waitForExistence(timeout: 3))
+        let stateProbe = scrollCoordinationStateProbe(in: app)
+        drag(in: app, from: 0.24, to: 0.76)
+        XCTAssertNotNil(waitForScrollState(from: stateProbe) {
+            $0.page == "short" && $0.collapse <= 0.01 && $0.distance == 0
+        })
         app.descendants(matching: .any)["长页"].tap()
 
         XCTAssertTrue(app.staticTexts["长页 - 1"].waitForExistence(timeout: 3))
@@ -241,9 +532,8 @@ final class AnchorPagerExampleUITests: XCTestCase {
 
     @MainActor
     func testReloadReplacesOldPageGenerationAndKeepsPageInteractive() throws {
-        let app = XCUIApplication()
-        app.launchArguments = ["--anchorPagerInitialIndex", "2"]
-        app.launch()
+        let app = launchPage(index: 2, mode: "container")
+        let stateProbe = scrollCoordinationStateProbe(in: app)
         let oldGeneration = app.staticTexts["page-generation-1-long"]
         XCTAssertTrue(oldGeneration.waitForExistence(timeout: 3))
 
@@ -254,6 +544,10 @@ final class AnchorPagerExampleUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["page-generation-2-long"].waitForExistence(timeout: 3))
         XCTAssertFalse(oldGeneration.exists)
         XCTAssertTrue(app.staticTexts["长页 - 1"].exists)
+        XCTAssertNotNil(waitForScrollState(from: stateProbe) {
+            $0.page == "long" && $0.mode == "container" && $0.hasScrollTarget
+                && $0.hasZeroPresentationMetrics
+        })
     }
 
     @MainActor
@@ -345,9 +639,194 @@ final class AnchorPagerExampleUITests: XCTestCase {
     }
 
     @MainActor
+    private func openSettingsSubmenu(named title: String, in app: XCUIApplication) {
+        let settingsButton = app.navigationBars["AnchorPager"].buttons["示例设置"]
+        XCTAssertTrue(settingsButton.waitForExistence(timeout: 3))
+        settingsButton.tap()
+
+        let submenu = app.buttons[title]
+        XCTAssertTrue(submenu.waitForExistence(timeout: 3))
+        submenu.tap()
+    }
+
+    @MainActor
+    private func selectHeaderTopBehavior(
+        named title: String,
+        in app: XCUIApplication
+    ) {
+        openSettingsSubmenu(named: "Header 顶部行为", in: app)
+        let action = app.buttons[title]
+        XCTAssertTrue(action.waitForExistence(timeout: 3))
+        action.tap()
+    }
+
+    @MainActor
     private func appearanceEventSequence(from element: XCUIElement) -> [String] {
         ((element.value as? String) ?? "")
             .split(separator: "|")
             .map(String.init)
+    }
+
+    @MainActor
+    private func launchLongPage() -> XCUIApplication {
+        launchPage(index: 2, mode: "container")
+    }
+
+    @MainActor
+    private func launchPage(index: Int, mode: String) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "--anchorPagerInitialIndex", "\(index)",
+            "--anchorPagerTopOverscrollMode", mode
+        ]
+        app.launch()
+        XCTAssertTrue(scrollCoordinationStateProbe(in: app).exists)
+        return app
+    }
+
+    @MainActor
+    private func scrollCoordinationStateProbe(in app: XCUIApplication) -> XCUIElement {
+        let probe = app.buttons["scroll-coordination-state"]
+        XCTAssertTrue(probe.waitForExistence(timeout: 3))
+        return probe
+    }
+
+    @MainActor
+    private func drag(in app: XCUIApplication, from startY: CGFloat, to endY: CGFloat) {
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: startY))
+        let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: endY))
+        start.press(
+            forDuration: 0.12,
+            thenDragTo: end,
+            withVelocity: .slow,
+            thenHoldForDuration: 0.05
+        )
+    }
+
+    @MainActor
+    private func waitForScrollState(
+        from probe: XCUIElement,
+        matching predicate: @escaping (ScrollCoordinationState) -> Bool
+    ) -> ScrollCoordinationState? {
+        let expectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in
+                guard let state = ScrollCoordinationState(value: probe.value as? String) else {
+                    return false
+                }
+                return predicate(state)
+            },
+            object: nil
+        )
+        guard XCTWaiter.wait(for: [expectation], timeout: 3) == .completed else {
+            return nil
+        }
+        return ScrollCoordinationState(value: probe.value as? String)
+    }
+}
+
+private struct ScrollCoordinationState {
+    let page: String
+    let hasScrollTarget: Bool
+    let mode: String
+    let collapse: CGFloat
+    let containerTopInset: CGFloat
+    let headerHeight: CGFloat
+    let headerHeightDeltaMax: CGFloat
+    let headerCollapse: CGFloat
+    let distance: CGFloat
+    let containerCurrent: CGFloat
+    let containerTopMax: CGFloat
+    let containerBottomMax: CGFloat
+    let barCurrent: CGFloat
+    let barMax: CGFloat
+    let childTopCurrent: CGFloat
+    let childTopMax: CGFloat
+    let childBottomCurrent: CGFloat
+    let childBottomMax: CGFloat
+    let headerContentTop: CGFloat
+    let headerContentTopDeltaMax: CGFloat
+
+    var hasZeroPresentationMetrics: Bool {
+        abs(containerCurrent) < 0.5
+            && containerTopMax < 0.5
+            && containerBottomMax < 0.5
+            && abs(barCurrent) < 0.5
+            && barMax < 0.5
+            && abs(childTopCurrent) < 0.5
+            && childTopMax < 0.5
+            && abs(childBottomCurrent) < 0.5
+            && childBottomMax < 0.5
+            && headerContentTopDeltaMax < 0.5
+    }
+
+    init?(value: String?) {
+        let fields = Dictionary(
+            uniqueKeysWithValues: (value ?? "")
+                .split(separator: ";")
+                .compactMap { component -> (String, String)? in
+                    let parts = component.split(separator: "=", maxSplits: 1).map(String.init)
+                    guard parts.count == 2 else { return nil }
+                    return (parts[0], parts[1])
+                }
+        )
+        guard let page = fields["page"],
+              let hasScrollTargetValue = fields["hasScrollTarget"],
+              let mode = fields["mode"],
+              let collapseValue = fields["collapse"],
+              let collapse = Double(collapseValue),
+              let containerTopInsetValue = fields["containerTopInset"],
+              let containerTopInset = Double(containerTopInsetValue),
+              let headerHeightValue = fields["headerHeight"],
+              let headerHeight = Double(headerHeightValue),
+              let headerHeightDeltaMaxValue = fields["headerHeightDeltaMax"],
+              let headerHeightDeltaMax = Double(headerHeightDeltaMaxValue),
+              let headerCollapseValue = fields["headerCollapse"],
+              let headerCollapse = Double(headerCollapseValue),
+              let distanceValue = fields["distance"],
+              let distance = Double(distanceValue),
+              let containerCurrentValue = fields["containerCurrent"],
+              let containerCurrent = Double(containerCurrentValue),
+              let containerTopMaxValue = fields["containerTopMax"],
+              let containerTopMax = Double(containerTopMaxValue),
+              let containerBottomMaxValue = fields["containerBottomMax"],
+              let containerBottomMax = Double(containerBottomMaxValue),
+              let barCurrentValue = fields["barCurrent"],
+              let barCurrent = Double(barCurrentValue),
+              let barMaxValue = fields["barMax"],
+              let barMax = Double(barMaxValue),
+              let childTopCurrentValue = fields["childTopCurrent"],
+              let childTopCurrent = Double(childTopCurrentValue),
+              let childTopMaxValue = fields["childTopMax"],
+              let childTopMax = Double(childTopMaxValue),
+              let childBottomCurrentValue = fields["childBottomCurrent"],
+              let childBottomCurrent = Double(childBottomCurrentValue),
+              let childBottomMaxValue = fields["childBottomMax"],
+              let childBottomMax = Double(childBottomMaxValue),
+              let headerContentTopValue = fields["headerContentTop"],
+              let headerContentTop = Double(headerContentTopValue),
+              let headerContentTopDeltaMaxValue = fields["headerContentTopDeltaMax"],
+              let headerContentTopDeltaMax = Double(headerContentTopDeltaMaxValue) else {
+            return nil
+        }
+        self.page = page
+        self.hasScrollTarget = hasScrollTargetValue == "1"
+        self.mode = mode
+        self.collapse = CGFloat(collapse)
+        self.containerTopInset = CGFloat(containerTopInset)
+        self.headerHeight = CGFloat(headerHeight)
+        self.headerHeightDeltaMax = CGFloat(headerHeightDeltaMax)
+        self.headerCollapse = CGFloat(headerCollapse)
+        self.distance = CGFloat(distance)
+        self.containerCurrent = CGFloat(containerCurrent)
+        self.containerTopMax = CGFloat(containerTopMax)
+        self.containerBottomMax = CGFloat(containerBottomMax)
+        self.barCurrent = CGFloat(barCurrent)
+        self.barMax = CGFloat(barMax)
+        self.childTopCurrent = CGFloat(childTopCurrent)
+        self.childTopMax = CGFloat(childTopMax)
+        self.childBottomCurrent = CGFloat(childBottomCurrent)
+        self.childBottomMax = CGFloat(childBottomMax)
+        self.headerContentTop = CGFloat(headerContentTop)
+        self.headerContentTopDeltaMax = CGFloat(headerContentTopDeltaMax)
     }
 }

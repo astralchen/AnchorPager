@@ -20,6 +20,10 @@ AnchorPager 是一个全新的独立 UIKit 容器框架，用于实现可变 Hea
 10. Vertical nested scrolling model：参考 JXPagingView + JXSegmentedView 的设计思路
 11. 核心框架保持领域无关，不包含具体应用场景、内容类型、数据模型或场景命名
 
+### 当前复审门禁
+
+v0.5/v0.6 初次独立复审的 3 个 Important 已在 `f81ca1e` 修复，第二次整分支复审的零稳定区间边界反向切换 Important 已在 `5b80893` 修复，第三次整分支复审的已呈现 `.top/.child` 回稳总量跳变 Important 已在 `128821f` 修复；第二、三次复审的文档 Minor 均已同步修正。第四次整分支独立复审覆盖 `be2d783...13b3d95`，两个 Minor 已在 `b9699b0` 修复。2026-07-14 plain page bottom/bar 安全区、formal Header bootstrap 和真实 Header 附着前 required zero-height 缺口分别修复到 `c37e829`、`d6ece31`。主容器真实 top inset 与固定高度 Header presentation 专项最终生产 HEAD 为 `424a0a3`；fresh-pass 发现的 2 个 Important 与 2 个 Minor 均已按 RED/GREEN 修复，终态 Critical 0、Important 0、Minor 0。Framework 322/322、Example 41/41（11 单元 + 30 UI）与 generic Simulator build 全部通过，0 fail、0 skip、0 error/warning/analyzer warning；v0.5 Task 7 与 v0.6 已恢复 Ready。
+
 ## 3. 参考项目
 
 1. JXPagingView：https://github.com/pujiaxin33/JXPagingView
@@ -76,8 +80,12 @@ open class AnchorPagerViewController: UIViewController {
 ```
 
 `verticalScrollView` 的实例只读暴露，供接入方读取容器滚动状态；其 `delegate` 由 AnchorPager
-内部保留，用于驱动 Header/bar 可见几何和 collapse progress，调用方不得替换。主容器 scroll range
-只表示 Header 折叠距离，横纵滚动指示器必须隐藏；用户可见滚动进度只由当前 child/fallback 表达。
+内部保留，用于驱动 Header/bar 可见几何和 collapse progress，调用方不得替换；其 `contentInset`
+同样由 AnchorPager 独占，调用方不得写入。主容器固定使用 `.never` 自动调整，`.insideSafeArea`
+的 top inset 等于本地顶部遮挡，`.extendsUnderTopSafeArea` 为 `0`，其余三边均为 `0`。设 top inset
+为 `I`、纯内容可折叠距离为 `D`、viewport 高度为 `H`，主容器必须统一使用
+`logical = raw + I`、稳定 raw 边界 `-I...(D-I)` 和 range `H + D - I`。横纵滚动指示器必须隐藏；
+用户可见滚动进度只由当前真实 child scroll target 表达，无滚动页没有滚动指示器。
 
 数据源协议：
 
@@ -175,6 +183,16 @@ public enum AnchorPagerHeaderTopBehavior: Sendable, Equatable {
 }
 ```
 
+`AnchorPagerHeaderConfiguration` 的 `topBehavior` 默认参数为 `.extendsUnderTopSafeArea`；需要安全区域内背景时必须显式选择 `.insideSafeArea`。
+
+该默认迁移已在生产代码 HEAD `3bdcfb6` 完成，并于 2026-07-15 通过 Framework 322/322、Example 41/41（11 单元 + 30 UI）、generic Simulator build、运行时约束扫描和静态所有权门禁；两种模式的既有几何公式与 ownership 要求不变。
+
+两种顶部行为只决定主容器顶部 inset 与 Header 背景是否延伸到顶部系统区域，不决定折叠时缩小
+Header。业务 Header 根视图在稳定滚动和 bounce 期间必须保持完整解析高度；正常折叠只允许移动
+AnchorPager 自有 canonical content presentation surface。固定 viewport 是唯一屏幕裁剪边界，container
+top bounce 移动整个 viewport，plain page bottom bounce 只移动 Pageboy 页面 surface。不得直接修改业务
+Header 或业务 page 根 view 的 transform。
+
 Header offset adjustment：
 
 ```swift
@@ -196,6 +214,8 @@ public enum AnchorPagerTopOverscrollHandlingMode: Sendable, Equatable {
 }
 ```
 
+顶部 overscroll mode 默认值为 `.container`；`.child` 只在当前 committed page 存在真实 scroll target 时可用，不创建替代 scroll view，也不在不可用时回退到 container。
+
 ## 6. UIViewController Scroll 接入要求
 
 通过 UIViewController extension 提供 scroll view 接入点：
@@ -214,7 +234,7 @@ extension UIViewController {
 1. 每个 UIViewController 默认都可以作为 AnchorPager child。
 2. 显式设置的 scroll view 优先级最高。
 3. 未显式设置时，默认实现按确定性规则在 view 层级查找 UIScrollView。
-4. 如果最终没有 scroll view，则 AnchorPager 使用内部 page scroll host 承载 child.view。
+4. 如果最终没有 scroll view，则 original page 直接由 Pageboy/UIKit containment，AnchorPager 记录 nil scroll target，不创建替代 scroll view。
 5. extension 属性通过 associated object 存储显式设置值。
 6. `anchorPagerDefaultScrollView` 是只读计算属性，不缓存失效 view 引用。
 7. 默认查找必须确定性，建议深度优先，并在 `docs/architecture.md` 固定。
@@ -222,25 +242,28 @@ extension UIViewController {
 9. 多个候选时只选第一个符合规则的候选，不做领域推断。
 10. 不跨 child view controller 边界查找。
 11. 必须支持关闭默认查找。
+12. AnchorPager 不得设置业务 child 的 `UIScrollView.delegate`、内建 `panGestureRecognizer.delegate` 或 `isScrollEnabled`；child observation 只能使用不占用这些所有权的机制。
 
 ## 7. Header 要求
 
 1. Header content 支持 UIView 和 UIViewController。
 2. Header 使用 UIViewController 时，必须通过标准 UIKit containment 管理。
-3. Header 默认显示在安全区域内。
+3. Header 默认延伸到顶部系统区域；需要让 Header 背景从安全区域下方开始时显式使用 insideSafeArea。
 4. Header 默认使用 automatic height，最小高度为 0，不设置固定最大高度。
 5. automatic 高度根据 Header 纯内容测量结果决定，测量不得包含 Header 当前展示位置带来的顶部 safe area 或 layout margins 增量。
 6. Header 是 UIView 时，默认使用 Auto Layout fitting size、当前 bounds 或 intrinsicContentSize 计算高度。
 7. Header 是 UIViewController 时，默认使用其 view 的 Auto Layout fitting size 或 preferredContentSize 作为测量来源。
 8. Header heightMode 必须支持 automatic、fixed、ranged 三种模式。
-9. insideSafeArea 模式下，Header 顶部从 navigation bar bottom 或 safeArea.top 开始，frame 高度为当前可见纯内容高度。
-10. extendsUnderTopSafeArea 模式下，Header 从容器 view 顶部开始绘制，frame 高度为本地顶部遮挡加当前可见纯内容高度。
+9. insideSafeArea 模式下，Header 展开态顶部从 navigation bar bottom 或 safeArea.top 开始，frame 保持完整 resolved expanded 纯内容高度；正常折叠通过内部 presentation 向上移动，不缩小业务 Header 根视图高度。
+10. extendsUnderTopSafeArea 模式下，Header 展开态从容器 view 顶部开始绘制，frame 保持“本地顶部遮挡 + resolved expanded 纯内容高度”；正常折叠同样只向上移动，不缩小业务 Header 根视图高度。
 11. 两种顶部行为只改变 Header 外框是否延伸到顶部系统区域，不改变分段栏吸顶基线和 child 内容安全区域。
 12. Header height mode 和可折叠距离只表示纯内容高度，本地顶部遮挡不得进入可折叠距离。
-13. automatic/ranged Header 必须在顶部遮挡下方的中立几何中测量，不能让最终 top behavior 或负 offset presentation 污染测量结果。
-14. Header frame 和 height 可以运行时变化。
-15. `reloadHeaderLayout` 必须支持重新测量、重新布局，并按 offsetAdjustment 保持视觉状态。
-16. Header 视觉迁移不能反复 add/remove header view controller。
+13. 正常折叠量只改变 Header/paging 内部 canonical presentation 的纵向位置；固定 viewport 负责裁剪，bar 在 `safe top + collapsed Header height` 处吸顶。
+14. automatic/ranged Header 必须在顶部遮挡下方的中立几何中测量，不能让最终 top behavior 或负 offset presentation 污染测量结果。
+15. Header 测量缓存只属于当前 UIView/UIViewController 内容身份；身份替换必须使旧缓存失效，首次无当前身份缓存时先取得不发布正式状态或日志的非负 bootstrap fitting seed，非空约束内容不得以 required `height == 0` 参与中立布局。
+16. Header frame 和 height 可以运行时变化。
+17. `reloadHeaderLayout` 必须支持重新测量、重新布局，并按 offsetAdjustment 保持视觉状态。
+18. Header 视觉迁移不能反复 add/remove header view controller。
 
 ## 8. 安全区域要求
 
@@ -248,7 +271,7 @@ extension UIViewController {
 2. 布局计算不能假设 AnchorPagerViewController 是 window root。
 3. 可见顶部和底部遮挡必须转换到 AnchorPagerViewController.view 本地坐标系后参与布局。
 4. 分段栏吸顶基线必须基于当前可见顶部遮挡计算，不固定使用 view.safeAreaInsets.top。
-5. Tabman adapter 的 top 跟随 Header bottom，高度固定为 Header 完全折叠时的最大可见高度；普通 Header 折叠滚动只移动 adapter，不改变 Pageboy child bounds。
+5. Tabman adapter 的呈现 top 跟随 Header 呈现 bottom，高度固定为 Header 完全折叠时的最大可见高度；普通 Header 折叠滚动只移动 AnchorPager 自有 canonical presentation surface，不改变 Pageboy child bounds。
 6. child managed contentInset.top 只表达 Tabman adapter 内实际覆盖 Pageboy child 的 bar obstruction，不包含 Header 高度或容器顶部遮挡。
 7. child managed scrollIndicatorInsets.top 避让实际 bar obstruction；contentInset.bottom 和 scrollIndicatorInsets.bottom 必须使用 child 局部底部遮挡，即 adapter 当前底端到 AnchorPager 安全可见底端的距离。Header 展开时该值包含尚未折叠距离，完全折叠时收敛为底部 safe area、tab bar、toolbar 或其他根容器可见遮挡。
 8. 框架必须区分自身 managed inset 和外部追加 inset，不覆盖调用方已有额外 contentInset。
@@ -256,20 +279,23 @@ extension UIViewController {
 10. child top offset 迁移使用相对顶部距离，bar 高度变化不能让当前 child 可见内容跳动。
 11. safe area、bar 显隐、横竖屏、Split View、Stage Manager 尺寸变化后必须重新计算布局，并尽量保持 selectedIndex、Header 折叠进度和当前 child 可见位置。
 12. container 折叠导致 child 局部 bottom 变化时，必须保持 child distance-from-top 和固定 Pageboy child bounds；滚动热路径不得逐帧输出 inset 日志。
+13. 主容器 `contentInsetAdjustmentBehavior` 固定为 `.never`；insideSafeArea 的主容器 `contentInset.top` 等于本地顶部安全区遮挡，extendsUnderTopSafeArea 为 `0`，不得与 child managed inset 合并。
+14. 主容器逻辑 offset 必须统一定义为 `contentOffset.y + contentInset.top`；展开/折叠逻辑边界为 `0...collapsibleDistance`，scroll range 必须扣除 container top inset，避免 inside 模式额外多滚一段安全区高度。
 
 ## 9. Child 生命周期与缓存要求
 
 1. AnchorPagerViewController 是 child lifecycle 策略、page identity、reload 清理和对外状态语义的唯一管理者。
 2. 横向 page 的实际 UIKit containment 由内部 Tabman/Pageboy adapter 执行；AnchorPager 不得对同一个 page view controller 重复执行 `addChild`。
-3. Header view controller、fallback page scroll host 和其他 AnchorPager 自有 wrapper 必须通过标准 UIKit containment 管理。
-4. fallback host 首次承载普通 child 时必须执行 `addChild`、添加 view、`didMove(toParent:)`；清理时必须执行 `willMove(toParent: nil)`、移除 view、`removeFromParent`。
+3. Header view controller 和其他 AnchorPager 自有 wrapper 必须通过标准 UIKit containment 管理；无滚动横向业务页不得创建 AnchorPager wrapper。
+4. 无滚动横向业务页必须把 original controller 直接交给 Pageboy/UIKit containment，AnchorPager 不得对同一页面再次执行 `addChild`。
 5. 横向分页切换、懒加载、卸载、reloadData、setSelectedIndex 都不能破坏生命周期语义。
 6. page 切换必须正确收敛 Tabman/Pageboy 的 appearance 和 selection 回调，不能让取消或回弹提前提交 public 状态。
 7. 必须定义 page view controller 缓存窗口和 page identity 策略，默认至少保留 current page，可选择保留相邻 page。
 8. 卸载或替换 page 前必须保存 scroll offset、managed inset 状态和必要 appearance 状态。
-9. reloadData 必须清理旧 page state、旧 fallback host content、旧 offset snapshot 和旧 Tabman/Pageboy 状态。
+9. reloadData 必须清理旧 page state、真实 scroll ownership、旧 offset snapshot 和旧 Tabman/Pageboy 状态。
 10. Tabman/Pageboy 事件必须通过 adapter 标准化后再驱动 AnchorPager 的 public selection、scroll/inset 和 lifecycle 策略。
-11. 测试必须覆盖 Tabman 驱动下的生命周期语义、selection cancel、reloadData 后旧 child 可释放，以及 fallback host containment 顺序。
+11. 测试必须覆盖 Tabman 驱动下的生命周期语义、selection cancel、reloadData 后旧 child 可释放，以及无滚动 original page 的直接 containment。
+12. AnchorPager 不得设置横向业务 child 的 `UIScrollView.delegate`；纵向协调对 child offset、contentSize 和 pan state 的观察必须保留接入方原 delegate 身份与回调语义。
 
 ## 10. API Contract 要求
 
@@ -287,10 +313,17 @@ extension UIViewController {
 3. AnchorPager 只处理顶部 overscroll 相关 scroll event 和 gesture state。
 4. 支持 none、container、child 三种模式。
 5. container 模式下，Header 完全展开后的继续下拉由 verticalScrollView 处理。
-6. child 模式下，Header 完全展开后的继续下拉由当前 child scroll view 或内部 page scroll host 处理。
+6. child 模式下，Header 完全展开后的继续下拉只可由当前真实 child scroll view 处理；无滚动页没有 child overscroll owner，不创建替代 scroll view。
 7. 同一次下拉手势中只能有一个 top overscroll owner。
 8. Header 展开优先级高于 top overscroll handling。
 9. 横向分页、Header layout reload、屏幕旋转或 child 切换期间，active top overscroll handling 必须有明确暂停、取消或恢复策略。
+10. 底部 bounce 不受顶部 mode 影响：真实 scroll page 由 child 处理；无滚动页由 verticalScrollView 提供原生物理，但可见 presentation 只允许移动 Pageboy 页面 surface，Header/bar 保持 canonical。
+11. AnchorPager 不得修改业务 child 的 `bounces` 或 `alwaysBounceVertical`；`.child` 顶部和真实 child bottom 只允许业务 scroll view 按自身配置处理原生回弹，短内容是否回弹由业务方配置 `alwaysBounceVertical`。
+12. `.container` 或 `.none` 的顶部非 owner 约束通过 guarded stable-boundary write 完成，不得为了屏蔽瞬时越界而临时关闭业务 child bounce。
+13. stable range 与 native boundary 必须分离；原生 owner 越界期间，container delegate、child observation、pan target 和结构性 geometry update 都不得把 owner 反向夹回 canonical range。
+14. container 顶部和 plain bottom 使用同一 UIKit container 物理但分层呈现：顶部移动共享 viewport，plain bottom 只移动 Pageboy 页面 surface；presentation distance 不得进入 LayoutEngine canonical output、scroll range、managed inset、snapshot 或 page generation，LayoutContext 必须报告实际可见分层坐标。
+15. mode 切换、selection will-select、matching reload、Header layout reload、尺寸过渡和控制器释放必须同步取消 active boundary；取消路径应幂等。
+16. overscroll 日志只在 boundary/owner/mode 的 begin、finish、cancel 或 unavailable 状态变化时输出，不得逐帧记录位移。
 
 ## 12. 状态栏点击顶滚要求
 
@@ -298,7 +331,7 @@ extension UIViewController {
 2. AnchorPager 管理范围内任一时刻只能有一个 UIScrollView 的 scrollsToTop 为 true。
 3. 横向分页 scroll view 永远不能响应 scrollsToTop。
 4. Header 未完全折叠时，verticalScrollView 作为唯一 scroll-to-top 响应者。
-5. Header 已完全折叠且当前 child 可见时，当前 child scroll view 或内部 page scroll host 作为唯一响应者。
+5. Header 已完全折叠且当前真实 child scroll view 可见时，该 scroll view 作为唯一响应者；无滚动页不创建替代 scroll-to-top owner。
 6. 非当前 child、已卸载 child、横向 paging scroll view、内部辅助 scroll view 必须关闭 scrollsToTop。
 7. 页面切换、reloadData、Header layout reload、屏幕旋转、child 加载或卸载后必须重新计算 scrollsToTop owner。
 8. 空页状态下，AnchorPager 管理的所有 scroll view 都关闭 scrollsToTop。
@@ -344,7 +377,7 @@ extension UIViewController {
 
 1. KVO、Notification、gesture delegate、display link、Task、closure callback 必须在 child 卸载或 deinit 时释放。
 2. 不允许 page state store、adapter、coordinator 之间形成 retain cycle。
-3. reloadData 后旧 page state、fallback host 和不再使用的 child 应可释放。
+3. reloadData 后旧 page state、scroll ownership 和不再使用的 child 应可释放。
 4. deinit 时必须清理内部 observer、gesture 关系和 pending transition。
 
 ## 17. 日志与可观测性要求
@@ -357,11 +390,11 @@ extension UIViewController {
 6. 必须记录关键生命周期事件：init、deinit、reloadData begin/end、child add/remove、header controller add/remove。
 7. 必须记录关键布局事件：Header 测量结果、Header frame 变化、bar frame 变化、safe area 变化、bounds 变化、managed inset 变化。
 8. 必须记录关键分页事件：setSelectedIndex 请求、越界 no-op、分页开始、分页完成、分页取消、selectedIndex commit。
-9. 必须记录关键滚动协调事件：Header 完全展开、Header 完全折叠、child top boundary、scroll owner 切换、guarded contentOffset update 被触发或跳过。
+9. 必须记录关键滚动协调事件：Header 完全展开、Header 完全折叠、child top boundary，以及 scroll/overscroll owner、handoff、boundary phase 的状态变化。高频 guarded contentOffset correction 不得逐帧记录 apply/skip；只有状态变化、异常或显式调试开关下的受控采样可以输出。
 10. 必须记录顶部 overscroll 事件：mode、owner 进入、owner 退出、owner cancel、阈值判定结果。
 11. 必须记录手势和交互状态机事件：state begin、state update 中的重要边界、state finish、state cancel、非法或重复 transition 被忽略。
 12. 必须记录状态栏点击顶滚 owner 变化。
-13. 必须记录异常和降级策略：重复 viewController、无 scroll view fallback host、Header 测量异常、Tabman/Pageboy 回调缺失或乱序。
+13. 必须记录异常和降级策略：重复 viewController、无 scroll target、共享 scroll 冲突、Header 测量异常、Tabman/Pageboy 回调缺失或乱序。
 14. 高频滚动路径不得逐帧打印普通日志，只能记录状态变化、阈值跨越、owner 切换、异常或显式调试开关下的采样日志。
 15. 日志不得输出业务数据、用户内容、完整 view 层级或可能包含隐私的数据。
 16. 日志必须可测试。实现时应通过内部可注入 log sink 或等价机制验证关键事件确实发出，不依赖人工查看控制台。
@@ -403,7 +436,7 @@ README.md
 ## 20. 默认行为
 
 1. Header 默认使用 automatic height，最小高度为 0，不设置固定最大高度。
-2. Header 默认 topBehavior 为 insideSafeArea。
+2. Header 默认 topBehavior 为 extendsUnderTopSafeArea；insideSafeArea 继续作为显式可选模式。
 3. 分段栏高度默认由内部分页适配器自适应；调用方可以通过可选显式高度覆盖。
 4. 默认支持点击分段栏、API 选择、横向滑动切页。
 5. 默认启用 UIViewController.anchorPagerDefaultScrollView 自动查找。
@@ -430,7 +463,7 @@ README.md
 6. 实现 UIViewController anchorPagerScrollView extension、associated object 显式设置、默认嵌套查找和测试。
 7. 实现 AnchorPagerLayoutEngine 和单元测试。
 8. 实现 Header 管理、Header controller containment 和 Header 动态 frame 更新。
-9. 实现 page state store、fallback containment、缓存窗口和 Tabman 驱动的 lifecycle 语义转发。
+9. 实现 page state store、无滚动页直接 containment、缓存窗口和 Tabman 驱动的 lifecycle 语义转发。
 10. 封装 Tabman/Pageboy adapter。
 11. 实现纵向嵌套滚动协调。
 12. 实现顶部 overscroll event handling。
@@ -468,10 +501,10 @@ README.md
 20. 显式设置优先于默认查找测试
 21. 多个 UIScrollView 时选择规则稳定性测试
 22. hidden、alpha、userInteractionEnabled 过滤测试
-23. 关闭默认查找后使用内部 page scroll host 测试
-24. 无候选 UIScrollView 时使用内部 page scroll host 测试
+23. 关闭默认查找后 original page 直接 containment 且 scroll target 为 nil 的测试
+24. 无候选 UIScrollView 时 original page 直接 containment 且根 view 铺满 viewport 的测试
 25. 不跨 child view controller 边界查找测试
-26. fallback host child add/remove containment 单测
+26. 无滚动 original page 仅由 Pageboy containment 的单测
 27. Tabman 驱动的 child appearance lifecycle 顺序测试
 28. top overscroll owner 互斥单测
 29. top overscroll handling mode 单测

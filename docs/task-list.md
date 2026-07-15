@@ -18,6 +18,7 @@
 - [ ] 横向分页使用 Tabman + Pageboy
 - [ ] Tabman/Pageboy 类型只出现在 internal adapter 层
 - [ ] 横向 page 的实际 UIKit containment 由 Tabman/Pageboy adapter 执行，AnchorPager 不对同一 page view controller 重复 `addChild`
+- [ ] 任何时候都不设置横向业务 child 的 `UIScrollView.delegate`，包括临时代理和恢复式接管
 - [ ] Public API 不暴露第三方库类型
 - [ ] Public API、data source、delegate、coordinator 状态更新保持 `@MainActor`
 - [ ] 只有直接操作 UIKit 状态或维护 UI lifecycle/coordinator 状态的内部类型整体使用 `@MainActor`
@@ -126,7 +127,7 @@
 - [x] Header viewController 移除时使用 `willMove(toParent: nil)`、移除 view、`removeFromParent`
 - [x] 提供基础 Header 高度测量
 - [x] 默认 Header height mode 为 automatic，min 为 0，max 为 nil
-- [x] 默认 Header top behavior 为 insideSafeArea
+- [x] v0.1 历史默认 Header top behavior 为 insideSafeArea；当前默认已在后续专项改为 extendsUnderTopSafeArea
 - [x] 为 Header view 承载加入 header 日志
 - [x] 为 Header viewController add/remove 加入 header 和 lifecycle 日志
 - [x] 为 Header 基础测量结果加入 layout 日志
@@ -191,10 +192,10 @@
 - [x] 默认查找忽略 `isUserInteractionEnabled == false` 的 UIScrollView
 - [x] 多个候选时选择第一个符合规则的 UIScrollView
 - [x] 不跨 child view controller 边界查找
-- [x] 无候选 UIScrollView 时使用内部 page scroll host
+- [x] v0.1 曾在无候选 UIScrollView 时使用内部滚动包装（已由 direct page 设计取代）
 - [x] 为显式 scroll view 命中加入 scroll 日志
 - [x] 为默认 lookup 命中加入 scroll 日志
-- [x] 为 fallback page scroll host 加入 scroll 日志
+- [x] v0.1 曾为无滚动包装加入 scroll 日志（现行实现已删除）
 
 ### 文档与示例
 
@@ -229,7 +230,7 @@
 - [x] 多个 UIScrollView 选择顺序测试
 - [x] hidden、alpha、userInteractionEnabled 过滤测试
 - [x] 关闭默认查找测试
-- [x] 无 UIScrollView child fallback host 测试
+- [x] v0.1 无 UIScrollView child 包装测试（现行实现已替换为直接 containment 测试）
 - [x] 不跨 child view controller 边界查找测试
 - [x] 基础 child add/remove containment 测试
 - [x] Tabman/Pageboy 类型不泄漏 public API 检查
@@ -242,7 +243,7 @@
 - [x] 程序化切页取消不通知 delegate 测试
 - [x] adapter 拒绝第二次切页时保留首次 pending selection 测试
 - [x] `reloadHeaderLayout()` 基础 layout context 回调测试
-- [x] fallback host 日志测试
+- [x] v0.1 无滚动包装日志测试（现行实现已删除）
 - [x] `AnchorPagerAssertions` 非 MainActor 调用测试
 - [x] 示例工程基础启动 UI test
 - [x] 示例工程 Header、分段栏和页面内容 UI test
@@ -283,7 +284,7 @@
 - [x] 将底部遮挡转换到本地坐标系
 - [x] 横向分页区域默认延伸到容器 `bounds` 底部，底部遮挡只进入 managed inset target
 - [x] 禁用 AnchorPager 自有主容器 `verticalScrollView` 自动 content inset，避免 Header 顶部遮挡重复叠加
-- [x] 禁用无滚动页 fallback scroll host 自动 content inset，避免 plain child 底部停在安全区域上方
+- [x] v0.2 禁用当时无滚动包装的自动 content inset（后续由 direct page 设计整体取代）
 - [x] 示例工程导航栏支持切换 `AnchorPagerHeaderTopBehavior`、显示当前配置，并使用 `.preserveVisualPosition` 刷新布局
 - [x] 主容器使用独立 `scrollRangeView` 固定 content range，滚动范围不依赖当前 `contentOffset`
 - [x] Header 和 paging adapter 位于 `frameLayoutGuide` viewport，不参与 `contentSize` 反算
@@ -303,10 +304,11 @@
 - [x] 测试 navigation bar 显隐
 - [x] 测试 navigation controller 下 Header 实际 frame 与 layout context 对齐
 - [x] 测试 tab bar 和 toolbar 底部遮挡
-- [x] 测试无滚动页 fallback host 的最后内容停在安全可见底端
+- [x] v0.2 测试当时无滚动包装的安全可见底端（现由 plain root 物理底边测试取代）
 - [x] 测试示例工程 `AnchorPagerHeaderTopBehavior` 菜单显示、切换和 `extendsUnderTopSafeArea` 顶部遮挡覆盖
 - [x] 示例 Header 标题栈上下约束到 `safeAreaLayoutGuide`，两种顶部行为下保持 20 pt 内容间距
-- [x] 示例 Header 文本组顶部对齐，标题与副标题保持固定 8 pt 间距且负 offset 不拉伸 label
+- [x] 示例 Header 历史 follow-up：文本组曾采用顶部对齐，标题与副标题保持固定 8 pt 间距且负 offset 不拉伸 label；该纵向约束已由下一项取代
+- [x] 示例 Header 改用顶部安全下限与底部稳定锚点，跨越完整顶部遮挡回弹时保持文字相对 Header 顶部距离不变
 - [x] 测试 additionalSafeAreaInsets
 
 ## v0.3：Scroll Discovery 与 Inset Ownership 版
@@ -335,10 +337,10 @@
 - [x] bar 高度变化时按 child distance-from-top 保持可见内容
 - [x] 测试 managed inset 不覆盖外部 contentInset
 - [x] 测试 contentInsetAdjustmentBehavior 策略
-- [x] 测试 fallback page scroll host inset
+- [x] v0.3 测试当时无滚动包装的 inset（现行无滚动页不参与 inset ownership）
 - [x] 测试 optional bar height、自适应 barInsets 和显式高度
 - [x] 测试 ownership 归还、重复 target 跳过和 scroll target 冲突降级
-- [x] 示例工程真实列表页和 fallback 页 UI test
+- [x] 示例工程真实列表页和当时无滚动包装页 UI test（现已替换为 plain direct page UI test）
 - [x] 更新 README 的 scroll 接入说明
 - [x] 更新 `docs/architecture.md` 的 inset ownership 章节
 - [x] 为 managed inset 写入加入 inset 日志
@@ -358,7 +360,7 @@
 - [x] 卸载 child 前保存 scroll offset snapshot
 - [x] 卸载 child 时归还 managed inset ownership，不把派生 managed/external inset 写入 snapshot
 - [x] appearance lifecycle 由 Pageboy/UIKit 驱动，不因缓存强引用变化手工转发
-- [x] reloadData 在非空、空数据 terminal 后清理旧 page state 和旧 fallback host content
+- [x] reloadData 在非空、空数据 terminal 后清理旧 page state 和当时的无滚动包装内容（现行 containment 由 Pageboy teardown）
 - [x] 使用 generation 和 paging host page/empty terminal 安全清理旧状态
 - [x] reloadData 清理旧 generation offset snapshot
 - [x] reloadData 清理旧 Tabman/Pageboy 状态，包括非空到空
@@ -380,7 +382,7 @@
 - [x] active reload 的 bar inset 按 request staged，只有 matching terminal 被 ViewController acknowledgement 后更新 committed baseline
 - [x] Store 将 live identity payload 与 generation-specific retention/strong lease/snapshot/ownership lease 分离
 - [x] Store 提供严格只读 committed current index/page/scroll 入口，empty 或没有 committed generation 时返回 nil
-- [x] commit/cancel/releaseAll 在释放最后 strong lease 前强捕获 CleanupPlan，显式清理 unique fallback/scroll 资源
+- [x] commit/cancel/releaseAll 在释放最后 strong lease 前强捕获 CleanupPlan，显式清理当时的 unique wrapper/scroll 资源（现行只归还真实 scroll ownership）
 - [x] ViewController staged public metadata/Header/provider generation，matching terminal 原子提交 Store/public/bar 几何
 - [x] 首次 pre-load reload 保持 public metadata/selection 语义且不加载 paging view，首次 terminal 复用同一 request
 - [x] Swift 6.2.4 generation atomicity 完整验收：框架 193 项、Example 5 项单测与 16 项 UI 测试通过，均为 0 fail、0 skip；resolve 1.34 秒、框架墙钟 53.81 秒、Example generic build 15.71 秒；测试窗口夹具 follow-up 后 Example 全量复验 257.960 秒，其中 UI 16 项 204.338 秒、单元 5 项 0.625 秒，未再出现 appearance transition 不平衡；剩余提示仅为 Pageboy/Tabman `PrivacyInfo.xcprivacy` 和模拟器字体/启动测量环境提示
@@ -388,62 +390,134 @@
 
 ## v0.5：纵向嵌套滚动协调版
 
-启动门禁：已满足，可以开始开发。ScrollCoordinator 只读 Store committed current page/scroll target，empty 时两者为 nil，并在 matching reload/selection terminal 后重新绑定。不得缓存 Host/adapter/provider、读取 provider pending，或复制 page identity/cache/generation 职责。
+设计见 `docs/superpowers/specs/2026-07-13-v0-5-scroll-coordination-design.md`，direct page 修订见 `docs/superpowers/specs/2026-07-13-plain-page-direct-containment-design.md`，边界 owner 历史契约见 `docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md`，2026-07-14 修复设计见 `docs/superpowers/specs/2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement-design.md`、`docs/superpowers/specs/2026-07-14-header-preinstall-bootstrap-seed-repair-design.md` 和 `docs/superpowers/specs/2026-07-14-container-top-inset-fixed-header-presentation-design.md`。plain bottom 页面/chrome 分层、析构清理、Header 安装前 seed，以及 container top inset/固定高度 Header 专项均已完成实现、最终全量验收和 fresh-pass；v0.5 Task 7 当前为 Ready。
 
-- [ ] 创建 `Sources/AnchorPager/Core/AnchorPagerScrollCoordinator.swift`
-- [ ] Header 未完全折叠时优先响应向上滚动
-- [ ] Header 未完全展开时优先响应向下滚动
-- [ ] Header 完全折叠后当前 child scroll view 正常滚动
-- [ ] 支持不同 contentSize child 切换
-- [ ] 处理 Header 展开阈值附近抖动
-- [ ] 处理 Header 折叠阈值附近抖动
-- [ ] 处理 child top boundary rubber-band 抖动
-- [ ] 实现 guarded contentOffset update
-- [ ] 当前 container 与当前 child 支持受限纵向 simultaneous recognition
-- [ ] 同一 pan 在 container/child 边界转移剩余 delta
-- [ ] container 未完全折叠时当前 child 保持顶部
-- [ ] child 离开顶部时 container 保持完全折叠
-- [ ] 避免 contentSize 变化重复写 managed inset
-- [ ] 为 Header 完全展开加入 scroll 日志
-- [ ] 为 Header 完全折叠加入 scroll 日志
-- [ ] 为 child top boundary 加入 scroll 日志
-- [ ] 为 scroll owner 切换加入 scroll 日志
-- [ ] 为 guarded contentOffset update 触发或跳过加入 scroll 日志
-- [ ] 测试高频滚动路径不逐帧输出普通日志
-- [ ] 测试 Header 展开和折叠
-- [ ] 测试 child top boundary 抖动
-- [ ] 测试不同 contentSize child 切换
-- [ ] 测试 guarded update 防重入
-- [ ] 测试向上和向下 handoff 不丢失剩余 delta
-- [ ] 测试 Header 折叠热路径不改变 Pageboy child bounds
-- [ ] 测试 contentSize 变化不震荡
+- [x] 删除无滚动页 synthetic scroll wrapper 及其额外 containment
+- [x] 无滚动 original page 直接交给 Pageboy，Store 保存 page 非 nil、scroll target 为 nil
+- [x] 无滚动页根 view 铺满 paging viewport，并在 Example root 下至少覆盖 window 物理底边
+- [x] 无滚动页不参与 managed inset、offset snapshot、child bounce 或 simultaneous pair
+- [x] 真实 pan UI 测试读取 plain root/window 几何，不再用写死 distance 代替内部事实
+
+- [x] 创建 `Sources/AnchorPager/Core/AnchorPagerScrollCoordinator.swift`
+- [x] Header 未完全折叠时优先响应向上滚动
+- [x] Header 未完全展开时优先响应向下滚动
+- [x] Header 完全折叠后当前 child scroll view 正常滚动
+- [x] 支持不同 contentSize child 切换
+- [x] 处理 Header 展开阈值附近抖动
+- [x] 处理 Header 折叠阈值附近抖动
+- [x] 处理 child top boundary rubber-band 抖动
+- [x] 实现 guarded contentOffset update
+- [x] 当前 container 与当前 child 支持受限纵向 simultaneous recognition
+- [x] container `UIScrollView` 子类只放行 committed current child pair，且不设置 container/child 内建 pan delegate
+- [x] child contentOffset/contentSize observation 与 pan target 在 rebind、empty、reload 和 deinit 时同步清理
+- [x] 同一 pan 在 container/child 边界转移剩余 delta
+- [x] container 未完全折叠时当前 child 保持顶部
+- [x] child 离开顶部时 container 保持完全折叠
+- [x] contentSize 变化只触发有界协调，不重复写 managed inset
+- [x] 为 Header 完全展开加入 scroll 日志
+- [x] 为 Header 完全折叠加入 scroll 日志
+- [x] 为 child top boundary 加入 scroll 日志
+- [x] 为 scroll owner 切换加入 scroll 日志
+- [x] 移除 guarded write 逐帧日志，只保留 owner、handoff 和 boundary 状态变化事件
+- [x] 测试高频滚动路径不逐帧输出普通日志
+- [x] 测试 Header 展开和折叠
+- [x] 测试 child top boundary 抖动
+- [x] 测试不同 contentSize child 切换
+- [x] 测试 guarded update 防重入
+- [x] 测试向上和向下 handoff 不丢失剩余 delta
+- [x] 测试 Header 折叠热路径不改变 Pageboy child bounds
+- [x] 测试 contentSize 变化不震荡
+- [x] Example UI test 使用真实连续 drag 验证 container-to-child 与 child-to-container handoff
+- [x] Example UI test 覆盖短内容、plain direct page、页面切换和完全展开后仅 container bounce
+- [x] 删除历史 child `bounces` 临时租约，业务配置在绑定、handoff、模式切换、切页、reload、empty 和释放全过程保持不变
+- [x] UIKit 集成测试验证 child scroll delegate 与 child pan delegate 在绑定/解绑后保持原实例
+- [x] UIKit 集成测试验证全过程不修改业务 child 的 `bounces` 与 `alwaysBounceVertical`
+- [x] stable range 与 native boundary pass-through 分离；active owner 不被 container delegate、child KVO、pan target 或 geometry refresh 反向夹紧
+- [x] container top 使用共享 viewport、plain bottom 只使用 Pageboy 页面 surface，分层 presentation 不污染 canonical layout/range、managed inset 或 snapshot
+- [x] plain page 保持 direct Pageboy containment、nil scroll target 和物理屏幕底边，底部 bounce 由 container 处理
+- [x] Task 7 实现者新鲜验收：Apple Swift 6.3.3；Framework 264 项、Example 36 项（9 单元 + 27 UI），0 fail、0 skip；Example generic Simulator build 成功；三份 xcresult 0 error/warning；实现提交链 `cff0e55`、`8805892`、`27390b4`、`f9fd570`、`687733a`、`c20e259`、`344317d`、`10f1799`、`a4f7c3f`、`47abcd6`
+- [x] Task 7 实现者验收记录提交：`同步纵向边界回弹验收记录`（本次文档提交）
+- [x] Task 7 十项实现者自审未发现阻塞性代码缺陷
+- [x] Task 7 初次独立复审：发现未呈现 owner 反向回稳、部分折叠 Header 的 child top KVO 路由、`.none` UI 探针假阳性共 3 个 Important
+- [x] Task 7 复审问题修复提交：`f81ca1e`（`修复未呈现边界所有权收敛`）
+- [x] Task 7 再次整分支复审：发现零稳定区间跨越相反边界仍返回旧未呈现 owner 的 1 个 Important，以及 architecture 只描述顶部 presentation、仍把完整 child offset 转移写成后续 v0.5 的 1 个 Minor
+- [x] Task 7 零稳定区间修复提交：`5b80893`（`修复零区间边界反向切换`）；架构文档同步改为 top/bottom 对称公式与当前 v0.5/v0.7 职责
+- [x] Task 7 第三次整分支复审：发现已呈现 `.top/.child` owner 在 child KVO 从 `-12` 越过到 `+6` 时递归 stable settle，把 canonical total 从 6 跳到 106 的 1 个 Important；同时发现 requirements 仍要求 guarded apply/skip 逐帧日志、与现行热路径日志契约冲突的 1 个 Minor
+- [x] Task 7 已呈现顶部回稳修复提交：`128821f`（`修复已呈现子页面顶部回稳`）；enforcement 显式返回 finish owner，pan 同轮应用当前 resolver input，observer-only `.top/.child` 保留 raw total 并经同一 Resolver container-first 分配
+- [x] Task 7 最新修复新鲜验收：Apple Swift 6.3.3；Framework 283 项、Example 37 项（10 单元 + 27 UI），0 fail、0 skip；Example generic Simulator build 成功；三份 xcresult 0 error/warning/analyzer warning
+- [x] Task 7 第四次整分支独立复审：覆盖 `be2d783...13b3d95` 并重点比较 `b00d204...128821f`、尤其 `5b80893...128821f`；结论为 Critical 0、Important 0、Minor 2
+- [x] Task 7 最终 Minor 修复：README 验收摘要更新到生产代码 HEAD `128821f` / Framework 283；`testRealChildContainerTopBounceIsVisible` 增加严格 `childTopMax < 0.5`，证明 `.container` 顶部 owner 排他
+- [x] Task 7 最终验收：Framework 283/283 对应 `/private/tmp/AnchorPagerPresentedTopFrameworkFull-20260713-2258.xcresult` 和生产代码 HEAD `128821f`；Example 37/37（10 单元 + 27 UI），0 fail、0 skip；generic Simulator build 成功；全部结果 0 error/warning/analyzer warning
+- [x] v0.5 历史 Ready：截至 `b9699b0`，Task 7 实现、四轮复审、两个最终 Minor 修复与当时验收门禁全部完成
+- [x] 2026-07-14 后续回归关系梳理：plain page bottom 由 `verticalScrollView` 提供原生物理，但共享 `viewportView` transform 同时上移 Header/bar/page；真实 child bottom 由 child owner 处理所以不受影响；首次 automatic Header required `height == 0` 中立布局会触发非空内容约束冲突
+- [x] 2026-07-14 专项设计确认：container top 仍整体移动，plain bottom 只移动 Paging adapter 内 Pageboy 页面 surface；Header 首次先取 bootstrap fitting seed，再执行中立正式测量；Public API、Pageboy containment、child scroll ownership 不变
+- [x] 2026-07-14 专项实施计划：拆为 Paging surface、ViewController 分层、Header bootstrap、Example UI 探针、全量验收与复审五个 RED→GREEN 任务
+- [x] 为 plain bottom bar 安全区、页面 presentation、回稳清理与 Header 非零首次布局编写并运行 RED；目标失败原因分别为旧共享 viewport 位移、缺少 Paging surface 接口和跨 Header 身份复用零高度缓存
+- [x] 实施 Paging adapter 页面 presentation surface、ViewController chrome/page 分层、按 Header 身份失效的 bootstrap measurement、Example page/bar 探针与析构归零；提交 `574e9bf`、`f7a76bd`、`dfabd6c`、`bb6aa08`、`c37e829`
+- [x] 运行聚焦 GREEN、完整 Framework 293/293、Example 37/37（10 单元 + 27 UI）、generic build、静态门禁和 `git diff --check`；0 fail、0 skip、0 error/warning/analyzer warning
+- [x] 执行实现者自审与整分支 fresh-pass 复审；发现的 1 个 Important（deinit 未显式归零 page surface）已在 `c37e829` 修复并完成 RED/GREEN，终态 Critical 0、Important 0、Minor 0
+- [x] 恢复 v0.5 Ready：2026-07-14 专项实现、验收和复审门禁全部完成
+- [x] 主容器 top inset/固定高度 Header 关系梳理与设计确认：inside 使用真实 safe-area top inset，extends 为 0；raw/logical offset、scroll range、canonical presentation 与 bounce 分层统一收口
+- [x] 编写并自审主容器 top inset/固定高度 Header 详细实施计划：拆为纯 geometry、LayoutEngine、ScrollCoordinator、canonical surface、真实 inset 迁移、Example/UI、全量验收和 fresh-pass 八个 RED→GREEN 任务
+- [x] 用户复核详细实施计划并选择逐任务执行方式
+- [x] 按 TDD 实现 container geometry、固定高度 canonical presentation、结构性 offset 迁移和日志；专项实现 HEAD `1847aac`
+- [x] 完成 Framework、Example、真实 UI、generic build 与运行时约束首轮全量验收：正式验收 HEAD `ce09f2b`，Framework 318/318、Example 41/41（11 单元 + 30 UI）、generic build，0 fail、0 skip、0 error/warning/analyzer warning；Header 真实手势日志无约束冲突
+- [x] fresh-pass 覆盖 `7885d9e...424a0a3`：2 个 Important 与 2 个 Minor 均按 RED/GREEN 修复到 `5ba84d4`、`424a0a3`，终态 Critical 0、Important 0、Minor 0
+- [x] 最终生产 HEAD `424a0a3` 全量验收：Framework 322/322、Example 41/41（11 单元 + 30 UI）、generic Simulator build，0 fail、0 skip、0 error/warning/analyzer warning；恢复 v0.5 Task 7 Ready
+- [x] Example Header 顶部回弹内容稳定专项完成关系梳理、设计与计划：框架继续整体移动共享 viewport，Example 只调整自身标题栈纵向约束并增加只读显示帧探针
+- [x] 旧顶部等式/底部上限约束的隔离真实 UI RED 精确记录 `headerContentTopDeltaMax = 116 pt`；正式顶部安全下限/底部稳定等式下 Example 单元 target 与两条聚焦 UI 全部 GREEN，生产提交 `1f7e3f4`
+- [x] Example Header 专项最终验收：Framework 322/322、Example 41/41（11 单元 + 30 UI）、generic Simulator build，0 fail、0 skip；三份 xcresult 0 error/warning/analyzer warning，UIKit `LayoutConstraints` 无冲突
+- [x] Example Header 专项 fresh-pass `afaefce...1f7e3f4`：Public、framework、containment、scroll/inset/gesture/bounce/logging owner 均未改变，终态 Critical 0、Important 0、Minor 0；v0.5 Task 7 与 v0.6 保持 Ready
 
 ## v0.6：顶部 Overscroll 事件处理版
 
 依赖门禁：OverscrollCoordinator 只消费 v0.5 已绑定的 committed current/empty owner；pending provider page 不能成为 overscroll owner。
 
-- [ ] 创建 `Sources/AnchorPager/Overscroll/AnchorPagerOverscrollCoordinator.swift`
-- [ ] 实现 `.none`
-- [ ] 实现 `.container`
-- [ ] 实现 `.child`
-- [ ] Header 完全展开前优先展开 Header
-- [ ] container 模式由 verticalScrollView 处理继续下拉
-- [ ] child 模式由当前 child scroll view 或 page scroll host 处理继续下拉
-- [ ] 同一次下拉手势只允许一个 top overscroll owner
-- [ ] 实现 owner 进入阈值
-- [ ] 实现 owner 退出阈值
-- [ ] 横向分页期间取消 active overscroll handling
-- [ ] Header layout reload 期间取消 active overscroll handling
-- [ ] 屏幕旋转期间取消 active overscroll handling
-- [ ] child 切换期间取消 active overscroll handling
-- [ ] 为 overscroll mode 加入 overscroll 日志
-- [ ] 为 owner 进入和退出加入 overscroll 日志
-- [ ] 为 owner cancel 加入 overscroll 日志
-- [ ] 为阈值判定加入 overscroll 日志
-- [ ] 测试三种 overscroll mode
-- [ ] 测试 owner 互斥
-- [ ] 测试 Header 展开优先级
-- [ ] 测试 owner 阈值稳定性
+设计与计划：`docs/superpowers/specs/2026-07-13-boundary-bounce-ownership-design.md`、`docs/superpowers/plans/2026-07-13-boundary-bounce-ownership.md`；plain bottom 当前修订见 `docs/superpowers/specs/2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement-design.md`，container boundary 最新坐标修订见 `docs/superpowers/specs/2026-07-14-container-top-inset-fixed-header-presentation-design.md`。mode、owner、cancel 和日志历史实现保持；container raw/logical boundary 已完成迁移、最终重新验收和 fresh-pass，v0.6 当前为 Ready。
+
+- [x] 创建 `Sources/AnchorPager/Overscroll/AnchorPagerOverscrollCoordinator.swift`
+- [x] 实现 `.none`
+- [x] 实现 `.container`
+- [x] 实现 `.child`
+- [x] Header 完全展开前优先展开 Header
+- [x] container 模式由 verticalScrollView 处理继续下拉
+- [x] child 模式只由当前真实 child scroll view 处理继续下拉；nil scroll target 不创建替代 owner且不回退
+- [x] 默认顶部模式调整为 container，并支持运行时同步切换
+- [x] 无滚动页 container bottom bounce 与真实 scroll page child bottom bounce 不受顶部 mode 影响
+- [x] child 顶部及真实 child bottom owner 尊重业务 `bounces`/`alwaysBounceVertical`，框架不保存、不修改、不恢复这两项属性
+- [x] 同一次下拉手势只允许一个 top overscroll owner
+- [x] 实现 owner 进入阈值
+- [x] 实现 owner 退出阈值
+- [x] 横向分页期间取消 active overscroll handling
+- [x] Header layout reload 期间取消 active overscroll handling
+- [x] 屏幕旋转期间取消 active overscroll handling
+- [x] child 切换、reload terminal 与 empty 期间取消 active overscroll handling
+- [x] 为 overscroll mode 加入 overscroll 日志
+- [x] 为 owner 进入和退出加入 overscroll 日志
+- [x] 为 owner cancel 加入 overscroll 日志
+- [x] boundary 与 unavailable 阈值跨越只记录一次状态日志
+- [x] 测试三种 overscroll mode
+- [x] 测试 owner 互斥
+- [x] 测试 Header 展开优先级
+- [x] 测试 owner 阈值稳定性
+- [x] UI test 验证实际 current/max presentation distance，不再只记录瞬时负 offset flag
+- [x] Example 顶部回弹菜单与 launch argument 覆盖默认 container、child、none
+- [x] 六类真实 UI：plain top/bottom、real child container top、real child child top、none top、real child bottom 全部通过
+- [x] v0.6 最新修复验收复用本轮 Framework 283 / Example 37 / generic build，0 fail、0 skip、0 xcresult warning
+- [x] v0.6 实现提交为 `10f1799`、`a4f7c3f`、`47abcd6`，验收记录随 `同步纵向边界回弹验收记录` 提交
+- [x] v0.6 历史第四次独立复审与 Ready：Critical 0、Important 0；两个 Minor 已修复，Framework 283/283、Example 37/37 与 generic build 门禁通过
+- [x] v0.6 历史 Ready：2026-07-14 plain bottom 页面/chrome presentation、完整 Framework/Example/UI/generic build 复验和整分支 fresh-pass 复审均完成；后续 container top inset 专项曾重新关闭门禁，现已在生产 HEAD `424a0a3` 完成并恢复 Ready
+- [x] Example 统一设置菜单设计确认：使用单个 `gearshape` 入口和“Header 顶部行为”“顶部回弹模式”两个二级菜单，不修改框架 Public API 或 owner 路由
+- [x] Example 统一设置菜单实施计划：测试先要求齿轮/二级菜单形成 RED，再做最小菜单实现，最后运行真实菜单 UI、完整回归、自审和 fresh-pass 复审
+- [x] Example 统一设置菜单 RED/GREEN：单元 RED 精确失败 3 条；真实菜单 UI RED 精确失败于“示例设置”入口缺失；最小实现后单元与 4 条目标 UI GREEN，提交 `7b1b6f7`
+- [x] Example 统一设置菜单最终验收：Framework 相邻 mode 回归通过；Example 38/38（10 单元 + 28 UI）、0 fail、0 skip；generic build 成功；两份 xcresult 均为 0 error、0 warning、0 analyzer warning；fresh-pass 复审 Critical 0、Important 0、Minor 0
+- [x] Header 安装前 bootstrap seed 修复设计确认：真实内容附着前先写 host seed，保留 UIViewController containment、正式测量和 Public API 边界
+- [x] Header 安装前 bootstrap seed 书面规格复核与实施计划：结构性附着探针、Host 安装顺序、完整 UI、运行时约束日志和 fresh-pass 门禁已明确
+- [x] Header 安装前 bootstrap seed RED/GREEN：附着瞬间结构测试先精确失败于 `0.0`；Host 新接口先因缺失参数编译失败；最小实现后聚焦 16/16 通过，生产提交 `d6ece31`
+- [x] Header 安装前 bootstrap seed 完整验收：Framework 296/296、Example 38/38（10 单元 + 28 UI）、generic Simulator build 均通过；三份结果包均为 0 error/warning/analyzer warning；新进程 Header 安装日志存在且 UIKit `LayoutConstraints` 无冲突
+- [x] Header 安装前 bootstrap seed 自审与 fresh-pass：Public API、Pageboy、child scroll/bounce、formal measurement/log 均未改变；Critical 0、Important 0、Minor 0；v0.5 Task 7 与 v0.6 恢复 Ready
+- [x] 使用逻辑 container offset 首轮重新验收 `.none/.container/.child` 顶部 owner、plain bottom 和真实 child 双边界
+- [x] 完成最终 fresh-pass 并用生产 HEAD `424a0a3` 重跑全量门禁，恢复 v0.6 Ready
 
 ## v0.7：手势与交互状态机版
 
@@ -603,16 +677,16 @@
 - [x] v0.2 Task 5：v0.2 布局与 inset 日志已完成，验证记录见 `docs/superpowers/plans/2026-07-09-v0-2-header-layout.md`
 - [x] v0.2 Task 6：文档、任务状态与版本验收已完成，验证记录见 `docs/superpowers/plans/2026-07-09-v0-2-header-layout.md`
 - [x] v0.2 follow-up：主容器自动 content inset 已禁用，修复 navigation bar 下 Header 与 layout context 顶部位置不一致的问题；验证记录见 `docs/superpowers/plans/2026-07-09-v0-2-header-layout.md`
-- [x] v0.2 follow-up：内部 fallback scroll host 自动 content inset 已禁用，修复无滚动页底部没有延伸到 content frame 底部的问题；验证记录见 `docs/superpowers/plans/2026-07-09-v0-2-header-layout.md`
+- [x] v0.2 follow-up：当时的无滚动包装自动 content inset 已禁用；该方案现已被 direct page containment 取代，历史验证见 `docs/superpowers/plans/2026-07-09-v0-2-header-layout.md`
 - [x] v0.2 follow-up：示例工程已新增 `AnchorPagerHeaderTopBehavior` 菜单，可显示并切换当前 Header 顶部行为配置，且切换时使用 `.preserveVisualPosition` 刷新布局；验证记录见 `docs/superpowers/plans/2026-07-09-v0-2-header-layout.md`
 - [x] v0.2 历史 follow-up（已被主容器架构修订取代）：曾在 Header host 写入 scroll content 约束前补偿 `contentOffset.y`；该方案后来确认会形成 offset/constraint/contentSize 反馈闭环，现已移除且不得恢复；历史验证见 `docs/superpowers/plans/2026-07-09-v0-2-header-layout.md`
 - [x] v0.2 follow-up：`extendsUnderTopSafeArea` 下 Header 可视 frame 高度至少覆盖本地顶部遮挡，修复当前 Header 内容高度小于顶部遮挡时 Header 与分段栏之间出现空隙的问题；验证记录见 `docs/superpowers/plans/2026-07-09-v0-2-header-layout.md`
 - [x] v0.2 follow-up：主容器 scroll range 与 Header/paging viewport 已解耦，移除 `visibleY + contentOffset` 约束反馈闭环，修复顶部行为切换后下拉回弹残留空白；验证记录见 `docs/superpowers/plans/2026-07-10-header-scroll-viewport.md`
 - [x] v0.2 follow-up：保留 Header 双顶部行为并统一分段栏基线；automatic Header 使用中立测量，负 offset 使用 viewport presentation translation，修复视觉 bounce 消失和回弹后高度增长；验证记录见 `docs/superpowers/plans/2026-07-11-dual-header-top-behavior-bounce-stability.md`
 - [x] v0.2 follow-up：示例 Header 蓝色背景保持顶部行为语义，标题栈上下改用 safe area 并保留 20 pt 间距；验证记录见 `docs/superpowers/plans/2026-07-11-example-header-safe-area-content.md`
-- [x] v0.2 follow-up：示例 Header 标题栈 bottom 改为 safe area 上限约束，文本组顶部对齐并在下拉中保持固定 8 pt 间距；验证记录见 `docs/superpowers/plans/2026-07-11-example-header-safe-area-content.md`
+- [x] v0.2 历史 follow-up（当前约束已取代）：示例 Header 标题栈 bottom 曾改为 safe area 上限约束，文本组顶部对齐并在下拉中保持固定 8 pt 间距；历史验证见 `docs/superpowers/plans/2026-07-11-example-header-safe-area-content.md`
 - [x] v0.2 Header 与布局稳定版已完成；后续从 v0.3 Scroll Discovery 与 Inset Ownership 版继续
-- [x] v0.3–v0.5 固定分页视口、optional bar height、inset ownership 和纵向 owner 架构已确认；设计见 `docs/superpowers/specs/2026-07-11-fixed-paging-viewport-inset-scroll-ownership-design.md`
+- [x] v0.3–v0.5 固定分页视口、optional bar height、inset ownership 与纵向 owner 基础不变量已确认；v0.5 代理所有权、canonical distance 和顶部下拉边界改由 `docs/superpowers/specs/2026-07-13-v0-5-scroll-coordination-design.md` 草案收口
 - [x] v0.3 Scroll Discovery 与 Inset Ownership 版已完成；验收记录见 `docs/superpowers/plans/2026-07-11-v0-3-fixed-paging-inset-ownership.md`
 - [x] v0.4 Child 生命周期与缓存主体实现已完成
 - [x] v0.4 reload terminal、空态 teardown、reload 重入与 appearance cancel 修复完整验收已通过
@@ -620,7 +694,10 @@
 - [x] v0.4 generation atomicity Task 2：payload/generation lease、committed current 与强 CleanupPlan 已完成
 - [x] v0.4 generation atomicity Task 3：staged public/provider/bar terminal、pre-load 与跨层 superseded request 已完成
 - [x] 最低工具链已提升为 Swift 6.2，语言模式保持 Swift 6，iOS 14 运行基线不变
-- [x] v0.4 最终独立复审已完成，Critical/Important/Minor 均为零；允许开始 v0.5
+- [x] v0.4 最终独立复审已完成，Critical/Important/Minor 均为零；允许进入 v0.5 设计与计划阶段
+- [x] Header 默认顶部行为专项设计已确认；Public 单一默认源已改为 extendsUnderTopSafeArea，显式 insideSafeArea、固定 Header/paging/bounce 架构保持不变
+- [x] Header 默认顶部行为 Task 1 已完成聚焦 RED/GREEN：Framework 默认契约、101 项控制器回归、Example 11 项单元与 5 项相关 UI 测试通过；生产实现提交 `3bdcfb6`
+- [x] Header 默认顶部行为专项已完成：生产代码 HEAD `3bdcfb6`；Framework 322/322、Example 41/41（11 单元 + 30 UI）、generic build、运行时约束与静态门禁全部通过；fresh-pass `97e8fc2...f4d9f41` 为 Critical 0、Important 0、Minor 0
 - [x] 实现时遵循测试先行
 - [x] 每个任务完成后运行对应测试
 - [x] 每个任务完成时确认是否需要 UI 测试

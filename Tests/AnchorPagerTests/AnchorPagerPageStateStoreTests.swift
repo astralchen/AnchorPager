@@ -73,7 +73,7 @@ final class AnchorPagerPageStateStoreTests: XCTestCase {
         XCTAssertEqual(child.scrollView.contentInset.bottom, 30)
     }
 
-    func testPlainPageUsesSingleFallbackContainment() {
+    func testPlainPageUsesOriginalControllerWithoutScrollTargetOrInsetOwnership() {
         let coordinator = AnchorPagerManagedInsetCoordinator()
         let store = AnchorPagerPageStateStore(managedInsetCoordinator: coordinator)
         let child = UIViewController()
@@ -84,21 +84,47 @@ final class AnchorPagerPageStateStoreTests: XCTestCase {
             keepsAdjacentPagesLoaded: false
         )
         let context = AnchorPagerPageStateStore.AccessContext(
-            managedInsetTarget: .init(content: .zero, indicators: .zero),
+            managedInsetTarget: .init(
+                content: UIEdgeInsets(top: 20, left: 0, bottom: 30, right: 0),
+                indicators: UIEdgeInsets(top: 20, left: 0, bottom: 30, right: 0)
+            ),
             containerIsCollapsed: false
         )
 
         let actual = store.pageViewController(at: 0, context: context) { child }
-        actual?.loadViewIfNeeded()
+        store.commitReload(generation: 1)
+        store.updateManagedInsets(context.managedInsetTarget, logsChanges: true)
 
-        let fallbackHost = actual as? AnchorPagerPageScrollHostViewController
-        XCTAssertNotNil(fallbackHost)
-        XCTAssertTrue(child.parent === fallbackHost)
-        XCTAssertTrue(store.scrollView(at: 0) === fallbackHost?.scrollView)
-        XCTAssertEqual(fallbackHost?.children.count, 1)
+        XCTAssertTrue(actual === child)
+        XCTAssertTrue(store.committedCurrentPageViewController === child)
+        XCTAssertNil(store.scrollView(at: 0))
+        XCTAssertNil(store.committedCurrentScrollView)
+        XCTAssertNil(child.parent)
+        XCTAssertEqual(store.lastManagedUpdateCount, 0)
     }
 
-    func testSharedExplicitScrollTargetFallsBackForLaterPageAndWritesLog() {
+    func testPlainPageWritesNoScrollTargetLogOnceAcrossReuse() {
+        let store = AnchorPagerPageStateStore(
+            managedInsetCoordinator: AnchorPagerManagedInsetCoordinator()
+        )
+        let child = UIViewController()
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+        store.beginReload(
+            generation: 1,
+            pageCount: 1,
+            selectedIndex: 0,
+            keepsAdjacentPagesLoaded: false
+        )
+
+        _ = store.pageViewController(at: 0, context: .testZero) { child }
+        _ = store.pageViewController(at: 0, context: .testZero) { child }
+
+        XCTAssertEqual(events.filter { $0.event == "scroll.target.none" }.count, 1)
+    }
+
+    func testSharedExplicitScrollTargetUsesOriginalLaterPageWithNilScrollAndWritesLog() {
         let coordinator = AnchorPagerManagedInsetCoordinator()
         let store = AnchorPagerPageStateStore(managedInsetCoordinator: coordinator)
         let sharedScrollView = UIScrollView()
@@ -124,8 +150,8 @@ final class AnchorPagerPageStateStoreTests: XCTestCase {
         }
 
         XCTAssertTrue(firstActual === first)
-        XCTAssertTrue(secondActual is AnchorPagerPageScrollHostViewController)
-        XCTAssertFalse(store.scrollView(at: 1) === sharedScrollView)
+        XCTAssertTrue(secondActual === second)
+        XCTAssertNil(store.scrollView(at: 1))
         XCTAssertTrue(events.contains(.init(
             category: .inset,
             level: .debug,
@@ -158,7 +184,7 @@ final class AnchorPagerPageStateStoreTests: XCTestCase {
 
         XCTAssertNotNil(first)
         XCTAssertTrue(first === second)
-        XCTAssertNotNil(store.scrollView(at: 0))
+        XCTAssertNil(store.scrollView(at: 0))
         XCTAssertTrue(events.contains(.init(
             category: .children,
             level: .error,
@@ -760,7 +786,7 @@ final class AnchorPagerPageStateStoreTests: XCTestCase {
         XCTAssertEqual(movedPage.scrollView.contentInsetAdjustmentBehavior, .automatic)
     }
 
-    func testMovedFallbackMigrationDoesNotRemoveCommittedContentBeforeTerminal() {
+    func testMovedPlainPageMigrationKeepsOriginalIdentityWithoutContainment() {
         let coordinator = AnchorPagerManagedInsetCoordinator()
         let store = AnchorPagerPageStateStore(managedInsetCoordinator: coordinator)
         let movedChild = UIViewController()
@@ -781,8 +807,6 @@ final class AnchorPagerPageStateStoreTests: XCTestCase {
         let committedActual = store.pageViewController(at: 0, context: context) { movedChild }
         store.commitReload(generation: 1)
         let committedStateIdentifier = store.pageStateIdentifier(at: 0)
-        let committedHost = committedActual as? AnchorPagerPageScrollHostViewController
-
         store.beginReload(
             generation: 2,
             pageCount: 2,
@@ -792,25 +816,22 @@ final class AnchorPagerPageStateStoreTests: XCTestCase {
         _ = store.pageViewController(at: 0, context: context) { newCurrent }
         let pendingActual = store.pageViewController(at: 1, context: context) { movedChild }
 
-        XCTAssertTrue(pendingActual === committedHost)
-        XCTAssertTrue(store.livePageViewController(at: 0) === committedHost)
+        XCTAssertTrue(committedActual === movedChild)
+        XCTAssertTrue(pendingActual === movedChild)
+        XCTAssertTrue(store.livePageViewController(at: 0) === movedChild)
         XCTAssertEqual(store.pageStateIdentifier(at: 0), committedStateIdentifier)
-        XCTAssertTrue(movedChild.parent === committedHost)
-        XCTAssertTrue(movedChild.view.superview === committedHost?.view)
-        XCTAssertEqual(committedHost?.children.count, 1)
-        XCTAssertEqual(committedHost?.scrollView.contentInset.top, 16)
-        XCTAssertEqual(committedHost?.scrollView.contentInsetAdjustmentBehavior, .never)
+        XCTAssertNil(movedChild.parent)
+        XCTAssertNil(store.scrollView(at: 0))
 
         store.commitReload(generation: 2)
 
-        XCTAssertTrue(store.livePageViewController(at: 1) === committedHost)
+        XCTAssertTrue(store.livePageViewController(at: 1) === movedChild)
         XCTAssertNotEqual(store.pageStateIdentifier(at: 1), committedStateIdentifier)
-        XCTAssertTrue(movedChild.parent === committedHost)
-        XCTAssertEqual(committedHost?.scrollView.contentInset.top, 0)
-        XCTAssertEqual(committedHost?.scrollView.contentInset.bottom, 0)
+        XCTAssertNil(movedChild.parent)
+        XCTAssertNil(store.scrollView(at: 1))
     }
 
-    func testCommitExplicitlyRemovesUniqueFallbackBeforeReleasingLastHostLease() {
+    func testCommitDoesNotContainOrRemovePlainPage() {
         let coordinator = AnchorPagerManagedInsetCoordinator()
         let store = AnchorPagerPageStateStore(managedInsetCoordinator: coordinator)
         let oldChild = PageStateContainmentRecordingViewController()
@@ -834,12 +855,12 @@ final class AnchorPagerPageStateStoreTests: XCTestCase {
         }
         store.commitReload(generation: 2)
 
-        XCTAssertEqual(oldChild.willMoveToNilParentCount, 1)
+        XCTAssertEqual(oldChild.willMoveToNilParentCount, 0)
         XCTAssertNil(oldChild.parent)
         XCTAssertNil(oldChild.view.superview)
     }
 
-    func testPendingCancelExplicitlyRemovesUniqueFallbackBeforeReleasingLastHostLease() {
+    func testPendingCancelDoesNotContainOrRemovePlainPage() {
         let coordinator = AnchorPagerManagedInsetCoordinator()
         let store = AnchorPagerPageStateStore(managedInsetCoordinator: coordinator)
         let pendingChild = PageStateContainmentRecordingViewController()
@@ -858,7 +879,7 @@ final class AnchorPagerPageStateStoreTests: XCTestCase {
             keepsAdjacentPagesLoaded: false
         )
 
-        XCTAssertEqual(pendingChild.willMoveToNilParentCount, 1)
+        XCTAssertEqual(pendingChild.willMoveToNilParentCount, 0)
         XCTAssertNil(pendingChild.parent)
         XCTAssertNil(pendingChild.view.superview)
     }
@@ -894,7 +915,7 @@ final class AnchorPagerPageStateStoreTests: XCTestCase {
         XCTAssertNotEqual(store.pageStateIdentifier(at: 0), committedStateIdentifier)
     }
 
-    func testReloadCommitRemovesOldFallbackContainment() {
+    func testReloadCommitLeavesPlainPageContainmentToPagingAdapter() {
         let coordinator = AnchorPagerManagedInsetCoordinator()
         let store = AnchorPagerPageStateStore(managedInsetCoordinator: coordinator)
         let oldPage = UIViewController()
@@ -906,7 +927,7 @@ final class AnchorPagerPageStateStoreTests: XCTestCase {
         )
         _ = store.pageViewController(at: 0, context: .testZero) { oldPage }
         store.commitReload(generation: 1)
-        XCTAssertNotNil(oldPage.parent)
+        XCTAssertNil(oldPage.parent)
 
         store.beginReload(
             generation: 2,
@@ -915,7 +936,7 @@ final class AnchorPagerPageStateStoreTests: XCTestCase {
             keepsAdjacentPagesLoaded: false
         )
         _ = store.pageViewController(at: 0, context: .testZero) { UIViewController() }
-        XCTAssertNotNil(oldPage.parent)
+        XCTAssertNil(oldPage.parent)
 
         store.commitReload(generation: 2)
 
@@ -923,7 +944,7 @@ final class AnchorPagerPageStateStoreTests: XCTestCase {
         XCTAssertNil(oldPage.view.superview)
     }
 
-    func testSameControllerAtSameIndexMigratesPageStateAndFallbackHost() {
+    func testSameControllerAtSameIndexMigratesDirectPageIdentity() {
         let coordinator = AnchorPagerManagedInsetCoordinator()
         let store = AnchorPagerPageStateStore(managedInsetCoordinator: coordinator)
         let child = UIViewController()
@@ -949,8 +970,9 @@ final class AnchorPagerPageStateStoreTests: XCTestCase {
         store.commitReload(generation: 2)
 
         XCTAssertNotEqual(store.pageStateIdentifier(at: 0), firstStateIdentifier)
-        XCTAssertTrue(child.parent === secondActual)
-        XCTAssertEqual(secondActual?.children.count, 1)
+        XCTAssertTrue(secondActual === child)
+        XCTAssertNil(child.parent)
+        XCTAssertNil(store.scrollView(at: 0))
     }
 
     func testSameIndexMigrationCapturesCurrentScrollDistance() {
@@ -1013,7 +1035,7 @@ final class AnchorPagerPageStateStoreTests: XCTestCase {
         XCTAssertEqual(store.childDistanceFromTop(at: 1), 0)
     }
 
-    func testDuplicateControllerInOneGenerationUsesBlankFallbackAndWritesLog() {
+    func testDuplicateControllerUsesDirectBlankPageWithNilScrollAndWritesLog() {
         let coordinator = AnchorPagerManagedInsetCoordinator()
         let store = AnchorPagerPageStateStore(managedInsetCoordinator: coordinator)
         let duplicate = PageStateScrollViewController()
@@ -1033,8 +1055,10 @@ final class AnchorPagerPageStateStoreTests: XCTestCase {
         }
 
         XCTAssertTrue(first === duplicate)
-        XCTAssertTrue(second is AnchorPagerPageScrollHostViewController)
-        XCTAssertFalse(second?.children.contains(where: { $0 === duplicate }) ?? true)
+        XCTAssertNotNil(second)
+        XCTAssertFalse(second === duplicate)
+        XCTAssertNil(store.scrollView(at: 1))
+        XCTAssertTrue(second?.children.isEmpty == true)
         XCTAssertTrue(events.contains(.init(
             category: .children,
             level: .debug,

@@ -1,8 +1,10 @@
 # v0.4 Child 生命周期与缓存设计
 
+> 2026-07-13 修订：本文关于 fallback host identity、wrapper containment 和 unique fallback cleanup 的设计已被 `2026-07-13-plain-page-direct-containment-design.md` 取代。无 scroll 页面改为 original page 直接由 Pageboy containment，scroll target 为 nil；其余 generation、retention 和 snapshot 设计继续有效。
+
 **日期：** 2026-07-12
 
-**状态：** 已实现；reload terminal、generation atomicity Task 1–3 与完整验收已完成，待最终独立复审
+**状态：** 已实现；reload terminal、generation atomicity Task 1–3、完整验收与最终独立复审已完成；无滚动页 fallback 部分由 2026-07-13 修订取代
 
 **适用版本：** v0.4，并作为 v0.5 纵向滚动协调的 page state 基础
 

@@ -143,6 +143,39 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
     }
 
     @MainActor
+    func testPagePresentationMovesPageboySurfaceWithoutMovingBarAndCanReset() throws {
+        let page = UIViewController()
+        let adapter = AnchorPagerPagingAdapter()
+        adapter.setBarHeight(44)
+        reload(
+            adapter,
+            titles: ["Plain"],
+            viewControllers: [page],
+            selectedIndex: 0
+        )
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = adapter
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        window.layoutIfNeeded()
+
+        let pageViewController = try XCTUnwrap(
+            adapter.children.compactMap { $0 as? UIPageViewController }.first
+        )
+        let barView = try XCTUnwrap(adapter.bars.first)
+        let barFrame = barView.frame
+        let barTransform = barView.transform
+
+        XCTAssertTrue(adapter.setPagePresentationTranslationY(-24))
+        XCTAssertEqual(pageViewController.view.transform.ty, -24, accuracy: 0.001)
+        XCTAssertEqual(barView.frame, barFrame)
+        XCTAssertEqual(barView.transform, barTransform)
+
+        XCTAssertTrue(adapter.setPagePresentationTranslationY(0))
+        XCTAssertEqual(pageViewController.view.transform, .identity)
+    }
+
+    @MainActor
     func testAdapterSuppliesTitlesAndViewControllersToTabmanAndPageboy() {
         let adapter = AnchorPagerPagingAdapter()
         let first = UIViewController()
@@ -327,19 +360,15 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
     }
 
     @MainActor
-    func testPrepareForRemovalSynchronouslyClearsFallbackPageWithoutPagingEvents() {
-        let content = UIViewController()
-        let fallbackPage = AnchorPagerPageScrollHostViewController(
-            contentViewController: content
-        )
-        fallbackPage.loadViewIfNeeded()
+    func testPrepareForRemovalSynchronouslyClearsPlainPageWithoutPagingEvents() {
+        let plainPage = UIViewController()
         let adapter = AnchorPagerPagingAdapter()
         let delegate = RecordingPagingDelegate()
         adapter.eventDelegate = delegate
         reload(
             adapter,
-            titles: ["Fallback"],
-            viewControllers: [fallbackPage],
+            titles: ["Plain"],
+            viewControllers: [plainPage],
             selectedIndex: 0
         )
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
@@ -347,18 +376,43 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
         window.makeKeyAndVisible()
         defer { window.isHidden = true }
         window.layoutIfNeeded()
-        XCTAssertNotNil(fallbackPage.parent)
-        XCTAssertNotNil(fallbackPage.view.superview)
-        XCTAssertTrue(content.parent === fallbackPage)
+        XCTAssertNotNil(plainPage.parent)
+        XCTAssertNotNil(plainPage.view.superview)
         delegate.events.removeAll()
 
         let didCompleteSynchronously = adapter.prepareForRemoval()
 
         XCTAssertTrue(didCompleteSynchronously)
-        XCTAssertNil(fallbackPage.parent)
-        XCTAssertNil(fallbackPage.view.superview)
-        XCTAssertTrue(content.parent === fallbackPage)
+        XCTAssertNil(plainPage.parent)
+        XCTAssertNil(plainPage.view.superview)
         XCTAssertEqual(delegate.events, [])
+    }
+
+    @MainActor
+    func testPrepareForRemovalResetsPagePresentationBeforeContainmentTeardown() throws {
+        let plainPage = UIViewController()
+        let adapter = AnchorPagerPagingAdapter()
+        reload(
+            adapter,
+            titles: ["Plain"],
+            viewControllers: [plainPage],
+            selectedIndex: 0
+        )
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = adapter
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        window.layoutIfNeeded()
+        let pageViewController = try XCTUnwrap(
+            adapter.children.compactMap { $0 as? UIPageViewController }.first
+        )
+
+        XCTAssertTrue(adapter.setPagePresentationTranslationY(-24))
+        XCTAssertEqual(pageViewController.view.transform.ty, -24, accuracy: 0.001)
+
+        XCTAssertTrue(adapter.prepareForRemoval())
+
+        XCTAssertEqual(pageViewController.view.transform, .identity)
     }
 
     @MainActor
@@ -542,6 +596,55 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
             XCTAssertFalse(contents.contains("Tabman"), "\(file.path) 不应引用 Tabman")
             XCTAssertFalse(contents.contains("Pageboy"), "\(file.path) 不应引用 Pageboy")
         }
+    }
+
+    func testPublicDocCUsesUserFacingTopOverscrollTerms() throws {
+        let publicDirectory = try packageRoot()
+            .appendingPathComponent("Sources")
+            .appendingPathComponent("AnchorPager")
+            .appendingPathComponent("Public")
+        let swiftFiles = try FileManager.default.swiftFiles(in: publicDirectory)
+        let docComments = try swiftFiles.flatMap { file in
+            try String(contentsOf: file, encoding: .utf8)
+                .split(separator: "\n")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { $0.hasPrefix("///") }
+        }
+        let normalizedDocC = docComments.joined(separator: "\n")
+        let internalTerms = try NSRegularExpression(
+            pattern: #"(?i)\b(owner|handoff|pin(?:\s+anchor)?)\b"#
+        )
+        let fullRange = NSRange(
+            normalizedDocC.startIndex..<normalizedDocC.endIndex,
+            in: normalizedDocC
+        )
+
+        XCTAssertNil(
+            internalTerms.firstMatch(in: normalizedDocC, range: fullRange),
+            "Public DocC 不得暴露内部状态机术语。"
+        )
+
+        let configurationSource = try String(
+            contentsOf: publicDirectory.appendingPathComponent(
+                "AnchorPagerConfiguration.swift"
+            ),
+            encoding: .utf8
+        )
+        XCTAssertTrue(
+            configurationSource.contains(
+                "/// 收敛到稳定边界，不提供可见的顶部 overscroll。"
+            )
+        )
+        XCTAssertTrue(
+            configurationSource.contains(
+                "/// 由当前真实 child 滚动视图按自身原生配置处理顶部 overscroll。"
+            )
+        )
+        XCTAssertTrue(
+            configurationSource.contains(
+                "/// 当前页面的 scroll target 为 nil 时，该模式不可用，且不会回退到 container。"
+            )
+        )
     }
 
     private func packageRoot() throws -> URL {

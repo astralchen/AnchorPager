@@ -87,8 +87,10 @@ final class AnchorPagerPagingHostViewControllerTests: XCTestCase {
         delegate.observedPage = page
         host.eventDelegate = delegate
         host.reload(titles: ["Page"], pageCount: 1, selectedIndex: 0)
-        weak var oldAdapter = host.activeAdapter
-        weak var oldInnerPageboyContainer = host.activeAdapter?.children.first
+        weak var oldAdapter: AnchorPagerPagingAdapter?
+        oldAdapter = host.activeAdapter
+        weak var oldInnerPageboyContainer: UIViewController?
+        oldInnerPageboyContainer = host.activeAdapter?.children.first
         weak var resetPlaceholder: UIViewController?
         XCTAssertNotNil(page.parent)
         XCTAssertNotNil(page.view.superview)
@@ -696,6 +698,23 @@ final class AnchorPagerPagingHostViewControllerTests: XCTestCase {
         XCTAssertTrue(events.contains(
             .init(category: .paging, level: .info, event: "paging.reload.empty")
         ))
+    }
+
+    func testMissingPagePresentationSurfaceLogsOnceUntilStateRecovers() {
+        let host = AnchorPagerPagingHostViewController()
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+
+        XCTAssertFalse(host.setPagePresentationTranslationY(-12))
+        XCTAssertFalse(host.setPagePresentationTranslationY(-18))
+        XCTAssertTrue(host.setPagePresentationTranslationY(0))
+        XCTAssertFalse(host.setPagePresentationTranslationY(-12))
+
+        XCTAssertEqual(
+            events.filter { $0.event == "paging.pagePresentation.unavailable" }.count,
+            2
+        )
     }
 
     private func makeHost() -> AnchorPagerPagingHostViewController {

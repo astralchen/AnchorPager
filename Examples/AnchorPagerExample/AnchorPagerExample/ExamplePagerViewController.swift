@@ -2,25 +2,59 @@ import AnchorPager
 import UIKit
 
 final class ExamplePagerViewController: UIViewController {
-    private let pagerViewController = AnchorPagerViewController()
+    private let pagerViewController = AnchorPagerViewController(
+        configuration: ExamplePagerViewController.initialConfiguration()
+    )
     private let appearanceRecorder: ExampleAppearanceRecorder? = {
         guard ProcessInfo.processInfo.arguments.contains("--anchorPagerAppearanceRecorder") else {
             return nil
         }
         return ExampleAppearanceRecorder()
     }()
-    private var headerTopBehaviorItem: UIBarButtonItem?
+    private var settingsItem: UIBarButtonItem?
     private var pageGeneration = 1
     private lazy var pages = makePages()
     private var didApplyInitialContainerState = false
+    private weak var exampleHeaderView: ExampleHeaderView?
+    private var expandedHeaderBaselineY: CGFloat?
+    private var expandedHeaderBaselineHeight: CGFloat?
+    private var expandedHeaderContentTopDistance: CGFloat?
+    private var expandedBarBaselineY: CGFloat?
+    private var collapsedBarBaselineY: CGFloat?
+    private var collapsedContentBaselineY: CGFloat?
+    private weak var scrollCoordinationStateControl: UIButton?
+    private var scrollCoordinationState = ExampleScrollCoordinationState(
+        page: "short",
+        hasScrollTarget: true,
+        mode: "container",
+        collapseProgress: 0,
+        containerTopInset: 0,
+        headerHeight: 0,
+        maximumHeaderHeightDelta: 0,
+        headerCollapseTranslation: 0,
+        childDistance: 0,
+        containerPresentation: 0,
+        maximumContainerTopPresentation: 0,
+        maximumContainerBottomPresentation: 0,
+        barPresentation: 0,
+        maximumBarPresentation: 0,
+        childTopOverflow: 0,
+        maximumChildTopOverflow: 0,
+        childBottomOverflow: 0,
+        maximumChildBottomOverflow: 0
+    )
 
     override func viewDidLoad() {
         super.viewDidLoad()
 
         title = "AnchorPager"
         view.backgroundColor = .systemBackground
+        scrollCoordinationState.mode = identifier(
+            for: pagerViewController.configuration.topOverscrollHandlingMode
+        )
         installNavigationItem()
         installPager()
+        installScrollCoordinationStateControl()
         if appearanceRecorder != nil {
             installAppearanceRecorderControl()
         }
@@ -44,8 +78,8 @@ final class ExamplePagerViewController: UIViewController {
         )
         pushItem.accessibilityLabel = "打开 AnchorPager"
 
-        let headerTopBehaviorItem = makeHeaderTopBehaviorItem()
-        self.headerTopBehaviorItem = headerTopBehaviorItem
+        let settingsItem = makeSettingsItem()
+        self.settingsItem = settingsItem
         let reloadItem = UIBarButtonItem(
             image: UIImage(systemName: "arrow.clockwise"),
             style: .plain,
@@ -53,10 +87,17 @@ final class ExamplePagerViewController: UIViewController {
             action: #selector(reloadPages)
         )
         reloadItem.accessibilityLabel = "重新加载页面"
-        navigationItem.rightBarButtonItems = [pushItem, headerTopBehaviorItem, reloadItem]
+        navigationItem.rightBarButtonItems = [
+            pushItem,
+            settingsItem,
+            reloadItem
+        ]
     }
 
     @objc private func reloadPages() {
+        scrollCoordinationState.resetPresentationMetrics()
+        resetHeaderGeometryBaseline()
+        updateScrollCoordinationStateControl()
         pageGeneration += 1
         pages = makePages()
         pagerViewController.reloadData()
@@ -72,16 +113,76 @@ final class ExamplePagerViewController: UIViewController {
         navigationController?.pushViewController(viewController, animated: true)
     }
 
-    private func makeHeaderTopBehaviorItem() -> UIBarButtonItem {
+    private func makeSettingsItem() -> UIBarButtonItem {
+        let image = UIImage(systemName: "gearshape")
         let item = UIBarButtonItem(
-            title: title(for: pagerViewController.configuration.header.topBehavior),
-            image: nil,
+            title: image == nil ? "设置" : nil,
+            image: image,
             primaryAction: nil,
-            menu: makeHeaderTopBehaviorMenu()
+            menu: makeSettingsMenu()
         )
-        item.accessibilityLabel = "Header 顶部行为"
-        item.accessibilityValue = title(for: pagerViewController.configuration.header.topBehavior)
+        item.accessibilityLabel = "示例设置"
         return item
+    }
+
+    private func makeSettingsMenu() -> UIMenu {
+        UIMenu(
+            title: "示例设置",
+            children: [
+                makeHeaderTopBehaviorMenu(),
+                makeTopOverscrollHandlingMenu()
+            ]
+        )
+    }
+
+    private func updateSettingsMenu() {
+        settingsItem?.menu = makeSettingsMenu()
+    }
+
+    private func makeTopOverscrollHandlingMenu() -> UIMenu {
+        let current = pagerViewController.configuration.topOverscrollHandlingMode
+        let modes: [AnchorPagerTopOverscrollHandlingMode] = [.none, .container, .child]
+        return UIMenu(
+            title: "顶部回弹模式",
+            children: modes.map { mode in
+                UIAction(
+                    title: title(for: mode),
+                    state: current == mode ? .on : .off
+                ) { [weak self] _ in
+                    self?.setTopOverscrollHandlingMode(mode)
+                }
+            }
+        )
+    }
+
+    private func setTopOverscrollHandlingMode(_ mode: AnchorPagerTopOverscrollHandlingMode) {
+        pagerViewController.configuration.topOverscrollHandlingMode = mode
+        scrollCoordinationState.mode = identifier(for: mode)
+        scrollCoordinationState.resetPresentationMetrics()
+        updateSettingsMenu()
+        updateScrollCoordinationStateControl()
+    }
+
+    private func title(for mode: AnchorPagerTopOverscrollHandlingMode) -> String {
+        switch mode {
+        case .none:
+            "关闭"
+        case .container:
+            "容器"
+        case .child:
+            "子页面"
+        }
+    }
+
+    private func identifier(for mode: AnchorPagerTopOverscrollHandlingMode) -> String {
+        switch mode {
+        case .none:
+            "none"
+        case .container:
+            "container"
+        case .child:
+            "child"
+        }
     }
 
     private func makeHeaderTopBehaviorMenu() -> UIMenu {
@@ -108,16 +209,12 @@ final class ExamplePagerViewController: UIViewController {
     private func setHeaderTopBehavior(_ behavior: AnchorPagerHeaderTopBehavior) {
         guard pagerViewController.configuration.header.topBehavior != behavior else { return }
 
+        scrollCoordinationState.resetPresentationMetrics()
+        resetHeaderGeometryBaseline()
         pagerViewController.configuration.header.topBehavior = behavior
         pagerViewController.reloadHeaderLayout(offsetAdjustment: .preserveVisualPosition)
-        updateHeaderTopBehaviorItem()
-    }
-
-    private func updateHeaderTopBehaviorItem() {
-        let currentTitle = title(for: pagerViewController.configuration.header.topBehavior)
-        headerTopBehaviorItem?.title = currentTitle
-        headerTopBehaviorItem?.accessibilityValue = currentTitle
-        headerTopBehaviorItem?.menu = makeHeaderTopBehaviorMenu()
+        updateSettingsMenu()
+        updateScrollCoordinationStateControl()
     }
 
     private func title(for behavior: AnchorPagerHeaderTopBehavior) -> String {
@@ -146,6 +243,182 @@ final class ExamplePagerViewController: UIViewController {
 
         pagerViewController.reloadData()
         pagerViewController.setSelectedIndex(initialSelectedIndex(), animated: false)
+    }
+
+    private func installScrollCoordinationStateControl() {
+        let control = UIButton(type: .custom)
+        control.accessibilityIdentifier = "scroll-coordination-state"
+        control.accessibilityLabel = "纵向滚动协调状态"
+        control.accessibilityValue = scrollCoordinationState.accessibilityValue
+        control.addTarget(
+            self,
+            action: #selector(resetScrollCoordinationPresentationMetrics),
+            for: .touchUpInside
+        )
+        control.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(control)
+        scrollCoordinationStateControl = control
+
+        NSLayoutConstraint.activate([
+            control.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -4),
+            control.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 4),
+            control.widthAnchor.constraint(equalToConstant: 20),
+            control.heightAnchor.constraint(equalToConstant: 20)
+        ])
+    }
+
+    @objc private func resetScrollCoordinationPresentationMetrics() {
+        scrollCoordinationState.resetPresentationMetrics()
+        updateScrollCoordinationStateControl()
+    }
+
+    private func updateSelectedPageState(at index: Int) {
+        guard pages.indices.contains(index) else { return }
+        scrollCoordinationState.resetPresentationMetrics()
+        scrollCoordinationState.page = pageIdentifier(at: index)
+
+        if let page = pages[index] as? ExampleScrollPageViewController {
+            scrollCoordinationState.hasScrollTarget = true
+            page.reportCurrentScrollState()
+        } else {
+            scrollCoordinationState.hasScrollTarget = false
+            scrollCoordinationState.childDistance = 0
+            updateScrollCoordinationStateControl()
+        }
+    }
+
+    private func updateChildScrollState(
+        page: String,
+        distance: CGFloat,
+        topOverflow: CGFloat,
+        bottomOverflow: CGFloat
+    ) {
+        guard page == scrollCoordinationState.page else { return }
+        scrollCoordinationState.childDistance = max(0, distance)
+        scrollCoordinationState.childTopOverflow = topOverflow
+        scrollCoordinationState.maximumChildTopOverflow = max(
+            scrollCoordinationState.maximumChildTopOverflow,
+            topOverflow
+        )
+        scrollCoordinationState.childBottomOverflow = bottomOverflow
+        scrollCoordinationState.maximumChildBottomOverflow = max(
+            scrollCoordinationState.maximumChildBottomOverflow,
+            bottomOverflow
+        )
+        updateScrollCoordinationStateControl()
+    }
+
+    private func recordContainerPresentation(_ context: AnchorPagerLayoutContext) {
+        let scrollView = pagerViewController.verticalScrollView
+        let expandedRawOffset = -scrollView.contentInset.top
+        let maximumRawOffset = max(
+            expandedRawOffset,
+            scrollView.contentSize.height
+                - scrollView.bounds.height
+                + scrollView.contentInset.bottom
+        )
+        let topOverflow = max(0, expandedRawOffset - scrollView.contentOffset.y)
+        let bottomOverflow = max(0, scrollView.contentOffset.y - maximumRawOffset)
+        let isStable = topOverflow <= 0.5 && bottomOverflow <= 0.5
+        scrollCoordinationState.containerTopInset = scrollView.contentInset.top
+
+        if isStable {
+            scrollCoordinationState.containerPresentation = 0
+            scrollCoordinationState.barPresentation = 0
+            if scrollCoordinationState.collapseProgress <= 0.01 {
+                expandedHeaderBaselineY = context.headerFrame.minY
+                expandedHeaderBaselineHeight = context.headerFrame.height
+                expandedBarBaselineY = context.barFrame.minY
+            }
+            if scrollCoordinationState.collapseProgress >= 0.99 {
+                collapsedBarBaselineY = context.barFrame.minY
+                collapsedContentBaselineY = context.contentFrame.minY
+            }
+        }
+
+        if let headerBaselineY = expandedHeaderBaselineY,
+           let headerBaselineHeight = expandedHeaderBaselineHeight {
+            scrollCoordinationState.recordHeaderGeometry(
+                currentHeight: context.headerFrame.height,
+                baselineHeight: headerBaselineHeight,
+                currentMinY: context.headerFrame.minY,
+                baselineMinY: headerBaselineY
+            )
+        } else {
+            scrollCoordinationState.headerHeight = context.headerFrame.height
+        }
+
+        recordHeaderContentGeometry(isStable: isStable)
+
+        if topOverflow > 0.5,
+           let headerBaseline = expandedHeaderBaselineY,
+           let barBaseline = expandedBarBaselineY {
+            let presentation = context.headerFrame.minY - headerBaseline
+            let barPresentation = context.barFrame.minY - barBaseline
+            scrollCoordinationState.containerPresentation = presentation
+            scrollCoordinationState.maximumContainerTopPresentation = max(
+                scrollCoordinationState.maximumContainerTopPresentation,
+                presentation
+            )
+            scrollCoordinationState.barPresentation = barPresentation
+            scrollCoordinationState.maximumBarPresentation = max(
+                scrollCoordinationState.maximumBarPresentation,
+                abs(barPresentation)
+            )
+        } else if bottomOverflow > 0.5,
+                  let contentBaseline = collapsedContentBaselineY,
+                  let barBaseline = collapsedBarBaselineY {
+            let presentation = context.contentFrame.minY - contentBaseline
+            let barPresentation = context.barFrame.minY - barBaseline
+            scrollCoordinationState.containerPresentation = presentation
+            scrollCoordinationState.maximumContainerBottomPresentation = max(
+                scrollCoordinationState.maximumContainerBottomPresentation,
+                -presentation
+            )
+            scrollCoordinationState.barPresentation = barPresentation
+            scrollCoordinationState.maximumBarPresentation = max(
+                scrollCoordinationState.maximumBarPresentation,
+                abs(barPresentation)
+            )
+        }
+        updateScrollCoordinationStateControl()
+    }
+
+    private func recordHeaderContentGeometry(isStable: Bool) {
+        guard let exampleHeaderView else { return }
+        let currentTopDistance = exampleHeaderView.contentTopDistance
+
+        if isStable && scrollCoordinationState.collapseProgress <= 0.01 {
+            expandedHeaderContentTopDistance = currentTopDistance
+        }
+
+        guard let baseline = expandedHeaderContentTopDistance else {
+            scrollCoordinationState.headerContentTopDistance = currentTopDistance
+            return
+        }
+
+        scrollCoordinationState.recordHeaderContentTopDistance(
+            current: currentTopDistance,
+            baseline: baseline
+        )
+    }
+
+    private func resetHeaderGeometryBaseline() {
+        expandedHeaderBaselineY = nil
+        expandedHeaderBaselineHeight = nil
+        expandedHeaderContentTopDistance = nil
+        expandedBarBaselineY = nil
+        collapsedBarBaselineY = nil
+        collapsedContentBaselineY = nil
+    }
+
+    private func updateScrollCoordinationStateControl() {
+        scrollCoordinationStateControl?.accessibilityValue =
+            scrollCoordinationState.accessibilityValue
+    }
+
+    private func pageIdentifier(at index: Int) -> String {
+        ["empty", "short", "long", "plain"][index]
     }
 
     private func installAppearanceRecorderControl() {
@@ -181,8 +454,43 @@ final class ExamplePagerViewController: UIViewController {
         return min(max(0, requestedIndex), pages.count - 1)
     }
 
+    private static func initialConfiguration() -> AnchorPagerConfiguration {
+        var configuration = AnchorPagerConfiguration.default
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let argumentIndex = arguments.firstIndex(of: "--anchorPagerTopOverscrollMode"),
+              arguments.indices.contains(argumentIndex + 1) else {
+            return configuration
+        }
+
+        switch arguments[argumentIndex + 1] {
+        case "none":
+            configuration.topOverscrollHandlingMode = .none
+        case "container":
+            configuration.topOverscrollHandlingMode = .container
+        case "child":
+            configuration.topOverscrollHandlingMode = .child
+        default:
+            break
+        }
+        return configuration
+    }
+
     var isAppearanceRecorderEnabledForTesting: Bool {
         appearanceRecorder != nil
+    }
+
+    var activeScrollPresentationSamplerCountForTesting: Int {
+        pages.compactMap { $0 as? ExampleScrollPageViewController }
+            .filter(\.isScrollPresentationSamplingActive)
+            .count
+    }
+
+    func scrollPageForTesting(at index: Int) -> UIViewController? {
+        guard pages.indices.contains(index),
+              pages[index] is ExampleScrollPageViewController else {
+            return nil
+        }
+        return pages[index]
     }
 
     private func makePages() -> [UIViewController] {
@@ -192,21 +500,24 @@ final class ExamplePagerViewController: UIViewController {
                 identifier: "empty",
                 rows: 0,
                 generation: pageGeneration,
-                appearanceRecorder: appearanceRecorder
+                appearanceRecorder: appearanceRecorder,
+                onScrollStateChange: makeScrollStateHandler()
             ),
             ExampleScrollPageViewController(
                 title: "短页",
                 identifier: "short",
                 rows: 6,
                 generation: pageGeneration,
-                appearanceRecorder: appearanceRecorder
+                appearanceRecorder: appearanceRecorder,
+                onScrollStateChange: makeScrollStateHandler()
             ),
             ExampleScrollPageViewController(
                 title: "长页",
                 identifier: "long",
                 rows: 30,
                 generation: pageGeneration,
-                appearanceRecorder: appearanceRecorder
+                appearanceRecorder: appearanceRecorder,
+                onScrollStateChange: makeScrollStateHandler()
             ),
             ExamplePlainPageViewController(
                 title: "无滚动页",
@@ -214,6 +525,17 @@ final class ExamplePagerViewController: UIViewController {
                 appearanceRecorder: appearanceRecorder
             )
         ]
+    }
+
+    private func makeScrollStateHandler() -> (String, CGFloat, CGFloat, CGFloat) -> Void {
+        { [weak self] page, distance, topOverflow, bottomOverflow in
+            self?.updateChildScrollState(
+                page: page,
+                distance: distance,
+                topOverflow: topOverflow,
+                bottomOverflow: bottomOverflow
+            )
+        }
     }
 }
 
@@ -261,7 +583,9 @@ extension ExamplePagerViewController: AnchorPagerViewControllerDataSource {
     }
 
     func headerContent(in pagerViewController: AnchorPagerViewController) -> AnchorPagerHeaderContent {
-        .view(ExampleHeaderView())
+        let headerView = ExampleHeaderView()
+        exampleHeaderView = headerView
+        return .view(headerView)
     }
 }
 
@@ -269,20 +593,34 @@ extension ExamplePagerViewController: AnchorPagerViewControllerDelegate {
     func pagerViewController(
         _ pagerViewController: AnchorPagerViewController,
         didSelectViewControllerAt index: Int
-    ) {}
+    ) {
+        updateSelectedPageState(at: index)
+    }
 
     func pagerViewController(
         _ pagerViewController: AnchorPagerViewController,
         didUpdateHeaderCollapseProgress progress: CGFloat
-    ) {}
+    ) {
+        scrollCoordinationState.collapseProgress = progress
+        updateScrollCoordinationStateControl()
+    }
 
     func pagerViewController(
         _ pagerViewController: AnchorPagerViewController,
         didUpdateLayout context: AnchorPagerLayoutContext
-    ) {}
+    ) {
+        recordContainerPresentation(context)
+    }
 }
 
 private final class ExampleHeaderView: UIView {
+    private let stackView = UIStackView()
+
+    var contentTopDistance: CGFloat {
+        layoutIfNeeded()
+        return stackView.frame.minY - bounds.minY
+    }
+
     override init(frame: CGRect) {
         super.init(frame: frame)
         configure()
@@ -307,7 +645,8 @@ private final class ExampleHeaderView: UIView {
         subtitleLabel.textColor = .white
         subtitleLabel.numberOfLines = 0
 
-        let stackView = UIStackView(arrangedSubviews: [titleLabel, subtitleLabel])
+        stackView.addArrangedSubview(titleLabel)
+        stackView.addArrangedSubview(subtitleLabel)
         stackView.axis = .vertical
         stackView.spacing = 8
         stackView.translatesAutoresizingMaskIntoConstraints = false
@@ -316,40 +655,53 @@ private final class ExampleHeaderView: UIView {
         NSLayoutConstraint.activate([
             stackView.leadingAnchor.constraint(equalTo: layoutMarginsGuide.leadingAnchor),
             stackView.trailingAnchor.constraint(equalTo: layoutMarginsGuide.trailingAnchor),
-            stackView.topAnchor.constraint(equalTo: safeAreaLayoutGuide.topAnchor, constant: 20),
+            stackView.topAnchor.constraint(greaterThanOrEqualTo: safeAreaLayoutGuide.topAnchor, constant: 20),
             stackView.bottomAnchor.constraint(
-                lessThanOrEqualTo: safeAreaLayoutGuide.bottomAnchor,
+                equalTo: safeAreaLayoutGuide.bottomAnchor,
                 constant: -20
             )
         ])
     }
 }
 
-private final class ExampleScrollPageViewController: UIViewController {
+private final class ExampleScrollPageViewController: UIViewController, UIScrollViewDelegate {
     private let pageTitle: String
     private let pageIdentifier: String
     private let rows: Int
     private let generation: Int
     private let appearanceRecorder: ExampleAppearanceRecorder?
+    private let onScrollStateChange: (String, CGFloat, CGFloat, CGFloat) -> Void
     private let scrollView = UIScrollView()
     private let appearanceLabel = UILabel()
     private var willAppearCount = 0
     private var didAppearCount = 0
     private var willDisappearCount = 0
     private var didDisappearCount = 0
+    private var needsScrollPresentationSample = false
+    private var scrollPresentationDisplayLink: CADisplayLink?
+    private lazy var scrollPresentationDisplayLinkTarget = ExampleDisplayLinkTarget {
+        [weak self] in
+        self?.sampleScrollPresentationIfNeeded()
+    }
+
+    var isScrollPresentationSamplingActive: Bool {
+        scrollPresentationDisplayLink != nil
+    }
 
     init(
         title: String,
         identifier: String,
         rows: Int,
         generation: Int,
-        appearanceRecorder: ExampleAppearanceRecorder?
+        appearanceRecorder: ExampleAppearanceRecorder?,
+        onScrollStateChange: @escaping (String, CGFloat, CGFloat, CGFloat) -> Void
     ) {
         self.pageTitle = title
         self.pageIdentifier = identifier
         self.rows = rows
         self.generation = generation
         self.appearanceRecorder = appearanceRecorder
+        self.onScrollStateChange = onScrollStateChange
         super.init(nibName: nil, bundle: nil)
         self.title = title
     }
@@ -363,11 +715,15 @@ private final class ExampleScrollPageViewController: UIViewController {
 
         view.backgroundColor = .systemBackground
         anchorPagerScrollView = scrollView
+        scrollView.bounces = true
+        scrollView.alwaysBounceVertical = true
+        scrollView.delegate = self
         installScrollView()
     }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        startScrollPresentationSampling()
         willAppearCount += 1
         updateAppearanceLabel()
         appearanceRecorder?.record(page: pageIdentifier, callback: "viewWillAppear")
@@ -389,9 +745,16 @@ private final class ExampleScrollPageViewController: UIViewController {
 
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
+        stopScrollPresentationSampling()
         didDisappearCount += 1
         updateAppearanceLabel()
         appearanceRecorder?.record(page: pageIdentifier, callback: "viewDidDisappear")
+    }
+
+    deinit {
+        MainActor.assumeIsolated {
+            scrollPresentationDisplayLink?.invalidate()
+        }
     }
 
     private func installScrollView() {
@@ -455,6 +818,63 @@ private final class ExampleScrollPageViewController: UIViewController {
             "didDisappear=\(didDisappearCount)"
         ].joined(separator: ",")
     }
+
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        needsScrollPresentationSample = true
+    }
+
+    func reportCurrentScrollState() {
+        let distance = scrollView.contentOffset.y + scrollView.contentInset.top
+        let maximumDistance = max(
+            0,
+            scrollView.contentSize.height
+                + scrollView.contentInset.top
+                + scrollView.contentInset.bottom
+                - scrollView.bounds.height
+        )
+        let topOverflow = max(0, -distance)
+        let bottomOverflow = max(0, distance - maximumDistance)
+        onScrollStateChange(
+            pageIdentifier,
+            distance,
+            topOverflow,
+            bottomOverflow
+        )
+    }
+
+    private func startScrollPresentationSampling() {
+        guard scrollPresentationDisplayLink == nil else { return }
+        let displayLink = CADisplayLink(
+            target: scrollPresentationDisplayLinkTarget,
+            selector: #selector(ExampleDisplayLinkTarget.displayLinkDidFire)
+        )
+        displayLink.add(to: .main, forMode: .common)
+        scrollPresentationDisplayLink = displayLink
+    }
+
+    private func stopScrollPresentationSampling() {
+        scrollPresentationDisplayLink?.invalidate()
+        scrollPresentationDisplayLink = nil
+        needsScrollPresentationSample = false
+    }
+
+    private func sampleScrollPresentationIfNeeded() {
+        guard needsScrollPresentationSample else { return }
+        needsScrollPresentationSample = false
+        reportCurrentScrollState()
+    }
+}
+
+private final class ExampleDisplayLinkTarget: NSObject {
+    private let onDisplay: () -> Void
+
+    init(onDisplay: @escaping () -> Void) {
+        self.onDisplay = onDisplay
+    }
+
+    @objc func displayLinkDidFire() {
+        onDisplay()
+    }
 }
 
 private final class ExamplePlainPageViewController: UIViewController {
@@ -503,6 +923,13 @@ private final class ExamplePlainPageViewController: UIViewController {
 
         view.backgroundColor = .tertiarySystemBackground
 
+        let rootProbe = UIView()
+        rootProbe.accessibilityIdentifier = "plain-page-root"
+        rootProbe.isAccessibilityElement = true
+        rootProbe.isUserInteractionEnabled = false
+        rootProbe.translatesAutoresizingMaskIntoConstraints = false
+        view.insertSubview(rootProbe, at: 0)
+
         let label = UILabel()
         label.text = pageTitle
         label.accessibilityIdentifier = "plain-page-content"
@@ -512,6 +939,10 @@ private final class ExamplePlainPageViewController: UIViewController {
         view.addSubview(label)
 
         NSLayoutConstraint.activate([
+            rootProbe.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            rootProbe.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            rootProbe.topAnchor.constraint(equalTo: view.topAnchor),
+            rootProbe.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             label.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             label.centerYAnchor.constraint(equalTo: view.centerYAnchor)
         ])

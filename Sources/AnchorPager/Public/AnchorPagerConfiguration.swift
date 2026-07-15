@@ -22,7 +22,7 @@ public struct AnchorPagerConfiguration: Sendable, Equatable {
         header: AnchorPagerHeaderConfiguration = .default,
         bar: AnchorPagerBarConfiguration = .default,
         paging: AnchorPagerPagingConfiguration = .default,
-        topOverscrollHandlingMode: AnchorPagerTopOverscrollHandlingMode = .none
+        topOverscrollHandlingMode: AnchorPagerTopOverscrollHandlingMode = .container
     ) {
         self.header = header
         self.bar = bar
@@ -43,9 +43,13 @@ public struct AnchorPagerHeaderConfiguration: Sendable, Equatable {
     public static let `default` = AnchorPagerHeaderConfiguration()
 
     /// 创建 Header 配置。
+    ///
+    /// - Parameters:
+    ///   - heightMode: Header 高度模式。
+    ///   - topBehavior: Header 顶部绘制行为，默认为延伸到顶部系统区域。
     public init(
         heightMode: AnchorPagerHeaderHeightMode = .automatic(min: 0, max: nil),
-        topBehavior: AnchorPagerHeaderTopBehavior = .insideSafeArea
+        topBehavior: AnchorPagerHeaderTopBehavior = .extendsUnderTopSafeArea
     ) {
         self.heightMode = heightMode
         self.topBehavior = topBehavior
@@ -99,14 +103,18 @@ public enum AnchorPagerHeaderHeightMode: Sendable, Equatable {
 /// Header 顶部绘制行为。
 public enum AnchorPagerHeaderTopBehavior: Sendable, Equatable {
     /// Header 从本地顶部遮挡下方开始布局。
+    ///
+    /// 主容器会用本地顶部遮挡作为真实 `contentInset.top`，展开稳定边界
+    /// 因而位于 raw offset `-contentInset.top`。
     case insideSafeArea
 
     /// Header 从容器 bounds 顶部开始布局。
     ///
-    /// `headerFrame.height` 等于本地顶部遮挡加当前可见纯内容高度，
+    /// `headerFrame.height` 等于本地顶部遮挡加完整展开纯内容高度，
     /// 并保持 `barFrame.minY == headerFrame.maxY`。因此该模式与
     /// `insideSafeArea` 使用相同的分段栏和 child 内容基线，只改变
-    /// Header 外框是否延伸到顶部系统区域。
+    /// Header 外框是否延伸到顶部系统区域；主容器的 `contentInset.top`
+    /// 固定为 `0`。正常折叠只移动 Header，不缩小其高度。
     case extendsUnderTopSafeArea
 }
 
@@ -127,12 +135,15 @@ public enum AnchorPagerHeaderOffsetAdjustment: Sendable, Equatable {
 
 /// 顶部 overscroll 处理模式。
 public enum AnchorPagerTopOverscrollHandlingMode: Sendable, Equatable {
-    /// 不接管顶部 overscroll。
+    /// 收敛到稳定边界，不提供可见的顶部 overscroll。
     case none
 
     /// 由容器滚动视图处理顶部 overscroll。
     case container
 
-    /// 由当前 child 滚动视图处理顶部 overscroll。
+    /// 由当前真实 child 滚动视图按自身原生配置处理顶部 overscroll。
+    ///
+    /// AnchorPager 不修改 child 的 `bounces` 或 `alwaysBounceVertical`；
+    /// 当前页面的 scroll target 为 nil 时，该模式不可用，且不会回退到 container。
     case child
 }

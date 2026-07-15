@@ -126,6 +126,21 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
         updateBarHeightConstraintIfNeeded()
     }
 
+    @discardableResult
+    func setPagePresentationTranslationY(_ translationY: CGFloat) -> Bool {
+        guard let pageViewController = children
+            .compactMap({ $0 as? UIPageViewController })
+            .first,
+            pageViewController.isViewLoaded else {
+            return translationY == 0
+        }
+
+        pageViewController.view.transform = translationY == 0
+            ? .identity
+            : CGAffineTransform(translationX: 0, y: translationY)
+        return true
+    }
+
     func reload(
         requestIdentifier: AnchorPagerPagingReloadRequestIdentifier,
         titles: [String],
@@ -181,6 +196,7 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
     /// 升级依赖时必须重新验证该兼容点。
     @discardableResult
     func prepareForRemoval() -> Bool {
+        _ = setPagePresentationTranslationY(0)
         let oldPageCount = pageCount ?? 0
         let deletionIndex = Swift.min(
             Swift.max(0, committedSelectedIndex),

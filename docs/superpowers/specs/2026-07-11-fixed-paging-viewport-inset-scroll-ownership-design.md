@@ -1,13 +1,18 @@
 # 固定分页视口、Inset Ownership 与纵向滚动所有权设计
 
+> 2026-07-13 修订：本文关于无 scroll 页面创建 fallback scroll host、复用 managed inset 和 fallback indicator owner 的设计已被 `2026-07-13-plain-page-direct-containment-design.md` 取代。真实 scroll page 的固定 viewport 与 inset ownership 设计继续有效。
+
 **日期：** 2026-07-11
-**状态：** v0.3 已实现；v0.4 generation atomicity Task 1–3、完整验收与最终独立复审已完成；v0.5 入口已开放但尚未实现
+**状态：** v0.3 已实现；v0.4 generation atomicity Task 1–3、完整验收与最终独立复审已完成；v0.5 Task 1–6 已完成，无滚动页直接 containment 修订待实施
 **适用版本：** v0.3、v0.4、v0.5
 
 **最新验收：** Swift 6.2.4；Framework 193 项、Example 5 项单元 + 16 项 UI，均 0 fail、0 skip；resolve / Framework / Example build / Example test 墙钟分别为 1.34 / 53.81 / 15.71 / 277.97 秒；warning 仅为 Pageboy/Tabman `PrivacyInfo.xcprivacy` unhandled resource 提示。
 
 当前技术基线为最低工具链 Swift 6.2、语言模式 Swift 6、最低系统版本 iOS 14；详见
 `2026-07-12-swift-6-2-toolchain-baseline-design.md`。
+
+v0.5 的代理所有权、canonical distance、顶部下拉临时边界、binding teardown 和真实 pan UI 门禁以
+`2026-07-13-v0-5-scroll-coordination-design.md` 为准。
 
 ## 背景
 
@@ -353,10 +358,11 @@ childTopOffset = -child.contentInset.top
 1. child 尚未回到顶部：child 消费位移，container 保持完全折叠。
 2. child 到达顶部：child 锁定，把同一手势剩余 delta 交给 container。
 3. container 回到 expanded offset：Header 完全展开。
-4. 完全展开后的额外下拉由 v0.6 overscroll mode 决定 owner。
+4. 完全展开后的额外下拉在 v0.5 临时只保留 container 原生 bounce、child 固定顶部；v0.6 再按 overscroll mode 决定正式 owner。
 
 不得通过反复切换 `isScrollEnabled` 实现 handoff，避免中断 pan、丢失 velocity 或产生手势断点。
-ScrollCoordinator 通过私有 delegate proxy、guarded offset update 和剩余 delta 转移维护唯一 owner。
+ScrollCoordinator 不替换 child scroll/pan delegate；它使用 child observation、container `UIScrollView` 子类、
+基于手势起点的 canonical total 和 guarded offset update 维护唯一 owner，不依赖 callback 顺序猜测剩余 delta。
 
 ### 最小纵向手势同时识别
 
@@ -367,7 +373,8 @@ verticalScrollView.panGestureRecognizer
 <-> currentChild.panGestureRecognizer
 ```
 
-进行受限 simultaneous recognition。因此“当前 container 与当前 child 的最小纵向手势对”前移到
+进行受限 simultaneous recognition。只有 container scroll view 子类自身可以为当前 committed child pair 返回
+simultaneous，container/child 内建 pan delegate 均不被设置。因此“当前 container 与当前 child 的最小纵向手势对”前移到
 v0.5。v0.7 继续负责横向分页、系统返回手势、child 横向滚动、程序化分页、取消路径和完整
 interaction state 优先级。
 
@@ -380,7 +387,7 @@ interaction state 优先级。
 3. 不暂存非零 child distance 等待 Header 再次折叠后突然恢复，避免临界点内容跳跃。
 4. 不为了恢复目标 child offset 强制折叠 Header，避免切页导致 Header 突然消失。
 
-v0.5 只能通过 Store 的 committed-current 只读入口取得上述当前页；empty 时 page/scroll 均为 nil。ScrollCoordinator 在 matching reload/selection terminal 后重新绑定，不缓存 Host、adapter 或 provider，也不读取 pending generation。
+v0.5 只能通过 Store 的 committed-current 只读入口取得上述当前页；empty 时 page/scroll 均为 nil。ScrollCoordinator 在 matching reload、selection complete 或 selection cancel terminal 后重新绑定，不缓存 Host、adapter 或 provider，也不读取 pending generation。旧 observation、pan target 和 container weak child pair 必须同步失效。
 
 ## 尺寸与 Header 变化
 
@@ -497,6 +504,8 @@ scroll.handoff.childToContainer
 6. Header 展开、折叠和 child top boundary 的 rubber-band 稳定性。
 7. Header 滚动期间 adapter height 和 Pageboy child bounds 不变。
 8. 高频滚动路径不逐帧输出普通日志。
+9. child scroll delegate 与 child pan delegate 在绑定、滚动、切页、reload 和解绑后保持原 owner。
+10. Example UI test 使用真实连续 drag 覆盖双向 handoff、短内容、fallback、切页和唯一 container bounce。
 
 ## 版本边界调整
 

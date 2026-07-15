@@ -4,6 +4,8 @@
 > 保持 v0.2 容器级总预留输出，仅用于当时布局与日志回归，不得在 v0.3 直接写入 child。
 > v0.3 起 child managed top 只表达 Tabman bar 的局部 obstruction，详细设计见
 > `2026-07-11-fixed-paging-viewport-inset-scroll-ownership-design.md`。
+> 2026-07-14 修订：首次没有缓存时使用 required `height == 0` 建立中立布局会与非空 Header 内部约束冲突；当前 bootstrap measurement 规则以
+> `2026-07-14-plain-bottom-page-presentation-header-bootstrap-measurement-design.md` 为准。
 
 ## 背景
 
@@ -152,7 +154,7 @@ topObstruction + expandedContentHeight + barHeight
 1. 获取当前 bounds 和本地 top/bottom obstruction。
 2. 临时清除 viewport presentation transform。
 3. 临时把 Header host 放到 `bounds.minY + topObstruction`。
-4. 临时高度使用最近一次有效纯内容高度；首次没有缓存时使用 `0`。
+4. 历史实现使用最近一次有效纯内容高度，首次没有缓存时使用 `0`；该首次 zero-height 规则已被 2026-07-14 bootstrap seed 修订废止。
 5. 同步执行内部 layout，使 Header 自身顶部 safe area 在测量时归零。
 6. 调用 Header host fitting measurement，得到纯内容高度。
 7. 使用纯内容高度、当前 top behavior 和 offset 生成 canonical output。
@@ -428,3 +430,9 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExa
 - TDD RED：LayoutEngine 10 个测试中 6 个预期几何失败；负 offset 同进程测试实际 Header `minY` 为 `62`、预期 `86`；强化后的真实示例 UI test 因分段栏无法返回初始 `minY` 超时失败。
 - TDD GREEN：LayoutEngine 定向测试、两个 Task 2 目标测试、35 个控制器测试和真实示例 UI 回归均已通过。
 - 最终完整核心测试 83/83、完整示例测试 11/11、generic build 和 SwiftPM resolve 已通过；命令、首次旧示例断言失败及最终自审记录在对应实施计划中。
+
+## 2026-07-14 首次 Bootstrap Measurement 修订
+
+后续用户启动日志证明：首次 automatic Header 没有 `lastMeasuredHeaderHeight` 时，旧步骤把 host required height 设为 `0` 再同步 layout；示例标题栈的 safe-area top/bottom 内容约束因此不可满足。该问题不改变“最终 top behavior 无关的中立位置测量”原则，只废止首次 required zero-height seed。
+
+修订后的首次路径让测量缓存只属于当前 Header 内容身份，身份替换先使旧缓存失效，再对当前内容执行一次不发布状态的 compressed fitting，得到 finite、nonnegative bootstrap seed；随后以 seed 建立 required host height、同步中立 layout，再执行正式 fitting。只有正式结果更新测量缓存、canonical output 和既有日志；bootstrap 不更新 context、progress、range、inset 或 frame 日志。实现提交为 `dfabd6c`，完整验收与整分支 fresh-pass 复审已在生产代码 HEAD `c37e829` 通过；详细关系、RED/GREEN 和清理证据见 2026-07-14 专项设计，关联的 v0.5/v0.6 当前为 Ready。

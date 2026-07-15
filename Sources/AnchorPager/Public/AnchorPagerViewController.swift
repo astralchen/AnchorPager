@@ -12,18 +12,12 @@ open class AnchorPagerViewController: UIViewController {
         var providerGenerationIsActive: Bool
     }
 
-    @MainActor
-    private final class VerticalScrollDelegate: NSObject, UIScrollViewDelegate {
-        weak var owner: AnchorPagerViewController?
+    private struct ContainerPresentation {
+        let chromeTranslationY: CGFloat
+        let pageSurfaceTranslationY: CGFloat
 
-        init(owner: AnchorPagerViewController) {
-            self.owner = owner
-        }
-
-        func scrollViewDidScroll(_ scrollView: UIScrollView) {
-            guard let owner,
-                  scrollView === owner.verticalScrollView else { return }
-            owner.updateVisibleLayoutForScrolling()
+        var contentTranslationY: CGFloat {
+            chromeTranslationY + pageSurfaceTranslationY
         }
     }
 
@@ -37,6 +31,14 @@ open class AnchorPagerViewController: UIViewController {
     public var configuration: AnchorPagerConfiguration {
         didSet {
             guard isViewLoaded else { return }
+            let didChangeHeader = oldValue.header != configuration.header
+            if didChangeHeader {
+                scrollCoordinator?.cancelBoundaryHandling()
+                resetPresentationSurfaces()
+            }
+            scrollCoordinator?.updateTopOverscrollHandlingMode(
+                configuration.topOverscrollHandlingMode
+            )
             pageStateStore.setKeepsAdjacentPagesLoaded(
                 configuration.paging.keepsAdjacentPagesLoaded
             )
@@ -45,6 +47,9 @@ open class AnchorPagerViewController: UIViewController {
                 logsChanges: false
             )
             view.setNeedsLayout()
+            if didChangeHeader, !isApplyingLayout {
+                updateVisibleLayout(forceNotify: true)
+            }
         }
     }
 
@@ -58,11 +63,13 @@ open class AnchorPagerViewController: UIViewController {
 
     /// AnchorPager 管理的纵向容器滚动视图。
     ///
-    /// 该滚动视图的 delegate 由 AnchorPager 内部管理，调用方不得替换。
-    public let verticalScrollView = UIScrollView()
+    /// 该滚动视图的 delegate 与 `contentInset` 由 AnchorPager 内部管理，
+    /// 调用方不得替换或写入。业务 child 的 inset 所有权不受此约束影响。
+    public let verticalScrollView: UIScrollView = AnchorPagerContainerScrollView()
 
     private let scrollRangeView = UIView()
     private let viewportView = UIView()
+    private let contentPresentationView = UIView()
     private let headerViewHost = AnchorPagerHeaderViewHost()
     private let layoutEngine = AnchorPagerLayoutEngine()
     private let pagingHost = AnchorPagerPagingHostViewController()
@@ -73,7 +80,8 @@ open class AnchorPagerViewController: UIViewController {
     private var pagingHeightConstraint: NSLayoutConstraint?
     private var lastMeasuredHeaderHeight: CGFloat?
     private var isApplyingLayout = false
-    private lazy var verticalScrollDelegate = VerticalScrollDelegate(owner: self)
+    private lazy var verticalScrollDelegate = AnchorPagerVerticalScrollDelegate(owner: self)
+    private var scrollCoordinator: AnchorPagerScrollCoordinator?
     private var currentHeaderContent: AnchorPagerHeaderContent?
     private var currentTitles: [String] = []
     private var resolvedBarInsets: UIEdgeInsets = .zero
@@ -92,6 +100,10 @@ open class AnchorPagerViewController: UIViewController {
     private var lastLoggedBarFrame: CGRect?
     private var lastLoggedSafeAreaObstruction: LocalSafeAreaObstruction?
     private var lastLoggedBounds: CGRect?
+    private var lastAppliedLayoutEnvironment: LayoutEnvironment?
+    private var containerGeometry: AnchorPagerContainerScrollGeometry = .zero
+    private var hasAppliedContainerGeometry = false
+    private var lastLoggedContainerTopInset: CGFloat?
     private var pageCount = 0
 
     /// 创建 AnchorPager 容器。
@@ -112,6 +124,8 @@ open class AnchorPagerViewController: UIViewController {
 
     deinit {
         MainActor.assumeIsolated {
+            resetPresentationSurfaces()
+            scrollCoordinator?.invalidate()
             pageStateStore.releaseAll()
             managedInsetCoordinator.releaseAll()
         }
@@ -121,8 +135,10 @@ open class AnchorPagerViewController: UIViewController {
     open override func viewDidLoad() {
         super.viewDidLoad()
         installVerticalScrollViewIfNeeded()
+        installScrollCoordinatorIfNeeded()
         installVisibleContentIfNeeded()
         submitStagedReloadIfNeeded()
+        reconcileCommittedScrollBinding()
     }
 
     open override func viewDidLayoutSubviews() {
@@ -135,8 +151,17 @@ open class AnchorPagerViewController: UIViewController {
         updateVisibleLayout()
     }
 
+    open override func viewWillTransition(
+        to size: CGSize,
+        with coordinator: any UIViewControllerTransitionCoordinator
+    ) {
+        cancelBoundaryHandlingAndRestoreCanonicalPresentation()
+        super.viewWillTransition(to: size, with: coordinator)
+    }
+
     /// 重新加载页面、标题和 Header 数据。
     public func reloadData() {
+        cancelBoundaryHandlingAndRestoreCanonicalPresentation()
         reloadTransactionIdentifier &+= 1
         let transactionIdentifier = reloadTransactionIdentifier
         let reloadDataSource = dataSource
@@ -228,6 +253,7 @@ open class AnchorPagerViewController: UIViewController {
                 stagedReloadSnapshot?.selectedIndex = selectedIndex
             }
             pageStateStore.didSelect(selectedIndex, context: pageAccessContext)
+            reconcileCommittedScrollBinding()
             commitSelectedIndex(selectedIndex, animated: animated)
             return
         }
@@ -242,6 +268,7 @@ open class AnchorPagerViewController: UIViewController {
     public func reloadHeaderLayout(
         offsetAdjustment: AnchorPagerHeaderOffsetAdjustment = .preserveVisualPosition
     ) {
+        cancelBoundaryHandlingAndRestoreCanonicalPresentation()
         AnchorPagerLogger.log(.info, category: .layout, event: "reloadHeaderLayout")
         updateVisibleLayout(forceNotify: true, offsetAdjustment: offsetAdjustment)
         view.setNeedsLayout()
@@ -289,6 +316,21 @@ open class AnchorPagerViewController: UIViewController {
             viewportView.topAnchor.constraint(equalTo: verticalScrollView.frameLayoutGuide.topAnchor),
             viewportView.bottomAnchor.constraint(equalTo: verticalScrollView.frameLayoutGuide.bottomAnchor)
         ])
+
+        contentPresentationView.translatesAutoresizingMaskIntoConstraints = false
+        contentPresentationView.clipsToBounds = false
+        viewportView.addSubview(contentPresentationView)
+        NSLayoutConstraint.activate([
+            contentPresentationView.topAnchor.constraint(equalTo: viewportView.topAnchor),
+            contentPresentationView.leadingAnchor.constraint(equalTo: viewportView.leadingAnchor),
+            contentPresentationView.trailingAnchor.constraint(equalTo: viewportView.trailingAnchor),
+            contentPresentationView.bottomAnchor.constraint(equalTo: viewportView.bottomAnchor)
+        ])
+        AnchorPagerLogger.log(
+            .info,
+            category: .layout,
+            event: "layout.headerPresentationInstalled"
+        )
     }
 
     private func configurePagingHost() {
@@ -345,13 +387,34 @@ open class AnchorPagerViewController: UIViewController {
 
     private func installHeaderHost() {
         let headerContent = currentHeaderContent ?? .view(UIView())
-        headerViewHost.install(headerContent, in: self, hostParentView: viewportView)
-
-        if headerHeightConstraint == nil {
-            let headerHeightConstraint = headerViewHost.view.heightAnchor.constraint(equalToConstant: 0)
-            headerHeightConstraint.isActive = true
-            self.headerHeightConstraint = headerHeightConstraint
+        let bootstrapMeasurementSize = headerMeasurementSize(
+            in: currentLayoutEnvironment()
+        )
+        let didReplaceHeader = headerViewHost.install(
+            headerContent,
+            in: self,
+            hostParentView: contentPresentationView,
+            bootstrapMeasurementSize: bootstrapMeasurementSize,
+            prepareHostForContent: { [unowned self] seed in
+                setHeaderHostHeight(seed)
+            }
+        )
+        if didReplaceHeader {
+            lastMeasuredHeaderHeight = nil
         }
+    }
+
+    private func setHeaderHostHeight(_ height: CGFloat) {
+        if let headerHeightConstraint {
+            headerHeightConstraint.constant = height
+            return
+        }
+
+        let headerHeightConstraint = headerViewHost.view.heightAnchor.constraint(
+            equalToConstant: height
+        )
+        headerHeightConstraint.isActive = true
+        self.headerHeightConstraint = headerHeightConstraint
     }
 
     private func installPagingHostIfNeeded() {
@@ -363,12 +426,12 @@ open class AnchorPagerViewController: UIViewController {
         if pagingHost.view.superview == nil {
             let hostView = pagingHost.view!
             hostView.translatesAutoresizingMaskIntoConstraints = false
-            viewportView.addSubview(hostView)
+            contentPresentationView.addSubview(hostView)
             let pagingTopConstraint = hostView.topAnchor.constraint(equalTo: headerViewHost.view.bottomAnchor)
             let pagingHeightConstraint = hostView.heightAnchor.constraint(equalToConstant: 0)
             NSLayoutConstraint.activate([
-                hostView.leadingAnchor.constraint(equalTo: viewportView.leadingAnchor),
-                hostView.trailingAnchor.constraint(equalTo: viewportView.trailingAnchor),
+                hostView.leadingAnchor.constraint(equalTo: contentPresentationView.leadingAnchor),
+                hostView.trailingAnchor.constraint(equalTo: contentPresentationView.trailingAnchor),
                 pagingTopConstraint,
                 pagingHeightConstraint
             ])
@@ -395,38 +458,87 @@ open class AnchorPagerViewController: UIViewController {
         defer { isApplyingLayout = false }
 
         let layoutEnvironment = currentLayoutEnvironment()
+        if let lastAppliedLayoutEnvironment,
+           lastAppliedLayoutEnvironment != layoutEnvironment {
+            scrollCoordinator?.cancelBoundaryHandling()
+            resetPresentationSurfaces()
+        }
         let measuredHeight = measureHeaderHeight(in: layoutEnvironment)
         lastMeasuredHeaderHeight = measuredHeight
+        let previousGeometry = containerGeometry
+        let previousLogicalOffset = hasAppliedContainerGeometry
+            ? previousGeometry.logicalOffset(
+                forRawOffset: verticalScrollView.contentOffset.y
+            )
+            : 0
         let oldLayoutOutput = lastLayoutOutput.map {
-            layoutOutputByApplyingContentOffset(
+            layoutOutputByApplyingLogicalOffset(
                 $0,
-                contentOffsetY: verticalScrollView.contentOffset.y
+                logicalContentOffsetY: previousLogicalOffset
             )
         }
-        var layoutOutput = makeLayoutOutput(
+        let nextGeometry = resolvedContainerGeometry(
             measuredHeaderHeight: measuredHeight,
-            contentOffsetY: verticalScrollView.contentOffset.y,
             environment: layoutEnvironment
         )
+        let provisionalLogicalOffset = nextGeometry.clampedLogicalOffset(
+            previousLogicalOffset
+        )
+        let provisionalOutput = makeLayoutOutput(
+            measuredHeaderHeight: measuredHeight,
+            logicalContentOffsetY: provisionalLogicalOffset,
+            environment: layoutEnvironment
+        )
+        let targetLogicalOffset: CGFloat
         if let offsetAdjustment {
-            let adjustedOffsetY = layoutEngine.adjustedContentOffsetY(
-                current: verticalScrollView.contentOffset.y,
+            targetLogicalOffset = layoutEngine.adjustedLogicalOffsetY(
+                current: previousLogicalOffset,
                 old: oldLayoutOutput,
-                new: layoutOutput,
+                new: provisionalOutput,
                 strategy: offsetAdjustment
             )
-            if abs(verticalScrollView.contentOffset.y - adjustedOffsetY) > 0.001 {
-                verticalScrollView.setContentOffset(
-                    CGPoint(x: verticalScrollView.contentOffset.x, y: adjustedOffsetY),
-                    animated: false
-                )
-            }
-            layoutOutput = makeLayoutOutput(
-                measuredHeaderHeight: measuredHeight,
-                contentOffsetY: adjustedOffsetY,
-                environment: layoutEnvironment
+        } else if !hasAppliedContainerGeometry {
+            targetLogicalOffset = 0
+        } else if abs(
+            previousGeometry.collapsibleDistance - nextGeometry.collapsibleDistance
+        ) > 0.001, let oldLayoutOutput {
+            targetLogicalOffset = nextGeometry.collapsibleDistance
+                * oldLayoutOutput.collapseProgress
+        } else {
+            targetLogicalOffset = provisionalLogicalOffset
+        }
+
+        let geometryDidChange = !hasAppliedContainerGeometry
+            || previousGeometry != nextGeometry
+        let insetNeedsRepair = verticalScrollView.contentInset != UIEdgeInsets(
+            top: nextGeometry.topInset,
+            left: 0,
+            bottom: 0,
+            right: 0
+        )
+        let shouldWriteTarget = geometryDidChange
+            || insetNeedsRepair
+            || offsetAdjustment != nil
+        if geometryDidChange {
+            scrollCoordinator?.cancelBoundaryHandling()
+        }
+        if shouldWriteTarget {
+            applyContainerGeometry(
+                nextGeometry,
+                targetLogicalOffset: targetLogicalOffset
             )
         }
+
+        let finalLogicalOffset = shouldWriteTarget
+            ? nextGeometry.clampedLogicalOffset(targetLogicalOffset)
+            : nextGeometry.logicalOffset(
+                forRawOffset: verticalScrollView.contentOffset.y
+            )
+        let layoutOutput = makeLayoutOutput(
+            measuredHeaderHeight: measuredHeight,
+            logicalContentOffsetY: finalLogicalOffset,
+            environment: layoutEnvironment
+        )
 
         applyLayoutOutput(
             layoutOutput,
@@ -435,6 +547,7 @@ open class AnchorPagerViewController: UIViewController {
             logsChanges: true,
             updatesScrollRange: true
         )
+        lastAppliedLayoutEnvironment = layoutEnvironment
     }
 
     private func updateVisibleLayoutForScrolling() {
@@ -447,9 +560,12 @@ open class AnchorPagerViewController: UIViewController {
         defer { isApplyingLayout = false }
 
         let environment = currentLayoutEnvironment()
+        let logicalContentOffsetY = containerGeometry.logicalOffset(
+            forRawOffset: verticalScrollView.contentOffset.y
+        )
         let output = makeLayoutOutput(
             measuredHeaderHeight: measuredHeaderHeight,
-            contentOffsetY: verticalScrollView.contentOffset.y,
+            logicalContentOffsetY: logicalContentOffsetY,
             environment: environment
         )
         applyLayoutOutput(
@@ -468,19 +584,36 @@ open class AnchorPagerViewController: UIViewController {
         logsChanges: Bool,
         updatesScrollRange: Bool
     ) {
-        let translationY = overscrollTranslationY
-        viewportView.transform = CGAffineTransform(translationX: 0, y: translationY)
+        let requestedPresentation = containerPresentation()
+        viewportView.transform = CGAffineTransform(
+            translationX: 0,
+            y: requestedPresentation.chromeTranslationY
+        )
+        contentPresentationView.transform = CGAffineTransform(
+            translationX: 0,
+            y: -output.collapseOffset
+        )
+        let didApplyPagePresentation = pagingHost.setPagePresentationTranslationY(
+            requestedPresentation.pageSurfaceTranslationY
+        )
+        let appliedPresentation = ContainerPresentation(
+            chromeTranslationY: requestedPresentation.chromeTranslationY,
+            pageSurfaceTranslationY: didApplyPagePresentation
+                ? requestedPresentation.pageSurfaceTranslationY
+                : 0
+        )
 
         if updatesScrollRange {
-            scrollRangeHeightConstraint?.constant = output.resolvedHeaderHeight.collapsibleDistance
+            let rangeHeight = containerGeometry.scrollRangeHeight(
+                viewportHeight: environment.bounds.height
+            )
+            scrollRangeHeightConstraint?.constant = rangeHeight
+                - environment.bounds.height
+            headerHeightConstraint?.constant = output.headerFrame.height
+            headerViewHost.setTopOffset(output.headerFrame.minY + output.collapseOffset)
+            pagingTopConstraint?.constant = 0
+            pagingHeightConstraint?.constant = output.pagingFrame.height
         }
-        headerHeightConstraint?.constant = output.headerFrame.height
-        headerViewHost.setTopOffset(output.headerFrame.minY)
-        pagingTopConstraint?.constant = Swift.max(
-            0,
-            output.pagingFrame.minY - output.headerFrame.maxY
-        )
-        pagingHeightConstraint?.constant = output.pagingFrame.height
 
         applyManagedInsets(output: output, logsChanges: logsChanges)
 
@@ -496,7 +629,7 @@ open class AnchorPagerViewController: UIViewController {
             )
         }
 
-        let context = layoutContext(for: output, translationY: translationY)
+        let context = layoutContext(for: output, presentation: appliedPresentation)
         if forceNotify || context != lastLayoutContext {
             lastLayoutContext = context
             delegate?.pagerViewController(self, didUpdateLayout: context)
@@ -505,38 +638,61 @@ open class AnchorPagerViewController: UIViewController {
     }
 
     private func measureHeaderHeight(in environment: LayoutEnvironment) -> CGFloat {
-        viewportView.transform = .identity
+        resetPresentationSurfaces()
         headerViewHost.setTopOffset(environment.bounds.minY + environment.obstruction.top)
-        headerHeightConstraint?.constant = lastMeasuredHeaderHeight ?? 0
+        let fittingSize = headerMeasurementSize(in: environment)
+        let neutralHeight = lastMeasuredHeaderHeight
+            ?? headerViewHost.bootstrapMeasurement(in: fittingSize)
+        headerHeightConstraint?.constant = neutralHeight
         view.layoutIfNeeded()
 
-        return headerViewHost.measure(
-            in: CGSize(
-                width: environment.bounds.width,
-                height: UIView.layoutFittingCompressedSize.height
-            )
+        return headerViewHost.measure(in: fittingSize)
+    }
+
+    private func headerMeasurementSize(in environment: LayoutEnvironment) -> CGSize {
+        CGSize(
+            width: environment.bounds.width,
+            height: UIView.layoutFittingCompressedSize.height
         )
     }
 
-    private var overscrollTranslationY: CGFloat {
-        Swift.max(0, -verticalScrollView.contentOffset.y)
+    private func containerPresentation() -> ContainerPresentation {
+        let rawOffset = verticalScrollView.contentOffset.y
+        let topOverflow = containerGeometry.topOverflow(forRawOffset: rawOffset)
+        let bottomOverflow = containerGeometry.bottomOverflow(forRawOffset: rawOffset)
+        let hasCommittedPlainPage =
+            pageStateStore.committedCurrentPageViewController != nil &&
+            pageStateStore.committedCurrentScrollView == nil
+        return ContainerPresentation(
+            chromeTranslationY: topOverflow,
+            pageSurfaceTranslationY: hasCommittedPlainPage ? -bottomOverflow : 0
+        )
     }
 
     private func layoutContext(
         for output: AnchorPagerLayoutEngine.Output,
-        translationY: CGFloat
+        presentation: ContainerPresentation
     ) -> AnchorPagerLayoutContext {
         AnchorPagerLayoutContext(
             selectedIndex: effectiveSelectedIndex,
-            headerFrame: output.headerFrame.offsetBy(dx: 0, dy: translationY),
-            barFrame: output.barFrame.offsetBy(dx: 0, dy: translationY),
-            contentFrame: output.contentFrame.offsetBy(dx: 0, dy: translationY)
+            headerFrame: output.headerFrame.offsetBy(
+                dx: 0,
+                dy: presentation.chromeTranslationY
+            ),
+            barFrame: output.barFrame.offsetBy(
+                dx: 0,
+                dy: presentation.chromeTranslationY
+            ),
+            contentFrame: output.contentFrame.offsetBy(
+                dx: 0,
+                dy: presentation.contentTranslationY
+            )
         )
     }
 
     private func makeLayoutOutput(
         measuredHeaderHeight: CGFloat,
-        contentOffsetY: CGFloat,
+        logicalContentOffsetY: CGFloat,
         environment: LayoutEnvironment? = nil
     ) -> AnchorPagerLayoutEngine.Output {
         let environment = environment ?? currentLayoutEnvironment()
@@ -549,12 +705,12 @@ open class AnchorPagerViewController: UIViewController {
                 barHeight: resolvedBarInsets.top,
                 topObstructionHeight: environment.obstruction.top,
                 bottomObstructionHeight: environment.obstruction.bottom,
-                contentOffsetY: contentOffsetY
+                logicalContentOffsetY: logicalContentOffsetY
             )
         )
     }
 
-    private struct LayoutEnvironment {
+    private struct LayoutEnvironment: Equatable {
         var bounds: CGRect
         var obstruction: LocalSafeAreaObstruction
     }
@@ -571,6 +727,61 @@ open class AnchorPagerViewController: UIViewController {
             bounds: CGRect(x: 0, y: 0, width: width, height: height),
             obstruction: localSafeAreaObstruction()
         )
+    }
+
+    private func resolvedContainerGeometry(
+        measuredHeaderHeight: CGFloat,
+        environment: LayoutEnvironment
+    ) -> AnchorPagerContainerScrollGeometry {
+        let resolvedHeaderHeight = layoutEngine.resolvedHeaderHeight(
+            measuredHeaderHeight: measuredHeaderHeight,
+            mode: configuration.header.heightMode
+        )
+        return AnchorPagerContainerScrollGeometry(
+            topInset: AnchorPagerContainerScrollGeometry.topInset(
+                for: configuration.header.topBehavior,
+                topObstructionHeight: environment.obstruction.top
+            ),
+            collapsibleDistance: resolvedHeaderHeight.collapsibleDistance
+        )
+    }
+
+    private func applyContainerGeometry(
+        _ geometry: AnchorPagerContainerScrollGeometry,
+        targetLogicalOffset: CGFloat
+    ) {
+        verticalScrollView.contentInset = UIEdgeInsets(
+            top: geometry.topInset,
+            left: 0,
+            bottom: 0,
+            right: 0
+        )
+        containerGeometry = geometry
+        hasAppliedContainerGeometry = true
+
+        if let scrollCoordinator {
+            scrollCoordinator.updateGeometry(
+                geometry,
+                targetLogicalOffset: targetLogicalOffset
+            )
+        } else {
+            let rawTarget = geometry.rawOffset(
+                forLogicalOffset: targetLogicalOffset
+            )
+            if abs(verticalScrollView.contentOffset.y - rawTarget) > 0.001 {
+                verticalScrollView.contentOffset.y = rawTarget
+            }
+        }
+
+        if lastLoggedContainerTopInset == nil
+            || abs((lastLoggedContainerTopInset ?? 0) - geometry.topInset) > 0.001 {
+            AnchorPagerLogger.log(
+                .info,
+                category: .inset,
+                event: "inset.containerTopChanged"
+            )
+            lastLoggedContainerTopInset = geometry.topInset
+        }
     }
 
     private func localSafeAreaObstruction() -> LocalSafeAreaObstruction {
@@ -626,15 +837,15 @@ open class AnchorPagerViewController: UIViewController {
         }
     }
 
-    private func layoutOutputByApplyingContentOffset(
+    private func layoutOutputByApplyingLogicalOffset(
         _ output: AnchorPagerLayoutEngine.Output,
-        contentOffsetY: CGFloat
+        logicalContentOffsetY: CGFloat
     ) -> AnchorPagerLayoutEngine.Output {
         var output = output
         let collapsibleDistance = output.resolvedHeaderHeight.collapsibleDistance
         let collapseOffset = Swift.min(
             collapsibleDistance,
-            Swift.max(0, contentOffsetY)
+            Swift.max(0, logicalContentOffsetY)
         )
         output.collapseOffset = collapseOffset
         output.collapseProgress = collapsibleDistance > 0
@@ -676,6 +887,35 @@ open class AnchorPagerViewController: UIViewController {
         pageStateStore.updateManagedInsets(target, logsChanges: logsChanges)
     }
 
+    private func installScrollCoordinatorIfNeeded() {
+        guard scrollCoordinator == nil else { return }
+        guard let container = verticalScrollView as? AnchorPagerContainerScrollView else {
+            preconditionFailure("verticalScrollView 必须由 AnchorPagerContainerScrollView 提供")
+        }
+        scrollCoordinator = AnchorPagerScrollCoordinator(
+            containerScrollView: container,
+            topOverscrollHandlingMode: configuration.topOverscrollHandlingMode
+        )
+    }
+
+    private func cancelBoundaryHandlingAndRestoreCanonicalPresentation() {
+        scrollCoordinator?.cancelBoundaryHandling()
+        resetPresentationSurfaces()
+        updateVisibleLayoutForScrolling()
+    }
+
+    private func resetPresentationSurfaces() {
+        viewportView.transform = .identity
+        contentPresentationView.transform = .identity
+        _ = pagingHost.setPagePresentationTranslationY(0)
+    }
+
+    private func reconcileCommittedScrollBinding() {
+        guard isViewLoaded else { return }
+        installScrollCoordinatorIfNeeded()
+        scrollCoordinator?.bindCommittedChild(pageStateStore.committedCurrentScrollView)
+    }
+
     private var pageAccessContext: AnchorPagerPageStateStore.AccessContext {
         AnchorPagerPageStateStore.AccessContext(
             managedInsetTarget: currentManagedInsetTarget,
@@ -688,6 +928,14 @@ open class AnchorPagerViewController: UIViewController {
         let collapsibleDistance = output.resolvedHeaderHeight.collapsibleDistance
         return collapsibleDistance <= 0.5
             || output.collapseOffset >= collapsibleDistance - 0.5
+    }
+}
+
+extension AnchorPagerViewController: AnchorPagerVerticalScrollDelegateOwner {
+    func verticalScrollViewDidScroll(_ scrollView: UIScrollView) {
+        guard scrollView === verticalScrollView else { return }
+        scrollCoordinator?.containerDidScroll()
+        updateVisibleLayoutForScrolling()
     }
 }
 
@@ -712,6 +960,7 @@ extension AnchorPagerViewController: AnchorPagerPagingHostViewControllerDelegate
             AnchorPagerLogger.log(.debug, category: .paging, event: "paging.reload.stale")
             return false
         }
+        cancelBoundaryHandlingAndRestoreCanonicalPresentation()
         activateProviderGeneration(for: identifier)
         activeReloadRequestIdentifier = identifier
         return true
@@ -734,6 +983,7 @@ extension AnchorPagerViewController: AnchorPagerPagingHostViewControllerDelegate
         willSelect index: Int,
         animated: Bool
     ) {
+        cancelBoundaryHandlingAndRestoreCanonicalPresentation()
         pageStateStore.willSelect(
             from: selectedIndex,
             to: index,
@@ -747,7 +997,9 @@ extension AnchorPagerViewController: AnchorPagerPagingHostViewControllerDelegate
         animated: Bool
     ) {
         guard index >= 0, index < pageCount else { return }
+        cancelBoundaryHandlingAndRestoreCanonicalPresentation()
         pageStateStore.didSelect(index, context: pageAccessContext)
+        reconcileCommittedScrollBinding()
         commitSelectedIndex(index, animated: animated)
     }
 
@@ -757,11 +1009,13 @@ extension AnchorPagerViewController: AnchorPagerPagingHostViewControllerDelegate
         returningTo previousIndex: Int
     ) {
         guard previousIndex >= 0, previousIndex < pageCount else { return }
+        cancelBoundaryHandlingAndRestoreCanonicalPresentation()
         pageStateStore.didCancelSelection(
             at: index,
             returningTo: previousIndex,
             context: pageAccessContext
         )
+        reconcileCommittedScrollBinding()
         AnchorPagerLogger.log(.debug, category: .paging, event: "setSelectedIndex.cancel")
     }
 
@@ -791,6 +1045,7 @@ extension AnchorPagerViewController: AnchorPagerPagingHostViewControllerDelegate
             selectedIndex = index
         }
         installVisibleContentIfNeeded()
+        reconcileCommittedScrollBinding()
         if activeReloadRequestIdentifier == requestIdentifier {
             activeReloadRequestIdentifier = nil
         }

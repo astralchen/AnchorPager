@@ -77,6 +77,7 @@ final class AnchorPagerPagingHostViewController: UIViewController {
     private var activeReloadFinalBarInsets: UIEdgeInsets?
     private var finishingReloadRequestIdentifier: AnchorPagerPagingReloadRequestIdentifier?
     private var isStartingReloadRequest = false
+    private var isPagePresentationSurfaceUnavailable = false
 
     override func loadView() {
         let view = UIView()
@@ -155,6 +156,22 @@ final class AnchorPagerPagingHostViewController: UIViewController {
     }
 
     @discardableResult
+    func setPagePresentationTranslationY(_ translationY: CGFloat) -> Bool {
+        let didApply = activeAdapter?.setPagePresentationTranslationY(translationY)
+            ?? (translationY == 0)
+        let isUnavailable = !didApply && translationY != 0
+        if isUnavailable && !isPagePresentationSurfaceUnavailable {
+            AnchorPagerLogger.log(
+                .error,
+                category: .paging,
+                event: "paging.pagePresentation.unavailable"
+            )
+        }
+        isPagePresentationSurfaceUnavailable = isUnavailable
+        return didApply
+    }
+
+    @discardableResult
     func setSelectedIndex(_ index: Int, animated: Bool) -> Bool {
         guard pendingReloadRequest == nil,
               activeReloadRequest == nil,
@@ -170,6 +187,7 @@ final class AnchorPagerPagingHostViewController: UIViewController {
     }
 
     private func installAdapter() -> AnchorPagerPagingAdapter {
+        isPagePresentationSurfaceUnavailable = false
         let adapter = AnchorPagerPagingAdapter()
         adapter.pageProvider = pageProvider
         adapter.eventDelegate = self
@@ -197,6 +215,7 @@ final class AnchorPagerPagingHostViewController: UIViewController {
         pendingRequestOnFailure request: ReloadRequest
     ) -> Bool {
         guard let adapter = activeAdapter else { return true }
+        _ = setPagePresentationTranslationY(0)
         guard adapter.prepareForRemoval() else {
             pendingReloadRequest = request
             AnchorPagerAssertions.failure(
@@ -216,6 +235,7 @@ final class AnchorPagerPagingHostViewController: UIViewController {
         adapter.view.removeFromSuperview()
         adapter.removeFromParent()
         activeAdapter = nil
+        isPagePresentationSurfaceUnavailable = false
         AnchorPagerLogger.log(.debug, category: .lifecycle, event: "paging.adapter.remove")
         return true
     }
