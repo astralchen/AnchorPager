@@ -490,6 +490,9 @@ final class ExamplePagerViewController: UIViewController {
         if let page = pages[index] as? ExampleScrollPageViewController {
             scrollCoordinationState.hasScrollTarget = true
             page.reportCurrentScrollState()
+        } else if let page = pages[index] as? ExampleCompositionalPageViewController {
+            scrollCoordinationState.hasScrollTarget = true
+            page.reportCurrentScrollState()
         } else if pages[index] is ExampleHorizontalPageViewController {
             scrollCoordinationState.hasScrollTarget = false
             scrollCoordinationState.childDistance = 0
@@ -625,6 +628,8 @@ final class ExamplePagerViewController: UIViewController {
         guard pages.indices.contains(selectedIndex) else { return }
         if let page = pages[selectedIndex] as? ExampleScrollPageViewController {
             page.requestScrollPresentationSample()
+        } else if let page = pages[selectedIndex] as? ExampleCompositionalPageViewController {
+            page.requestScrollPresentationSample()
         } else if pages[selectedIndex] is ExamplePlainPageViewController {
             recordMomentumSample(childDistance: 0)
         }
@@ -664,7 +669,7 @@ final class ExamplePagerViewController: UIViewController {
     }
 
     private func pageIdentifier(at index: Int) -> String {
-        ["empty", "short", "long", "plain", "horizontal"][index]
+        ["empty", "short", "long", "plain", "horizontal", "compositional"][index]
     }
 
     private func installAppearanceRecorderControl() {
@@ -727,9 +732,14 @@ final class ExamplePagerViewController: UIViewController {
     }
 
     var activeScrollPresentationSamplerCountForTesting: Int {
-        pages.compactMap { $0 as? ExampleScrollPageViewController }
+        let standardPageCount = pages.compactMap { $0 as? ExampleScrollPageViewController }
             .filter(\.isScrollPresentationSamplingActive)
             .count
+        let compositionalPageCount = pages
+            .compactMap { $0 as? ExampleCompositionalPageViewController }
+            .filter(\.isScrollPresentationSamplingActive)
+            .count
+        return standardPageCount + compositionalPageCount
     }
 
     func scrollPageForTesting(at index: Int) -> UIViewController? {
@@ -783,6 +793,15 @@ final class ExamplePagerViewController: UIViewController {
                 title: "横向业务页",
                 identifier: "horizontal",
                 appearanceRecorder: appearanceRecorder
+            ),
+            ExampleCompositionalPageViewController(
+                title: "组合布局页",
+                identifier: "compositional",
+                generation: pageGeneration,
+                onAppearance: { [weak self] page, callback in
+                    self?.appearanceRecorder?.record(page: page, callback: callback)
+                },
+                onScrollStateChange: makeScrollStateHandler()
             )
         ]
     }
@@ -908,6 +927,13 @@ extension ExamplePagerViewController: AnchorPagerViewControllerDataSource {
         viewControllerAt index: Int
     ) -> UIViewController {
         pages[index]
+    }
+
+    func pagerViewController(
+        _ pagerViewController: AnchorPagerViewController,
+        allowsInteractiveHorizontalPagingAt index: Int
+    ) -> Bool {
+        index != 5
     }
 
     func headerContent(in pagerViewController: AnchorPagerViewController) -> AnchorPagerHeaderContent {

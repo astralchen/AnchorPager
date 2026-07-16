@@ -188,7 +188,7 @@ struct AnchorPagerExampleTests {
             viewController.children.compactMap { $0 as? AnchorPagerViewController }.first
         )
 
-        #expect(pager.dataSource?.numberOfViewControllers(in: pager) == 5)
+        #expect(pager.dataSource?.numberOfViewControllers(in: pager) == 6)
         #expect(
             pager.dataSource?.pagerViewController(
                 pager,
@@ -217,6 +217,82 @@ struct AnchorPagerExampleTests {
         #expect(
             probe.accessibilityValue
                 == "scrollDelegate=1;panDelegate=1;bounces=1;alwaysBounceVertical=0;isScrollEnabled=1;horizontalRange=1"
+        )
+    }
+
+    @Test func compositionalPageIsSixthAndUsesRootCollectionAsVerticalTarget() throws {
+        let viewController = ExamplePagerViewController(arguments: [])
+        viewController.loadViewIfNeeded()
+        let pager = try #require(
+            viewController.children.compactMap { $0 as? AnchorPagerViewController }.first
+        )
+
+        #expect(pager.dataSource?.numberOfViewControllers(in: pager) == 6)
+        #expect(
+            pager.dataSource?.pagerViewController(
+                pager,
+                titleForViewControllerAt: 5
+            ) == "组合布局页"
+        )
+        #expect(
+            pager.dataSource?.pagerViewController(
+                pager,
+                allowsInteractiveHorizontalPagingAt: 5
+            ) == false
+        )
+        for index in 0..<5 {
+            #expect(
+                pager.dataSource?.pagerViewController(
+                    pager,
+                    allowsInteractiveHorizontalPagingAt: index
+                ) == true
+            )
+        }
+
+        let page = try #require(viewController.pageForTesting(at: 5))
+        page.loadViewIfNeeded()
+        page.view.frame = CGRect(x: 0, y: 0, width: 390, height: 700)
+        page.view.layoutIfNeeded()
+        let collectionView = try #require(
+            firstSubview(in: page.view, as: UICollectionView.self) {
+                $0.accessibilityIdentifier == "compositional-collection-view"
+            }
+        )
+        let probe = try #require(
+            firstSubview(in: page.view, as: UIButton.self) {
+                $0.accessibilityIdentifier == "compositional-scroll-probe"
+            }
+        )
+
+        #expect(collectionView.collectionViewLayout is UICollectionViewCompositionalLayout)
+        #expect(page.anchorPagerScrollView === collectionView)
+        #expect(collectionView.contentSize.height > collectionView.bounds.height + 0.5)
+        #expect(
+            probe.accessibilityValue?
+                .hasPrefix(
+                    "scrollDelegate=1;panDelegate=1;bounces=1;alwaysBounceVertical=1;isScrollEnabled=1;verticalRange=1;"
+                ) == true
+        )
+    }
+
+    @Test func compositionalScrollStateRecordsMaximumLeadingItemAndResets() {
+        var state = ExampleCompositionalScrollState()
+        state.record(horizontalOffset: 42, visibleItemIndexes: [1, 2])
+        state.record(horizontalOffset: 96, visibleItemIndexes: [2, 3])
+
+        #expect(state.currentHorizontalOffset == 96)
+        #expect(state.maximumHorizontalOffset == 96)
+        #expect(state.leadingHorizontalItem == 2)
+        #expect(
+            state.serializedValue
+                == "horizontalCurrent=96.00;horizontalMax=96.00;leading=2"
+        )
+
+        state.resetHorizontalMetrics()
+
+        #expect(
+            state.serializedValue
+                == "horizontalCurrent=0.00;horizontalMax=0.00;leading=-1"
         )
     }
 
