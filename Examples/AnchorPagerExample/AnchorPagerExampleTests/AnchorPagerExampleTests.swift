@@ -195,6 +195,12 @@ struct AnchorPagerExampleTests {
                 titleForViewControllerAt: 4
             ) == "横向业务页"
         )
+        #expect(
+            pager.dataSource?.pagerViewController(
+                pager,
+                allowsInteractiveHorizontalPagingAt: 4
+            ) == false
+        )
         let page = try #require(viewController.pageForTesting(at: 4))
         page.loadViewIfNeeded()
         page.view.frame = CGRect(x: 0, y: 0, width: 390, height: 700)
@@ -209,11 +215,20 @@ struct AnchorPagerExampleTests {
                 $0.accessibilityIdentifier == "horizontal-business-probe"
             }
         )
+        let navigationRegion = try #require(
+            firstSubview(in: page.view, as: UIView.self) {
+                $0.accessibilityIdentifier == "horizontal-explicit-navigation-region"
+            }
+        )
+        let navigationLabel = try #require(
+            firstSubview(in: navigationRegion, as: UILabel.self) { _ in true }
+        )
 
         #expect(page.anchorPagerUsesDefaultScrollViewLookup == false)
         #expect(page.anchorPagerDefaultScrollView == nil)
         #expect(page.anchorPagerScrollView == nil)
         #expect(horizontalScrollView.contentSize.width > horizontalScrollView.bounds.width)
+        #expect(navigationLabel.text == "使用上方分段栏切换页面")
         #expect(
             probe.accessibilityValue
                 == "scrollDelegate=1;panDelegate=1;bounces=1;alwaysBounceVertical=0;isScrollEnabled=1;horizontalRange=1"
@@ -234,18 +249,13 @@ struct AnchorPagerExampleTests {
                 titleForViewControllerAt: 5
             ) == "组合布局页"
         )
-        #expect(
-            pager.dataSource?.pagerViewController(
-                pager,
-                allowsInteractiveHorizontalPagingAt: 5
-            ) == false
-        )
-        for index in 0..<5 {
+        for index in 0..<6 {
+            let expected = index != 4 && index != 5
             #expect(
                 pager.dataSource?.pagerViewController(
                     pager,
                     allowsInteractiveHorizontalPagingAt: index
-                ) == true
+                ) == expected
             )
         }
 

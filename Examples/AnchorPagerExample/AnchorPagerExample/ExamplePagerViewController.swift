@@ -933,7 +933,7 @@ extension ExamplePagerViewController: AnchorPagerViewControllerDataSource {
         _ pagerViewController: AnchorPagerViewController,
         allowsInteractiveHorizontalPagingAt index: Int
     ) -> Bool {
-        index != 5
+        index != 4 && index != 5
     }
 
     func headerContent(in pagerViewController: AnchorPagerViewController) -> AnchorPagerHeaderContent {
@@ -1367,15 +1367,15 @@ private final class ExampleHorizontalPageViewController:
 
     private func installLowerPagingRegion() {
         let region = UIView()
-        region.accessibilityIdentifier = "horizontal-pageboy-hit-region"
-        region.accessibilityLabel = "页面横向分页区域"
+        region.accessibilityIdentifier = "horizontal-explicit-navigation-region"
+        region.accessibilityLabel = "显式页面切换说明"
         region.isAccessibilityElement = true
         region.backgroundColor = .tertiarySystemBackground
         region.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(region)
 
         let label = UILabel()
-        label.text = "在此区域左右滑动切换页面"
+        label.text = "使用上方分段栏切换页面"
         label.font = .preferredFont(forTextStyle: .body)
         label.textColor = .secondaryLabel
         label.translatesAutoresizingMaskIntoConstraints = false
