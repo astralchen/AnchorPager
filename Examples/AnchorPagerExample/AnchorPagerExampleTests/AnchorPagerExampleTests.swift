@@ -524,6 +524,23 @@ struct AnchorPagerExampleTests {
         #expect(viewController.activeScrollPresentationSamplerCountForTesting == 0)
     }
 
+    @Test func compositionalPresentationSamplerFollowsVisiblePageLifecycle() throws {
+        let owner = ExamplePagerViewController(arguments: [])
+        owner.loadViewIfNeeded()
+        let page = try #require(
+            owner.pageForTesting(at: 5) as? ExampleCompositionalPageViewController
+        )
+        #expect(page.isScrollPresentationSamplingActive == false)
+
+        page.beginAppearanceTransition(true, animated: false)
+        page.endAppearanceTransition()
+        #expect(page.isScrollPresentationSamplingActive)
+
+        page.beginAppearanceTransition(false, animated: false)
+        page.endAppearanceTransition()
+        #expect(page.isScrollPresentationSamplingActive == false)
+    }
+
     @Test func headerTopBehaviorMenuAppliesExtendsUnderTopSafeAreaCoverage() async throws {
         try await withPagerWindow { viewController, window in
             viewController.loadViewIfNeeded()

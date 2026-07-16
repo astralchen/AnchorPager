@@ -814,12 +814,14 @@ final class AnchorPagerExampleUITests: XCTestCase {
     func testCompositionalReloadRebindsRootVerticalTarget() throws {
         let app = launchPage(index: 5, mode: "container")
         let stateProbe = scrollCoordinationStateProbe(in: app)
+        let trace = selectionTraceProbe(in: app)
         let generationOne = app.staticTexts["page-generation-1-compositional"]
 
         XCTAssertTrue(generationOne.waitForExistence(timeout: 3))
         XCTAssertNotNil(waitForScrollState(from: stateProbe) {
             $0.page == "compositional" && $0.hasScrollTarget
         })
+        reset(trace: trace)
 
         let reload = app.navigationBars.buttons["重新加载页面"]
         XCTAssertTrue(reload.waitForExistence(timeout: 3))
@@ -859,6 +861,7 @@ final class AnchorPagerExampleUITests: XCTestCase {
                 && $0.hasStableOwnership
                 && $0.hasVerticalRange
         })
+        XCTAssertEqual(selectionEventSequence(from: trace), [])
     }
 
     @MainActor
