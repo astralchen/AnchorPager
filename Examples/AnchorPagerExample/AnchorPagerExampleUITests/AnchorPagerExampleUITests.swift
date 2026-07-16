@@ -468,6 +468,53 @@ final class AnchorPagerExampleUITests: XCTestCase {
     }
 
     @MainActor
+    func testHorizontalBusinessRegionDoesNotDriveVerticalContainer() throws {
+        let app = launchPage(index: 4, mode: "container")
+        let stateProbe = scrollCoordinationStateProbe(in: app)
+        let horizontalScrollView = app.scrollViews["horizontal-business-scroll"]
+        let ownershipProbe = app.otherElements["horizontal-business-probe"]
+
+        XCTAssertTrue(horizontalScrollView.waitForExistence(timeout: 3))
+        XCTAssertTrue(ownershipProbe.waitForExistence(timeout: 3))
+        XCTAssertNotNil(waitForScrollState(from: stateProbe) {
+            $0.page == "horizontal"
+                && !$0.hasScrollTarget
+                && $0.collapse < 0.01
+                && abs($0.headerCollapse) < 0.5
+        })
+        stateProbe.tap()
+
+        let start = horizontalScrollView.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.82, dy: 0.45)
+        )
+        let end = horizontalScrollView.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.18, dy: 0.55)
+        )
+        start.press(
+            forDuration: 0.1,
+            thenDragTo: end,
+            withVelocity: .slow,
+            thenHoldForDuration: 0.05
+        )
+
+        let state = try XCTUnwrap(waitForScrollState(from: stateProbe) {
+            $0.page == "horizontal"
+                && !$0.hasScrollTarget
+                && $0.collapse < 0.01
+                && abs($0.headerCollapse) < 0.5
+                && $0.hasZeroPresentationMetrics
+        })
+        XCTAssertFalse(state.hasScrollTarget)
+        XCTAssertLessThan(state.collapse, 0.01)
+        XCTAssertLessThan(abs(state.headerCollapse), 0.5)
+        XCTAssertTrue(state.hasZeroPresentationMetrics)
+        XCTAssertEqual(
+            ownershipProbe.value as? String,
+            "scrollDelegate=1;panDelegate=1;bounces=1;alwaysBounceVertical=0;isScrollEnabled=1;horizontalRange=1"
+        )
+    }
+
+    @MainActor
     func testRapidPublicSelectionsCommitRealIntermediateThenLatestTarget() throws {
         let app = launchInteractionPage(
             initialIndex: 1,

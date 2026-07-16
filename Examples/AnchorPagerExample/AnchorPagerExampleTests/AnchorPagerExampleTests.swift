@@ -210,7 +210,9 @@ struct AnchorPagerExampleTests {
             }
         )
 
-        #expect(page.anchorPagerScrollView === horizontalScrollView)
+        #expect(page.anchorPagerUsesDefaultScrollViewLookup == false)
+        #expect(page.anchorPagerDefaultScrollView == nil)
+        #expect(page.anchorPagerScrollView == nil)
         #expect(horizontalScrollView.contentSize.width > horizontalScrollView.bounds.width)
         #expect(
             probe.accessibilityValue

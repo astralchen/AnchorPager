@@ -14,7 +14,10 @@ private final class AnchorPagerWeakScrollViewBox: NSObject {
 
 @MainActor
 extension UIViewController {
-    /// AnchorPager 使用的页面滚动视图。显式设置优先；未设置时按默认规则查找。
+    /// AnchorPager 用于 Header 折叠与纵向协调的页面滚动视图。
+    ///
+    /// 显式设置优先；未设置时按默认规则查找。只有横向滚动视图的页面应关闭
+    /// ``anchorPagerUsesDefaultScrollViewLookup``，且不要把横向滚动视图设置到此属性。
     public var anchorPagerScrollView: UIScrollView? {
         get {
             if let box = objc_getAssociatedObject(
@@ -46,7 +49,9 @@ extension UIViewController {
         }
     }
 
-    /// 是否启用默认滚动视图查找。
+    /// 是否启用纵向协调目标的默认滚动视图查找。
+    ///
+    /// 默认查找不推断滚动轴向。只有横向滚动视图的页面应将此属性设为 `false`。
     public var anchorPagerUsesDefaultScrollViewLookup: Bool {
         get {
             guard let number = objc_getAssociatedObject(
@@ -67,7 +72,9 @@ extension UIViewController {
         }
     }
 
-    /// 按确定性深度优先规则查找的默认滚动视图。
+    /// 按确定性深度优先规则查找的默认纵向协调目标。
+    ///
+    /// 查找结果不包含轴向推断；混合滚动页面应显式设置纵向父滚动视图。
     public var anchorPagerDefaultScrollView: UIScrollView? {
         guard anchorPagerUsesDefaultScrollViewLookup, isViewLoaded else { return nil }
 

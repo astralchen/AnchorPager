@@ -491,7 +491,7 @@ final class ExamplePagerViewController: UIViewController {
             scrollCoordinationState.hasScrollTarget = true
             page.reportCurrentScrollState()
         } else if pages[index] is ExampleHorizontalPageViewController {
-            scrollCoordinationState.hasScrollTarget = true
+            scrollCoordinationState.hasScrollTarget = false
             scrollCoordinationState.childDistance = 0
             updateScrollCoordinationStateControl()
         } else {
@@ -1244,7 +1244,7 @@ private final class ExampleHorizontalPageViewController:
         horizontalScrollView.bounces = true
         horizontalScrollView.alwaysBounceVertical = false
         horizontalScrollView.isScrollEnabled = true
-        anchorPagerScrollView = horizontalScrollView
+        anchorPagerUsesDefaultScrollViewLookup = false
         baselineScrollDelegateIdentifier = objectIdentifier(
             horizontalScrollView.delegate
         )
