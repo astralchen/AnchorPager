@@ -1,3 +1,4 @@
+import UIKit
 import XCTest
 @testable import AnchorPager
 
@@ -154,6 +155,53 @@ final class AnchorPagerLoggerTests: XCTestCase {
             ["paging.interactivePaging.disabled", "paging.interactivePaging.enabled"]
         )
         XCTAssertTrue(events.allSatisfy { $0.category == .paging })
+    }
+
+    @MainActor
+    func testHorizontalRouteDecisionLogsContainNoGeometryOrHierarchyPayload() {
+        let paging = UIScrollView(frame: CGRect(x: 0, y: 0, width: 390, height: 700))
+        let business = UIScrollView(frame: paging.bounds)
+        business.contentSize = CGSize(width: 900, height: 700)
+        paging.addSubview(business)
+        var velocity = CGPoint(x: -400, y: 0)
+        let gate = AnchorPagerHorizontalPagingRouteGate(
+            pagingScrollView: paging,
+            pagingPan: paging.panGestureRecognizer,
+            hitTest: { _, _ in business },
+            velocity: { _, _ in velocity }
+        )
+        paging.addGestureRecognizer(gate)
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+
+        business.contentOffset.x = 100
+        XCTAssertTrue(gate.gestureRecognizerShouldBegin(gate))
+        business.contentOffset.x = 510
+        XCTAssertFalse(gate.gestureRecognizerShouldBegin(gate))
+        velocity = CGPoint(x: 0, y: 400)
+        XCTAssertFalse(gate.gestureRecognizerShouldBegin(gate))
+
+        XCTAssertEqual(
+            events,
+            [
+                AnchorPagerLogger.Event(
+                    category: .gesture,
+                    level: .debug,
+                    event: "gesture.horizontalRoute.content"
+                ),
+                AnchorPagerLogger.Event(
+                    category: .gesture,
+                    level: .debug,
+                    event: "gesture.horizontalRoute.pagingBoundary"
+                ),
+                AnchorPagerLogger.Event(
+                    category: .gesture,
+                    level: .debug,
+                    event: "gesture.horizontalRoute.noCandidate"
+                ),
+            ]
+        )
     }
 
     func testVerticalDecelerationDriverUsesOnlyFixedLifecycleEvents() throws {
