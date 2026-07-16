@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 为 AnchorPager 增加按页面声明的交互式横向分页开关，让 Compositional Layout 混合轴页面关闭 Pageboy 横向拖拽、保留 Tabman bar/API 切页，并完成真实纵向、正交横向、reload 与 lifecycle 验收。
+**Goal:** 为 AnchorPager 增加按页面声明的交互式横向分页开关，让横向业务页与 Compositional Layout 混合轴页都关闭 Pageboy 横向拖拽、保留 Tabman bar/API 切页，并完成真实纵向、业务横向、正交横向、reload 与 lifecycle 验收。
 
 **Architecture:** `AnchorPagerViewControllerDataSource` 通过带默认实现的逐页 Bool 提供策略；`AnchorPagerViewController` 把策略作为 reload metadata 采集，`AnchorPagerPagingHostViewController` 是唯一 committed policy owner，`AnchorPagerPagingAdapter` 只执行 Pageboy 自有 `isScrollEnabled` 开关。Interaction、Scroll、Overscroll、PageStateStore、业务 scroll/pan delegate 与 bounce ownership 均不增加新 owner。
 
@@ -10,10 +10,11 @@
 
 ## Global Constraints
 
-- 设计基线固定为 `docs/superpowers/specs/2026-07-16-compositional-layout-mixed-axis-gesture-validation-design.md`，确认提交为 `f51c657`。
+- 设计基线固定为 `docs/superpowers/specs/2026-07-16-compositional-layout-mixed-axis-gesture-validation-design.md`，二次修订确认提交为 `9408bc7`。
 - 按用户要求继续在当前 `codex/v0-7-interaction-state` 分支工作，不创建 worktree。
 - Public API 只新增 `pagerViewController(_:allowsInteractiveHorizontalPagingAt:) -> Bool`，并由 protocol extension 默认返回 `true`。
 - `false` 只关闭 committed page 的 Pageboy 交互式横向拖拽；Tabman bar 和 `setSelectedIndex(_:animated:)` 必须继续可用。
+- Example 的 index 4、index 5 固定返回 `false`；index 0...3 保持默认 `true`，不得依赖 index 4 位于分页末端掩盖手势竞争。
 - 策略必须与 page count/title 使用同一 reload transaction token；不得从 page controller、scroll target、业务 view hierarchy 或 recognizer 推断。
 - PagingHost 独占 committed policy、reload 与 selection transaction；Adapter 不保存策略 queue/generation，InteractionCoordinator 不保存 index/policy。
 - Adapter 只设置 Pageboy 自有 `PageboyViewController.isScrollEnabled`；不得设置业务 child 的 scroll delegate、pan delegate、`isScrollEnabled`、`bounces` 或 `alwaysBounceVertical`。
@@ -25,27 +26,27 @@
 
 ---
 
-## 当前工作区与前置证据
+## 当前执行检查点与证据
 
-当前未提交的 Example 实验改动包括：
+Task 1–5 已按原计划完成并提交：
 
 ```text
-Examples/AnchorPagerExample/AnchorPagerExample/ExampleCompositionalPageViewController.swift
-Examples/AnchorPagerExample/AnchorPagerExample/ExamplePagerViewController.swift
-Examples/AnchorPagerExample/AnchorPagerExampleTests/AnchorPagerExampleTests.swift
-Examples/AnchorPagerExample/AnchorPagerExampleUITests/AnchorPagerExampleUITests.swift
+b2e6935 建立逐页横向分页策略元数据
+c4dcf66 封装 Pageboy 交互分页开关
+6dcd5bb 原子提交分页交互策略
+db83bf3 按选择终态切换分页策略
+77a04dd 接入组合布局页面级分页策略
 ```
 
-这些文件已经形成以下前置证据，但在页面级 Framework 策略完成前不视为交付：
+当前仅 `AnchorPagerExampleUITests.swift` 保留预期未提交改动。已确认的后续证据为：
 
-1. 结构 RED：`/private/tmp/AnchorPagerCompositionalStructuralRed-20260716-2.xcresult`，17 tests、15 pass、2 fail。
-2. 纯值 RED：`/private/tmp/AnchorPagerCompositionalStateRed-20260716-1.xcresult`，缺少 `ExampleCompositionalScrollState` 编译失败。
-3. Example unit GREEN：`test_sim_2026-07-16T04-02-01-348Z_pid79706_530ef605.xcresult`，18/18 pass。
-4. 纵向 handoff GREEN：`test_sim_2026-07-16T04-02-24-547Z_pid79706_4ded21fc.xcresult`，1/1 pass。
-5. 非正交区域旧契约 GREEN：`test_sim_2026-07-16T04-13-58-232Z_pid79706_a39919e3.xcresult`，1/1 pass。
-6. 正交 winner RED：`test_sim_2026-07-16T04-13-09-416Z_pid79706_f716df67.xcresult`，Pageboy 抢占，orthogonal offset 保持 0。
+1. Example target-level unit GREEN 为 18/18；Swift Testing 的 method-level `-only-testing` 会运行 0 tests，后续必须使用 target-level selector。
+2. `/private/tmp/AnchorPagerTask6OrthogonalGreen-20260716-1520.xcresult` 中组合布局正交左右拖动通过。
+3. `/private/tmp/AnchorPagerTask6PagePolicyGreen-20260716-1525.xcresult` 中原 index 5 页面级契约通过。
+4. `/private/tmp/AnchorPagerTask6PagePolicyRegression-20260716-1527.xcresult` 为 4 pass、2 fail；horizontal-only 与 interactive-pop 需分别隔离复验。
+5. `/private/tmp/AnchorPagerTask6HorizontalDiagnostic-20260716.xcresult` 精确证明 index 4 业务区域拖动提交了 index 5，终态为 `page=compositional`，而全部纵向 presentation 为零。
 
-执行本计划时保留这些改动，不回滚、不重复创建页面；从 Framework/Public RED 开始，随后把旧“非正交区域仍分页”测试迁移为已确认的新页面级契约。
+因此 Task 6 起按二次修订规格继续：先以单元 RED 让 index 4、index 5 都返回 `false`，再迁移真实 UI 契约；不得回退已经通过的 Framework Public/Host/Adapter 实现。
 
 ## 文件与职责
 
@@ -80,13 +81,13 @@ Examples/AnchorPagerExample/AnchorPagerExample/ExampleCompositionalPageViewContr
   - 组合布局混合轴页面、正交进度 probe 与显示帧 sampler。
 
 Examples/AnchorPagerExample/AnchorPagerExample/ExamplePagerViewController.swift
-  - 第六页装配，并仅对 index 5 返回 false。
+  - 第六页装配，对 index 4、index 5 返回 false，并修正横向业务页显式导航提示。
 
 Examples/AnchorPagerExample/AnchorPagerExampleTests/AnchorPagerExampleTests.swift
   - 覆盖第六页结构、策略、probe 与 sampler lifecycle。
 
 Examples/AnchorPagerExample/AnchorPagerExampleUITests/AnchorPagerExampleUITests.swift
-  - 覆盖纵向 handoff、正交双向拖拽、非正交禁用、bar/API、进入目标页与 reload。
+  - 覆盖纵向 handoff、业务/正交双向拖拽、非正交禁用、bar/API、index 3→4 target terminal 与 reload。
 ```
 
 ---
@@ -984,7 +985,7 @@ git commit -m "按选择终态切换分页策略"
 
 **Interfaces:**
 - Consumes: Task 1 Public data source 方法。
-- Produces: index 5 为 `false`，index 0...4 为默认 `true`；根 CollectionView 仍是唯一纵向 target。
+- Produces: 首轮 index 5 为 `false`、index 0...4 为默认 `true`；根 CollectionView 仍是唯一纵向 target。Task 6 根据二次修订规格继续把 index 4 改为 `false`。
 
 - [ ] **Step 1：收紧 Example 策略 RED**
 
@@ -1013,10 +1014,10 @@ for index in 0..<5 {
 xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj \
   -scheme AnchorPagerExample \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' \
-  -only-testing:AnchorPagerExampleTests/AnchorPagerExampleTests/compositionalPageIsSixthAndUsesRootCollectionAsVerticalTarget test
+  -only-testing:AnchorPagerExampleTests test
 ```
 
-预期：index 5 仍继承默认 `true`，该断言失败。
+预期：18 tests 中组合布局策略断言失败，index 5 仍继承默认 `true`。Swift Testing method-level selector 在当前工具链运行 0 tests，因此固定使用 target-level selector。
 
 - [ ] **Step 3：实现 Example data source 策略**
 
@@ -1058,94 +1059,247 @@ git commit -m "接入组合布局页面级分页策略"
 
 ---
 
-### Task 6：用真实 UI 固定页面级横向手势、bar 与 API 契约
+### Task 6：让横向业务页与组合布局页统一声明 false
 
 **Files:**
+- Modify: `Examples/AnchorPagerExample/AnchorPagerExample/ExamplePagerViewController.swift`
+- Modify: `Examples/AnchorPagerExample/AnchorPagerExampleTests/AnchorPagerExampleTests.swift`
 - Modify: `Examples/AnchorPagerExample/AnchorPagerExampleUITests/AnchorPagerExampleUITests.swift`
-- Modify: `Examples/AnchorPagerExample/AnchorPagerExample/ExamplePagerViewController.swift`（只使用既有 launch-argument gated public selection trigger）
 
 **Interfaces:**
-- Consumes: `compositional-scroll-probe`、`scroll-coordination-state`、`selection-events`、真实 Tabman item 与 public rapid selection trigger。
-- Produces: 正交左右双向 winner、非正交区域不分页、bar/API 可离页、相邻页仍可拖入 disabled target 的真实证据。
+- Consumes: Task 1 的 `pagerViewController(_:allowsInteractiveHorizontalPagingAt:) -> Bool` 与 Task 4 的 matching target terminal 策略切换。
+- Produces: index 4、index 5 为 `false`，index 0...3 为 `true`；横向业务页不再依赖 Pageboy 末端边界，页面提示不再承诺不可用的区域分页手势。
 
-- [ ] **Step 1：保留正交双向真实 drag 并确认旧 RED 转 GREEN**
+- [ ] **Step 1：写双页面策略、提示和业务横向位移 RED**
 
-保持现有 `testCompositionalOrthogonalRegionOwnsHorizontalDrag()`：第一次左拖要求 `horizontalMax > 30`、`current > 20`；第二次右拖要求 current 至少减少 20；两次 selection trace 均为空，纵向 presentation 均小于 `0.5 pt`。
+在 `horizontalBusinessPageIsFifthAndKeepsDelegateConfiguration()` 增加：
+
+```swift
+#expect(
+    pager.dataSource?.pagerViewController(
+        pager,
+        allowsInteractiveHorizontalPagingAt: 4
+    ) == false
+)
+let navigationRegion = try #require(
+    firstSubview(in: page.view, as: UIView.self) {
+        $0.accessibilityIdentifier == "horizontal-explicit-navigation-region"
+    }
+)
+let navigationLabel = try #require(
+    firstSubview(in: navigationRegion, as: UILabel.self) { _ in true }
+)
+#expect(navigationLabel.text == "使用上方分段栏切换页面")
+```
+
+把组合布局策略循环收紧为：
+
+```swift
+for index in 0..<6 {
+    let expected = index != 4 && index != 5
+    #expect(
+        pager.dataSource?.pagerViewController(
+            pager,
+            allowsInteractiveHorizontalPagingAt: index
+        ) == expected
+    )
+}
+```
+
+在 `testHorizontalBusinessRegionDoesNotDriveVerticalContainer()` 的真实 drag 前后记录首卡 frame：
+
+```swift
+let firstCard = app.staticTexts["横向业务内容 1"]
+XCTAssertTrue(firstCard.waitForExistence(timeout: 3))
+let initialFirstCardMinX = firstCard.frame.minX
+// 保留现有 horizontalScrollView coordinate drag
+XCTAssertLessThan(
+    firstCard.frame.minX,
+    initialFirstCardMinX - 20,
+    "业务横向内容必须产生真实位移"
+)
+```
+
+- [ ] **Step 2：运行 target-level Example unit RED**
+
+```bash
+xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj \
+  -scheme AnchorPagerExample \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' \
+  -only-testing:AnchorPagerExampleTests test
+```
+
+预期：18 tests 中策略/提示测试 FAIL；index 4 当前仍为 `true`，旧 identifier/提示仍存在。不得使用 Swift Testing method-level selector，因为该工具链会得到 0 tests。
+
+- [ ] **Step 3：实现双页面策略与准确提示**
+
+```swift
+func pagerViewController(
+    _ pagerViewController: AnchorPagerViewController,
+    allowsInteractiveHorizontalPagingAt index: Int
+) -> Bool {
+    index != 4 && index != 5
+}
+```
+
+把横向页下半区域改为显式导航说明：
+
+```swift
+region.accessibilityIdentifier = "horizontal-explicit-navigation-region"
+region.accessibilityLabel = "显式页面切换说明"
+// ...
+label.text = "使用上方分段栏切换页面"
+```
+
+不得修改横向业务 `UIScrollView` 的 delegate、pan delegate、bounce、`isScrollEnabled` 或 nil 纵向 target 契约。
+
+- [ ] **Step 4：运行 Example unit GREEN 与 Framework 策略回归**
+
+```bash
+xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj \
+  -scheme AnchorPagerExample \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' \
+  -only-testing:AnchorPagerExampleTests test
+xcodebuild -quiet -scheme AnchorPager \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' \
+  -only-testing:AnchorPagerTests/AnchorPagerViewControllerTests \
+  -only-testing:AnchorPagerTests/AnchorPagerPagingHostViewControllerTests test
+```
+
+预期：Example unit 18/18 PASS；Framework ViewController/Host 全部 PASS。
+
+- [ ] **Step 5：隔离运行横向业务真实 UI GREEN**
 
 ```bash
 xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj \
   -scheme AnchorPagerExample \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' \
   -parallel-testing-enabled NO \
-  -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testCompositionalOrthogonalRegionOwnsHorizontalDrag test
+  -enableCodeCoverage NO \
+  -resultBundlePath /private/tmp/AnchorPagerTask6HorizontalBusinessGreen-20260716.xcresult \
+  -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testHorizontalBusinessRegionDoesNotDriveVerticalContainer test
 ```
 
-预期：1/1 PASS；Pageboy 不再抢占 orthogonal pan。
+预期：1/1 PASS；页面保持 horizontal、业务卡片横向位移超过 20 pt、nil scroll target 与所有纵向 presentation 保持零。
 
-- [ ] **Step 2：把旧非正交测试改为新页面级 RED/GREEN**
+- [ ] **Step 6：自审并提交 Example 策略**
 
-重命名为 `testCompositionalPageDisablesNonOrthogonalSwipeButKeepsBarSelection()`，横拖后改为：
+检查 index 4、index 5 的 `false` 只来自 data source metadata，不写入页面 controller 或手势热路径；旧 `horizontal-pageboy-hit-region` 与旧提示全文零命中。
 
-```swift
-let stateAfterSwipe = try XCTUnwrap(waitForScrollState(from: stateProbe) {
-    $0.page == "compositional" && $0.hasScrollTarget
-})
-XCTAssertEqual(stateAfterSwipe.page, "compositional")
-XCTAssertEqual(selectionEventSequence(from: trace), [])
-
-app.descendants(matching: .any)["横向业务页"].tap()
-XCTAssertTrue(
-    app.scrollViews["horizontal-business-scroll"].waitForExistence(timeout: 5)
-)
-XCTAssertEqual(waitForSelectionTrace(from: trace, matching: [4]), [4])
+```bash
+git diff --check
+rg -n 'horizontal-pageboy-hit-region|在此区域左右滑动切换页面' Examples/AnchorPagerExample
+git add Examples/AnchorPagerExample/AnchorPagerExample/ExamplePagerViewController.swift Examples/AnchorPagerExample/AnchorPagerExampleTests/AnchorPagerExampleTests.swift
+git commit -m "统一横向业务页面分页策略"
 ```
 
-- [ ] **Step 3：增加 public API 离页与相邻页拖入测试**
+---
 
-新增 `testCompositionalPageKeepsPublicSelectionAndIncomingSwipeAvailable()`：
+### Task 7：固定真实 UI 的 target terminal、bar 与 API 契约
+
+**Files:**
+- Modify: `Examples/AnchorPagerExample/AnchorPagerExampleUITests/AnchorPagerExampleUITests.swift`
+
+**Interfaces:**
+- Consumes: index 3 `true`、index 4/5 `false`、`compositional-scroll-probe`、`scroll-coordination-state`、`selection-event-trace`、真实 Tabman item 与 public rapid selection trigger。
+- Produces: enabled index 3→disabled index 4 的 matching terminal、index 4 业务横向 winner、index 4→5 bar terminal、index 5 orthogonal winner与 API 离页证据。
+
+- [ ] **Step 1：保留组合布局正交、非正交与 API 契约**
+
+保留已通过的 `testCompositionalOrthogonalRegionOwnsHorizontalDrag()` 和 `testCompositionalPageDisablesNonOrthogonalSwipeButKeepsBarSelection()`。把 `testCompositionalPageKeepsPublicSelectionAndIncomingSwipeAvailable()` 拆为只验证 API 的 `testCompositionalPageKeepsPublicSelectionAvailable()`：
 
 ```swift
-let apiApp = launchInteractionPage(
+let app = launchInteractionPage(
     initialIndex: 5,
     rapidTargets: "4",
     recordsAppearance: true
 )
-let apiTrace = selectionTraceProbe(in: apiApp)
-reset(trace: apiTrace)
-rapidSelectionTrigger(in: apiApp).tap()
-XCTAssertEqual(waitForSelectionTrace(from: apiTrace, matching: [4]), [4])
-apiApp.terminate()
-
-let swipeApp = launchPage(index: 4, mode: "container")
-let swipeTrace = selectionTraceProbe(in: swipeApp)
-reset(trace: swipeTrace)
-let start = swipeApp.coordinate(withNormalizedOffset: CGVector(dx: 0.82, dy: 0.78))
-let end = swipeApp.coordinate(withNormalizedOffset: CGVector(dx: 0.18, dy: 0.78))
-start.press(forDuration: 0.1, thenDragTo: end)
+let trace = selectionTraceProbe(in: app)
+reset(trace: trace)
+rapidSelectionTrigger(in: app).tap()
+XCTAssertEqual(waitForSelectionTrace(from: trace, matching: [4]), [4])
 XCTAssertTrue(
-    swipeApp.cells["compositional-horizontal-card-1"].waitForExistence(timeout: 5)
+    app.scrollViews["horizontal-business-scroll"].waitForExistence(timeout: 5)
 )
-XCTAssertEqual(waitForSelectionTrace(from: swipeTrace, matching: [5]), [5])
 ```
 
-进入 index 5 后，再对 orthogonal card 左拖并要求横向进度大于 20、selection trace 仍为 `[5]`，证明 matching target terminal 后策略已切换。
+- [ ] **Step 2：新增 index 3→4 target terminal 与 index 4→5 bar 测试**
 
-- [ ] **Step 4：运行三类页面级 UI 与相邻手势回归**
+新增 `testEnabledPageCanSwipeIntoDisabledHorizontalPageThenBarToCompositional()`：
+
+```swift
+let app = launchPage(index: 3, mode: "container")
+let trace = selectionTraceProbe(in: app)
+reset(trace: trace)
+let pageStart = app.coordinate(withNormalizedOffset: CGVector(dx: 0.82, dy: 0.78))
+let pageEnd = app.coordinate(withNormalizedOffset: CGVector(dx: 0.18, dy: 0.78))
+pageStart.press(forDuration: 0.1, thenDragTo: pageEnd)
+
+let horizontalScrollView = app.scrollViews["horizontal-business-scroll"]
+XCTAssertTrue(horizontalScrollView.waitForExistence(timeout: 5))
+XCTAssertEqual(waitForSelectionTrace(from: trace, matching: [4]), [4])
+
+let firstCard = app.staticTexts["横向业务内容 1"]
+let initialMinX = firstCard.frame.minX
+let businessStart = horizontalScrollView.coordinate(
+    withNormalizedOffset: CGVector(dx: 0.82, dy: 0.45)
+)
+let businessEnd = horizontalScrollView.coordinate(
+    withNormalizedOffset: CGVector(dx: 0.18, dy: 0.55)
+)
+businessStart.press(forDuration: 0.1, thenDragTo: businessEnd)
+XCTAssertLessThan(firstCard.frame.minX, initialMinX - 20)
+XCTAssertEqual(selectionEventSequence(from: trace), [4])
+
+app.descendants(matching: .any)["组合布局页"].tap()
+let card = app.cells["compositional-horizontal-card-1"]
+XCTAssertTrue(card.waitForExistence(timeout: 5))
+XCTAssertEqual(waitForSelectionTrace(from: trace, matching: [4, 5]), [4, 5])
+
+let compositionalProbe = compositionalScrollProbe(in: app)
+reset(trace: compositionalProbe)
+let cardStart = card.coordinate(withNormalizedOffset: CGVector(dx: 0.82, dy: 0.48))
+let cardEnd = card.coordinate(withNormalizedOffset: CGVector(dx: 0.18, dy: 0.52))
+cardStart.press(forDuration: 0.1, thenDragTo: cardEnd)
+XCTAssertNotNil(waitForCompositionalState(from: compositionalProbe, timeout: 5) {
+    $0.maximumHorizontalOffset > 20
+})
+XCTAssertEqual(selectionEventSequence(from: trace), [4, 5])
+```
+
+- [ ] **Step 3：先隔离复验 interactive-pop**
 
 ```bash
 xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj \
   -scheme AnchorPagerExample \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' \
   -parallel-testing-enabled NO \
+  -enableCodeCoverage NO \
+  -resultBundlePath /private/tmp/AnchorPagerTask7InteractivePopIsolation-20260716.xcresult \
+  -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testLeadingEdgeInteractivePopWinsOverPageboyPaging test
+```
+
+预期：1/1 PASS。若隔离仍失败，停止 Task 7 并以 xcresult activity/attachment 重新分型；不得把 batch 干扰假设写成产品修复。
+
+- [ ] **Step 4：运行七项页面级与相邻手势回归**
+
+```bash
+xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj \
+  -scheme AnchorPagerExample \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' \
+  -parallel-testing-enabled NO \
+  -enableCodeCoverage NO \
+  -resultBundlePath /private/tmp/AnchorPagerTask7PagePolicyRegression-20260716.xcresult \
   -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testCompositionalOrthogonalRegionOwnsHorizontalDrag \
   -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testCompositionalPageDisablesNonOrthogonalSwipeButKeepsBarSelection \
-  -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testCompositionalPageKeepsPublicSelectionAndIncomingSwipeAvailable \
+  -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testCompositionalPageKeepsPublicSelectionAvailable \
+  -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testEnabledPageCanSwipeIntoDisabledHorizontalPageThenBarToCompositional \
   -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testHorizontalSwipeSelectsNextPageContent \
   -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testHorizontalBusinessRegionDoesNotDriveVerticalContainer \
   -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testLeadingEdgeInteractivePopWinsOverPageboyPaging test
 ```
 
-预期：6/6 PASS；普通页面分页、horizontal-only nil target 与 interactive-pop 无回归。
+预期：7/7 PASS；普通页面分页、horizontal-only nil target、业务横向位移与 interactive-pop 无回归。
 
 - [ ] **Step 5：自审并提交 UI 契约**
 
@@ -1153,13 +1307,13 @@ xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj \
 
 ```bash
 git diff --check
-git add Examples/AnchorPagerExample/AnchorPagerExampleUITests/AnchorPagerExampleUITests.swift Examples/AnchorPagerExample/AnchorPagerExample/ExamplePagerViewController.swift
-git commit -m "验收页面级横向分页手势"
+git add Examples/AnchorPagerExample/AnchorPagerExampleUITests/AnchorPagerExampleUITests.swift
+git commit -m "验收双横向业务页面手势"
 ```
 
 ---
 
-### Task 7：验收纵向 handoff、reload/rebind、appearance 与 sampler 资源
+### Task 8：验收纵向 handoff、reload/rebind、appearance 与 sampler 资源
 
 **Files:**
 - Modify: `Examples/AnchorPagerExample/AnchorPagerExampleTests/AnchorPagerExampleTests.swift`
@@ -1170,7 +1324,7 @@ git commit -m "验收页面级横向分页手势"
 - Consumes: 根 CollectionView committed target、page generation、matching reload policy、appearance callback 和现有 display-link sampler。
 - Produces: 新 generation 继续 false、旧页面释放、纵向 handoff 与采样资源成对清理的证据。
 
-- [ ] **Step 1：补组合页面 sampler lifecycle RED**
+- [ ] **Step 1：补组合页面 sampler lifecycle 回归**
 
 ```swift
 @Test func compositionalPresentationSamplerFollowsVisiblePageLifecycle() throws {
@@ -1191,7 +1345,18 @@ git commit -m "验收页面级横向分页手势"
 }
 ```
 
-- [ ] **Step 2：固定 sampler 的成对实现**
+- [ ] **Step 2：使用 target-level selector 运行 lifecycle 回归**
+
+```bash
+xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj \
+  -scheme AnchorPagerExample \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' \
+  -only-testing:AnchorPagerExampleTests test
+```
+
+预期：新增后 19/19 PASS。现有实验实现已经具备成对 start/stop 时，该测试是先补齐遗漏的生命周期回归，不制造人为 RED；不得使用会运行 0 tests 的 Swift Testing method-level selector。
+
+- [ ] **Step 3：仅在回归暴露缺口时固定 sampler 成对实现**
 
 页面 lifecycle 保持以下唯一入口：
 
@@ -1218,21 +1383,16 @@ deinit {
 
 `startScrollPresentationSampling()` 必须先判断 `displayLink == nil`，`stopScrollPresentationSampling()` 必须同步 invalidate 并清 nil。
 
-- [ ] **Step 3：运行 lifecycle 单元测试**
-
-```bash
-xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj \
-  -scheme AnchorPagerExample \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' \
-  -only-testing:AnchorPagerExampleTests/AnchorPagerExampleTests/compositionalPresentationSamplerFollowsVisiblePageLifecycle \
-  -only-testing:AnchorPagerExampleTests/AnchorPagerExampleTests/scrollPresentationSamplerFollowsVisiblePageLifecycle test
-```
-
-预期：2/2 PASS；若第一项失败，只修复 `viewWillAppear` start、`viewDidDisappear` stop 与 `deinit` invalidate 的成对关系。
-
 - [ ] **Step 4：收紧 reload UI 策略与新 generation 正交能力**
 
-保持 `testCompositionalReloadRebindsRootVerticalTarget()` 的 generation 1→2、旧元素消失、root target 与 presentation 断言；reload 后对新 card 左拖并要求：
+保持 `testCompositionalReloadRebindsRootVerticalTarget()` 的 generation 1→2、旧元素消失、root target 与 presentation 断言；启动后取得并重置 trace：
+
+```swift
+let trace = selectionTraceProbe(in: app)
+reset(trace: trace)
+```
+
+reload 后对新 card 左拖并要求：
 
 ```swift
 XCTAssertNotNil(waitForCompositionalState(from: compositionalProbe, timeout: 5) {
@@ -1240,7 +1400,7 @@ XCTAssertNotNil(waitForCompositionalState(from: compositionalProbe, timeout: 5) 
         && $0.hasStableOwnership
         && $0.hasVerticalRange
 })
-XCTAssertEqual(selectionEventSequence(from: selectionTraceProbe(in: app)), [])
+XCTAssertEqual(selectionEventSequence(from: trace), [])
 ```
 
 - [ ] **Step 5：运行纵向/reload/appearance 聚焦回归**
@@ -1250,6 +1410,8 @@ xcodebuild -quiet -project Examples/AnchorPagerExample.xcodeproj \
   -scheme AnchorPagerExample \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' \
   -parallel-testing-enabled NO \
+  -enableCodeCoverage NO \
+  -resultBundlePath /private/tmp/AnchorPagerTask8LifecycleRegression-20260716.xcresult \
   -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testCompositionalVerticalRegionHandsOffToCollectionView \
   -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testCompositionalReloadRebindsRootVerticalTarget \
   -only-testing:AnchorPagerExampleUITests/AnchorPagerExampleUITests/testReloadReplacesOldPageGenerationAndKeepsPageInteractive \
@@ -1279,7 +1441,7 @@ git commit -m "验收组合布局重载与资源生命周期"
 
 ---
 
-### Task 8：同步长期文档、完整门禁与 fresh-pass
+### Task 9：同步长期文档、完整门禁与 fresh-pass
 
 **Files:**
 - Modify: `README.md`
@@ -1294,7 +1456,7 @@ git commit -m "验收组合布局重载与资源生命周期"
 - Modify: `AGENTS.md`
 
 **Interfaces:**
-- Consumes: Task 1–7 的新鲜 RED/GREEN、commit、真实 UI 和日志证据。
+- Consumes: Task 1–8 的新鲜 RED/GREEN、commit、真实 UI 和日志证据。
 - Produces: 长期 Public 契约、能力边界、最终测试统计、生产 HEAD 和复审结论。
 
 - [ ] **Step 1：同步长期文档的精确契约**
@@ -1306,6 +1468,7 @@ allowsInteractiveHorizontalPagingAt 默认 true。
 false 只关闭 committed page 的 Pageboy 横向拖拽。
 Tabman bar/API 保持可用；从 enabled page 可拖入 disabled target。
 disabled page 的非正交区域也不能横滑分页。
+Example index 4、index 5 显式 false；index 3→4 验证 enabled-to-disabled terminal，index 4↔5 只使用 bar/API。
 策略按 reload metadata generation 原子提交，由 PagingHost 独占 committed 状态。
 Adapter 只写 Pageboy 自有 isScrollEnabled，不修改业务 child。
 任意业务横向 UIScrollView 在默认 true 页面自动优先仍不支持。
@@ -1378,7 +1541,7 @@ xcrun xcresulttool get build-results --path /private/tmp/AnchorPagerCompositiona
 
 - [ ] **Step 7：执行 fresh-pass**
 
-从设计提交 `91a49f0`、原计划提交 `f318029` 和修订规格提交 `f51c657` 起重读完整 diff。按 Critical/Important/Minor 记录；任何 Critical/Important 必须补 RED、修复并重跑受影响聚焦与全量门禁。除非用户明确选择 subagent-driven 执行，否则在当前会话本地完成复审。
+从设计提交 `91a49f0`、原计划提交 `f318029`、首次修订规格提交 `f51c657` 与二次修订规格提交 `9408bc7` 起重读完整 diff。按 Critical/Important/Minor 记录；任何 Critical/Important 必须补 RED、修复并重跑受影响聚焦与全量门禁。用户已选择当前会话 inline execution，在当前会话本地完成复审。
 
 - [ ] **Step 8：写入真实验收结果并提交文档**
 
@@ -1388,14 +1551,14 @@ git add AGENTS.md README.md docs
 git commit -m "完成组合布局页面级分页验收"
 ```
 
-只有 Task 1–8、全量门禁和 fresh-pass 全部完成，才能把组合布局专项标记 Ready，并在 `AGENTS.md` 记录最终生产 HEAD。
+只有 Task 1–9、全量门禁和 fresh-pass 全部完成，才能把组合布局专项标记 Ready，并在 `AGENTS.md` 记录最终生产 HEAD。
 
 ## 计划自审
 
-1. **规格覆盖：** Task 1 覆盖 Public/default/metadata；Task 2 覆盖 Adapter/日志；Task 3 覆盖 reload atomicity；Task 4 覆盖 selection terminal；Task 5 覆盖 Example 声明；Task 6 覆盖页面级真实手势和 explicit selection；Task 7 覆盖纵向/reload/lifecycle；Task 8 覆盖长期文档、全量门禁和 fresh-pass。
+1. **规格覆盖：** Task 1 覆盖 Public/default/metadata；Task 2 覆盖 Adapter/日志；Task 3 覆盖 reload atomicity；Task 4 覆盖 selection terminal；Task 5 覆盖第六页首轮装配；Task 6 覆盖 index 4/5 双策略与横向页提示；Task 7 覆盖 target terminal、业务/正交横向手势和 explicit selection；Task 8 覆盖纵向/reload/lifecycle；Task 9 覆盖长期文档、全量门禁和 fresh-pass。
 2. **占位语句扫描：** 已按计划技能的禁用模式逐项检索，当前无命中；每个代码变更步骤都给出精确 symbol、代码和预期结果。
 3. **类型一致性：** Public 方法统一为 `pagerViewController(_:allowsInteractiveHorizontalPagingAt:) -> Bool`；metadata 统一为 `interactiveHorizontalPagingPermissions: [Bool]`；Adapter 入口统一为 `setInteractiveHorizontalPagingEnabled(_:)`。
 4. **所有权一致性：** ViewController 只采集，Host 只 committed，Adapter 只执行；Store/Interaction/Scroll/Overscroll、业务 delegate/pan/bounce 与 containment 不新增职责。
-5. **TDD 顺序：** 每个 Framework 能力先有 RED；现有 Example 实验仅作为前置门禁证据，页面级策略、非正交新契约、reload/lifecycle 均有新的 RED/GREEN。
-6. **回归完整性：** 覆盖 reload 重入、stale/rejected terminal、missing semantic、active/latest、empty teardown、bar/API、incoming swipe、interactive-pop、horizontal-only nil target、纵向 handoff、appearance 与资源释放。
-7. **提交边界：** 每个任务对应单一中文提交；未完成 Framework 策略前不提交 Example 为已交付状态。
+5. **TDD 顺序：** Framework 能力已按 RED/GREEN 完成；二次修订从 index 4 策略/提示 RED 开始，真实 UI 分别固定 index 3→4 terminal、index 4 业务位移、index 4→5 bar、index 5 orthogonal 与 reload/lifecycle。
+6. **回归完整性：** 覆盖 reload 重入、stale/rejected terminal、missing semantic、active/latest、empty teardown、bar/API、enabled-to-disabled incoming swipe、interactive-pop、horizontal-only nil target、业务横向位移、纵向 handoff、appearance 与资源释放。
+7. **提交边界：** Task 1–5 的既有中文提交保持不变；Task 6–9 各自单一中文主题提交，UI 文件在 Task 7 集中提交，不混入 Task 6 的策略提交。
