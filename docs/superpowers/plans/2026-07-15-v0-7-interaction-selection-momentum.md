@@ -8,7 +8,7 @@
 
 **Tech Stack:** Swift 6.2、Swift 6 language mode、UIKit、iOS 14+、Swift Package Manager、Tabman 4.0.1、Pageboy 5.0.2、XCTest/XCUITest、Xcode 26.6、iPhone 17 Pro / iOS 26.5 Simulator。
 
-**当前状态：** Task 0–15 已全部完成并按任务提交；2026-07-16 发现 Task 12 横向-only Example 页面错误登记纵向 target，独立修复计划正在执行，v0.7 Ready 暂停。详细入口：`docs/superpowers/plans/2026-07-16-horizontal-only-page-vertical-scroll-target.md`。
+**当前状态：** Task 0–15 与 2026-07-16 横向-only 页面纵向目标回归专项均已完成；修复生产代码 HEAD `984a009`，v0.7 Ready。详细记录：`docs/superpowers/plans/2026-07-16-horizontal-only-page-vertical-scroll-target.md`。
 
 ## Global Constraints
 

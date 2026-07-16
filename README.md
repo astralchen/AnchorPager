@@ -178,7 +178,23 @@ final class ListPageViewController: UIViewController {
 }
 ```
 
-显式设置的 `anchorPagerScrollView` 优先级高于默认查找。
+显式设置的 `anchorPagerScrollView` 优先级高于默认查找。该属性只表示参与 Header 折叠、纵向 handoff、managed inset、offset snapshot 和边界 owner 的纵向协调目标，不是页面内任意 `UIScrollView` 的登记入口。
+
+只有横向业务滚动视图的页面必须关闭默认查找，并保持纵向目标为 nil：
+
+```swift
+final class HorizontalOnlyPageViewController: UIViewController {
+    private let horizontalScrollView = UIScrollView()
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.addSubview(horizontalScrollView)
+        anchorPagerUsesDefaultScrollViewLookup = false
+    }
+}
+```
+
+页面同时包含纵向父 scroll 和嵌套横向业务 scroll 时，只把纵向父 scroll 设置为 `anchorPagerScrollView`。默认查找保持确定性的深度优先规则，不依据 `contentSize` 或运行时手势推断轴向；接入方必须显式表达 horizontal-only 或混合页面的纵向目标语义。
 
 AnchorPager 接管目标 scroll view 时会把 `contentInsetAdjustmentBehavior` 设为 `.never`、把 `automaticallyAdjustsScrollIndicatorInsets` 设为 `false`，并在现有外部 inset 上差量叠加 managed top/bottom。页面被 reload 移除或容器释放时，只移除最后一次 managed 部分，并恢复两项原始自动调整状态。调用方运行时修改外部 inset 时，应基于当前总 inset 做增量修改；若直接用不包含 managed 部分的绝对值覆盖整个 `contentInset`，框架无法从 UIKit 单一属性推断调用方意图。
 
@@ -243,6 +259,10 @@ log stream --predicate 'subsystem == "com.anchorpager.AnchorPager"'
 ## 当前限制
 
 v0.5 连续纵向 handoff、无滚动页直接承载、stable/native boundary 分离、两类底部回弹路径、plain bottom 页面 surface/bar 分层、Header 安装前 bootstrap seed、主容器真实 top inset/固定高度 Header presentation、v0.6 三种顶部模式，以及 v0.7 统一交互状态、快速选择事务、系统返回优先级和双向跨 owner 惯性均已实现。状态栏点击顶滚和尺寸变化后的滚动位置恢复留给 v0.8；refresh control 或业务刷新任务不属于 AnchorPager。Tabman/Pageboy 仅出现在 internal adapter 层，Public API 不暴露第三方类型。
+
+v0.7 最终生产代码 HEAD `07a3443` 已通过 Framework 426/426、Example 60/60（16 单元 + 44 UI）和 generic iOS Simulator build；全部 0 fail、0 skip、0 error、0 warning、0 analyzer warning，fresh-pass 终态为 Critical 0、Important 0、Minor 0。
+
+2026-07-16 横向-only 页面纵向目标修复生产代码 HEAD `984a009` 已把 Example 第五页改为 original Pageboy page + nil 纵向 target；横向业务 scroll 不再进入 managed inset、snapshot、纵向 binding 或 container/current-child simultaneous pair。Framework 426/426、Example 61/61（16 单元 + 45 UI）与 generic iOS Simulator build 全部通过，0 fail、0 skip、0 error、0 warning、0 analyzer warning；fresh-pass 终态 Critical 0、Important 0、Minor 0，v0.7 恢复 Ready。
 
 当前不保证页面内部任意横向 `UIScrollView` 自动优先于 Pageboy。真实 UIKit 验收证明 direct failure relation 与无侵入 guard 都无法在不接管既有 delegate、不重置手势、不依赖私有层级且不阻塞页面其他区域的前提下稳定改变同向嵌套 scroll winner；框架因此不安装业务 child failure relation。需要该组合时，应暂时由接入方调整页面交互布局，后续版本若提供能力将先定义显式接入契约。
 

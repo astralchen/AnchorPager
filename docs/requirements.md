@@ -24,6 +24,8 @@ AnchorPager 是一个全新的独立 UIKit 容器框架，用于实现可变 Hea
 
 v0.5/v0.6 初次独立复审的 3 个 Important 已在 `f81ca1e` 修复，第二次整分支复审的零稳定区间边界反向切换 Important 已在 `5b80893` 修复，第三次整分支复审的已呈现 `.top/.child` 回稳总量跳变 Important 已在 `128821f` 修复；第二、三次复审的文档 Minor 均已同步修正。第四次整分支独立复审覆盖 `be2d783...13b3d95`，两个 Minor 已在 `b9699b0` 修复。2026-07-14 plain page bottom/bar 安全区、formal Header bootstrap 和真实 Header 附着前 required zero-height 缺口分别修复到 `c37e829`、`d6ece31`。主容器真实 top inset 与固定高度 Header presentation 专项最终生产 HEAD 为 `424a0a3`；fresh-pass 发现的 2 个 Important 与 2 个 Minor 均已按 RED/GREEN 修复，终态 Critical 0、Important 0、Minor 0。Framework 322/322、Example 41/41（11 单元 + 30 UI）与 generic Simulator build 全部通过，0 fail、0 skip、0 error/warning/analyzer warning；v0.5 Task 7 与 v0.6 已恢复 Ready。
 
+2026-07-16 v0.7 原最终生产 HEAD `07a3443` 已完成统一 interaction/selection、系统返回优先级和双向跨 owner 惯性。后续横向-only Example 页面纵向目标缺口修复到生产代码 HEAD `984a009`：横向业务 scroll 不再登记为纵向 target，Public symbol、Framework ScrollCoordinator/Paging/containment 与业务所有权不变。最终 Framework 426/426、Example 61/61（16 单元 + 45 UI）与 generic Simulator build 全部通过，0 fail、0 skip、0 error/warning/analyzer warning；fresh-pass 终态 Critical 0、Important 0、Minor 0，v0.7 为 Ready。
+
 ## 3. 参考项目
 
 1. JXPagingView：https://github.com/pujiaxin33/JXPagingView
@@ -232,8 +234,8 @@ extension UIViewController {
 要求：
 
 1. 每个 UIViewController 默认都可以作为 AnchorPager child。
-2. 显式设置的 scroll view 优先级最高。
-3. 未显式设置时，默认实现按确定性规则在 view 层级查找 UIScrollView。
+2. `anchorPagerScrollView` 只表示参与 Header 折叠、纵向 handoff、managed inset、offset snapshot 和边界 owner 的纵向协调目标；显式设置的目标优先级最高。
+3. 未显式设置时，默认实现按确定性规则在 view 层级查找 UIScrollView，但不推断滚动轴向。
 4. 如果最终没有 scroll view，则 original page 直接由 Pageboy/UIKit containment，AnchorPager 记录 nil scroll target，不创建替代 scroll view。
 5. extension 属性通过 associated object 存储显式设置值。
 6. `anchorPagerDefaultScrollView` 是只读计算属性，不缓存失效 view 引用。
@@ -243,6 +245,9 @@ extension UIViewController {
 10. 不跨 child view controller 边界查找。
 11. 必须支持关闭默认查找。
 12. AnchorPager 不得设置业务 child 的 `UIScrollView.delegate`、内建 `panGestureRecognizer.delegate` 或 `isScrollEnabled`；child observation 只能使用不占用这些所有权的机制。
+13. 只有横向业务 scroll 的页面必须关闭默认查找，并保持 committed scroll target 为 nil；不得把横向 scroll 登记为 `anchorPagerScrollView`。
+14. 同时包含纵向父 scroll 与嵌套横向业务 scroll 的页面只登记纵向父 scroll。
+15. 框架不得依据 `contentSize`、bounce 配置或手势 velocity 启发式推断 scroll target 轴向。
 
 ## 7. Header 要求
 

@@ -586,6 +586,14 @@
 - [x] 测试横向分页与纵向拖拽竞争
 - [x] 测试系统返回手势与横向分页手势优先级
 - [x] 使用真实横向业务 scroll child 完成可行性 RED：确认自动优先级当前不可安全交付，delegate/configuration 身份始终不变并撤回无效生产关系
+- [x] Task 15 fresh-pass 首轮 Critical 0、Important 4、Minor 1；全部 Important 和文档 Minor 均完成 RED/GREEN，追踪复审发现的 boundary recovery 原子替换 Important 也已修复
+- [x] fresh-pass 终态 Critical 0、Important 0、Minor 0；Public API、Tabman/Pageboy containment、child lifecycle、scroll/inset/gesture/bounce ownership 均保持既有边界
+- [x] 最终生产代码 HEAD `07a3443` 全量验收：Framework 426/426、Example 60/60（16 单元 + 44 UI）、generic Simulator build，0 fail、0 skip、0 error/warning/analyzer warning；运行时约束、gesture cycle、appearance 与资源泄漏问题关键字零命中
+- [x] v0.7 Task 0–15、任务级自审、真实 UI、最终门禁与长期文档全部完成，v0.7 Ready，可进入 v0.8
+- [x] 横向-only Example 页面不再把业务横向 `UIScrollView` 登记为纵向 target；关闭默认 lookup，Store 提交 original page + nil target
+- [x] 单元 RED/GREEN 固定 `anchorPagerUsesDefaultScrollViewLookup == false` 与 nil target，同时保持业务 delegate、pan delegate 和 bounce/enable 配置
+- [x] 真实横向命中区域 UI 回归固定业务 drag 不驱动 `verticalScrollView`、Header collapse 或纵向 presentation；Pageboy 横向切页、plain nil target 与纵向 rebind 相邻回归通过
+- [x] 本专项生产代码 HEAD `984a009` 全量验收：Framework 426/426、Example 61/61（16 单元 + 45 UI）、generic Simulator build，0 fail、0 skip、0 error/warning/analyzer warning；fresh-pass 终态 Critical 0、Important 0、Minor 0，恢复 v0.7 Ready
 
 ## v0.8：状态栏点击与尺寸变化版
 
