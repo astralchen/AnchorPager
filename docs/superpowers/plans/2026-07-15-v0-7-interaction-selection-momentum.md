@@ -8,7 +8,7 @@
 
 **Tech Stack:** Swift 6.2、Swift 6 language mode、UIKit、iOS 14+、Swift Package Manager、Tabman 4.0.1、Pageboy 5.0.2、XCTest/XCUITest、Xcode 26.6、iPhone 17 Pro / iOS 26.5 Simulator。
 
-**当前状态：** Task 0–14 已完成并按任务提交。Task 15 首轮全量命令退出 0；首轮 fresh-pass 的 Critical 0、Important 4、Minor 1 已逐项 RED/GREEN。复审追踪又发现 pending boundary recovery 的新 pan 仍走普通 cancel，正在按同一原子替换契约补充 RED/GREEN；完成前 v0.7 不标记 Ready。
+**当前状态：** Task 0–15 已全部完成并按任务提交；2026-07-16 发现 Task 12 横向-only Example 页面错误登记纵向 target，独立修复计划正在执行，v0.7 Ready 暂停。详细入口：`docs/superpowers/plans/2026-07-16-horizontal-only-page-vertical-scroll-target.md`。
 
 ## Global Constraints
 
@@ -1055,11 +1055,11 @@ git commit -m "验收惯性与系统返回手势"
 - Modify: `docs/superpowers/plans/2026-07-15-v0-7-interaction-selection-momentum.md`
 - Modify: `AGENTS.md`
 
-- [ ] **Step 1：同步长期文档但只写真实完成状态**
+- [x] **Step 1：同步长期文档但只写真实完成状态**
 
 记录 Host/Adapter/Interaction/ViewController drain/Scroll/Overscroll 唯一事实源；README 仅在真实惯性完成后移除对应 known limitation；记录 failure relation 不能动态移除的 UIKit 限制；roadmap 删除旧 GestureCoordinator 提交 selection 的表述；task-list 逐项勾选真实完成项。
 
-- [ ] **Step 2：运行静态门禁**
+- [x] **Step 2：运行静态门禁**
 
 ```bash
 git diff --check
@@ -1070,7 +1070,7 @@ rg -n '\.(delegate|isScrollEnabled|bounces|alwaysBounceVertical)\s*=' Sources/An
 
 预期：Public 无第三方 import；业务 ownership 扫描只允许既有 container/Pageboy 自有配置，不得命中新业务 child 写入。
 
-- [ ] **Step 3：运行 Framework 全量**
+- [x] **Step 3：运行 Framework 全量**
 
 ```bash
 xcodebuild -scheme AnchorPager \
@@ -1078,7 +1078,7 @@ xcodebuild -scheme AnchorPager \
   -resultBundlePath /private/tmp/AnchorPagerV07FrameworkFull-20260715.xcresult test
 ```
 
-- [ ] **Step 4：运行 Example 全量与 generic build**
+- [x] **Step 4：运行 Example 全量与 generic build**
 
 ```bash
 xcodebuild -project Examples/AnchorPagerExample.xcodeproj \
@@ -1092,7 +1092,7 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj \
   -resultBundlePath /private/tmp/AnchorPagerV07ExampleBuild-20260715.xcresult build
 ```
 
-- [ ] **Step 5：检查 xcresult 与运行时问题**
+- [x] **Step 5：检查 xcresult 与运行时问题**
 
 ```bash
 xcrun xcresulttool get test-results summary --path /private/tmp/AnchorPagerV07FrameworkFull-20260715.xcresult
@@ -1101,11 +1101,11 @@ xcrun xcresulttool get test-results summary --path /private/tmp/AnchorPagerV07Ex
 
 记录真实 test count、0 fail、0 skip、0 error/warning/analyzer warning；检索 UIKit `LayoutConstraints`、gesture、appearance、resource release 相关 issue。任一异常都必须回到 `systematic-debugging`，补 RED 后修复。
 
-- [ ] **Step 6：任务级自审**
+- [x] **Step 6：任务级自审**
 
 逐项检查 Public API、Tabman/Pageboy containment、PageStateStore generation/cache、selection commit/cancel、reload terminal、child lifecycle/appearance、scroll discovery、managed inset、gesture delegates、bounce/configuration、MainActor、日志、Example 与文档。
 
-- [ ] **Step 7：fresh-pass 独立复审**
+- [x] **Step 7：fresh-pass 独立复审**
 
 使用 `superpowers:requesting-code-review` 从设计起点到当前 HEAD 重读完整 diff；在当前会话本地执行，除非用户明确要求 subagent。按 Critical/Important/Minor 记录发现；任何 Critical/Important 必须先补 RED、修复、重跑相邻与全量门禁，不得直接标记 Ready。
 
@@ -1113,11 +1113,11 @@ xcrun xcresulttool get test-results summary --path /private/tmp/AnchorPagerV07Ex
 
 首轮四项修复复审追踪结论为 Critical 0、Important 1、Minor 0：synthetic deceleration 的新 pan 已使用 replacement cancel，但 `pendingBoundaryRecoveryInteractionIdentifier` 仍通过普通 cancel 提前请求 deferred drain。该相邻缺口同样纳入原子替换契约，补充真实边界等待、新 pan 事件顺序，以及 pending reload/layout 直到新 terminal 才排空的 RED/GREEN。
 
-- [ ] **Step 8：生产 HEAD 最终复验**
+- [x] **Step 8：生产 HEAD 最终复验**
 
 fresh-pass 修复后使用新的 `Final` 结果包重跑 Framework、Example、generic build；文档记录最终生产 HEAD、测试统计、结果包、0 fail/skip/error/warning/analyzer warning 和复审结论。
 
-- [ ] **Step 9：最终文档提交**
+- [x] **Step 9：最终文档提交**
 
 ```bash
 git add AGENTS.md README.md docs/architecture.md docs/task-list.md docs/superpowers/specs/2026-07-09-anchorpager-version-roadmap-design.md docs/superpowers/specs/2026-07-15-v0-7-interaction-selection-momentum-design.md docs/superpowers/plans/2026-07-15-v0-7-interaction-selection-momentum.md
@@ -1125,3 +1125,5 @@ git commit -m "完成 v0.7 全量验收与文档收口"
 ```
 
 只有 Task 0–15、全量门禁和 fresh-pass 全部完成，才能把 v0.7 标记为 Ready 并进入 v0.8。
+
+最终验收记录：fresh-pass 修复提交 `07a3443`。相邻四类聚焦测试 263/263，结果包 `/private/tmp/AnchorPagerV07Task15FreshPassFocusedFinal-20260716.xcresult`；Framework 426/426，结果包 `/private/tmp/AnchorPagerV07FrameworkFinal2-20260716.xcresult`；Example 60/60（16 单元 + 44 UI），结果包 `/private/tmp/AnchorPagerV07ExampleFinal2-20260716.xcresult`；generic Simulator build 结果包 `/private/tmp/AnchorPagerV07ExampleBuildFinal2-20260716.xcresult`。全部 0 fail、0 skip、0 error、0 warning、0 analyzer warning；运行时问题关键字零命中。fresh-pass 终态 Critical 0、Important 0、Minor 0。Task 15 完成，v0.7 Ready。

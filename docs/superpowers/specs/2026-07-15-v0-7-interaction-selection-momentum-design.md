@@ -2,7 +2,7 @@
 
 **日期：** 2026-07-15
 
-**状态：** Task 0–14 已实施；Task 15 fresh-pass 修复与最终门禁进行中
+**状态：** Task 0–15 已完成；2026-07-16 横向-only 页面纵向目标回归专项实施与验收进行中，v0.7 Ready 暂停
 
 **适用范围：** v0.7 interaction state、快速选择请求、Tabman bar 点击、Pageboy 横向 pan、纵向跨 owner 惯性、reload/layout/尺寸仲裁、系统返回优先级和业务横向手势可行性边界
 
@@ -510,6 +510,8 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj -scheme AnchorPagerExa
 
 同时检查 xcresult 的 error、warning、analyzer warning、skip、UIKit 运行时约束冲突和资源释放日志。
 
+最终验收记录：生产代码 HEAD `07a3443`；Framework 426/426，结果包 `/private/tmp/AnchorPagerV07FrameworkFinal2-20260716.xcresult`；Example 60/60（16 单元 + 44 UI），结果包 `/private/tmp/AnchorPagerV07ExampleFinal2-20260716.xcresult`；generic Simulator build 结果包 `/private/tmp/AnchorPagerV07ExampleBuildFinal2-20260716.xcresult`。全部 0 fail、0 skip、0 error、0 warning、0 analyzer warning；运行时约束、gesture cycle、appearance 与资源泄漏问题关键字零命中。fresh-pass 首轮 Critical 0、Important 4、Minor 1，四项 Important 与文档 Minor 完成 RED/GREEN；追踪复审发现的 boundary recovery 原子替换 Important 同样完成 RED/GREEN，终态 Critical 0、Important 0、Minor 0。v0.7 Ready。
+
 ## 文档迁移
 
 实施过程中同步更新：
@@ -532,3 +534,7 @@ v0.7 只有同时满足以下条件才可标记 Ready：
 6. Public API、Tabman/Pageboy containment、业务 child delegate/bounce 所有权不变。
 7. Framework、Example、generic build、日志、warning/analyzer/runtime constraint 门禁全部通过。
 8. 完成任务级自审、整分支 fresh-pass 和长期文档同步。
+
+## 2026-07-16 横向-only 页面纵向目标修订
+
+Task 12 的 Example 第五页把只承担横向业务内容的 `UIScrollView` 显式登记为 `anchorPagerScrollView`。这使它错误进入 managed inset、snapshot、ScrollCoordinator binding 和 container simultaneous pair，横向拖动的纵向分量因而可以带动 `verticalScrollView`。根因修复不增加全局方向锁，而是关闭该页默认 lookup、提交 nil 纵向 target，并明确 `anchorPagerScrollView` 只表示纵向协调目标。详细设计与计划见 `docs/superpowers/specs/2026-07-16-horizontal-only-page-vertical-scroll-target-design.md` 和 `docs/superpowers/plans/2026-07-16-horizontal-only-page-vertical-scroll-target.md`；完成 RED/GREEN、真实 UI、全量门禁和自审前，前述最终验收作为历史基线保留，但 v0.7 Ready 暂停。
