@@ -753,7 +753,7 @@ extension AnchorPagerPagingHostViewController: AnchorPagerPagingAdapterDelegate 
             return
         }
         activeSelectionTransaction = transaction
-        committedSelectionIndex = index
+        commitSelection(index, on: adapter)
         eventDelegate?.pagingHost(self, didSelect: index, animated: animated)
         finishActiveSelectionIfReady()
     }
@@ -850,7 +850,8 @@ extension AnchorPagerPagingHostViewController: AnchorPagerPagingAdapterDelegate 
             )
             forwardRecoveredSelectionTerminal(
                 recoveredTerminal,
-                request: transaction.request
+                request: transaction.request,
+                adapter: adapter
             )
         } else if transaction.semanticTerminal == nil {
             logStaleSelectionTerminal()
@@ -951,11 +952,12 @@ extension AnchorPagerPagingHostViewController: AnchorPagerPagingAdapterDelegate 
 
     private func forwardRecoveredSelectionTerminal(
         _ terminal: AnchorPagerPagingSelectionSemanticTerminal,
-        request: AnchorPagerPagingSelectionRequest
+        request: AnchorPagerPagingSelectionRequest,
+        adapter: AnchorPagerPagingAdapter
     ) {
         switch terminal {
         case let .selected(index):
-            committedSelectionIndex = index
+            commitSelection(index, on: adapter)
             eventDelegate?.pagingHost(self, didSelect: index, animated: request.animated)
         case let .cancelled(index, previousIndex):
             eventDelegate?.pagingHost(
@@ -964,6 +966,14 @@ extension AnchorPagerPagingHostViewController: AnchorPagerPagingAdapterDelegate 
                 returningTo: previousIndex
             )
         }
+    }
+
+    private func commitSelection(
+        _ index: Int,
+        on adapter: AnchorPagerPagingAdapter
+    ) {
+        committedSelectionIndex = index
+        applyCommittedInteractivePagingPolicy(to: adapter, at: index)
     }
 
     private func finishActiveSelectionIfReady() {

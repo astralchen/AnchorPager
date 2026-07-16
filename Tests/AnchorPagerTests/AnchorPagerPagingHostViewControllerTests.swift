@@ -414,6 +414,139 @@ final class AnchorPagerPagingHostViewControllerTests: XCTestCase {
         XCTAssertEqual(delegate.interactionEvents.last, .finished(request))
     }
 
+    func testInteractiveDidSelectAppliesTargetPolicyBeforeForwardingPublicCommit() throws {
+        let host = makeHost()
+        let delegate = RecordingPagingHostDelegate()
+        host.eventDelegate = delegate
+        host.reload(
+            requestIdentifier: 1,
+            titles: ["A", "B"],
+            pageCount: 2,
+            selectedIndex: 0,
+            interactiveHorizontalPagingPermissions: [true, false]
+        )
+        let adapter = try XCTUnwrap(host.activeAdapter)
+        var observedPolicyDuringCommit: Bool?
+        delegate.onDidSelect = { host, _, _ in
+            observedPolicyDuringCommit = host.activeAdapter?.isScrollEnabled
+        }
+        let identifier = try XCTUnwrap(host.pagingAdapter(
+            adapter,
+            didBeginInteractiveSelectionAt: 1,
+            animated: true
+        ))
+
+        host.pagingAdapter(
+            adapter,
+            didSelect: 1,
+            animated: true,
+            requestIdentifier: identifier
+        )
+
+        XCTAssertEqual(observedPolicyDuringCommit, false)
+        XCTAssertFalse(adapter.isScrollEnabled)
+    }
+
+    func testInteractiveCancelKeepsCommittedSourcePagingPolicy() throws {
+        let host = makeHost()
+        host.reload(
+            requestIdentifier: 1,
+            titles: ["A", "B"],
+            pageCount: 2,
+            selectedIndex: 0,
+            interactiveHorizontalPagingPermissions: [true, false]
+        )
+        let adapter = try XCTUnwrap(host.activeAdapter)
+        let identifier = try XCTUnwrap(host.pagingAdapter(
+            adapter,
+            didBeginInteractiveSelectionAt: 1,
+            animated: true
+        ))
+
+        host.pagingAdapter(
+            adapter,
+            didCancelSelectionAt: 1,
+            returningTo: 0,
+            requestIdentifier: identifier
+        )
+
+        XCTAssertTrue(adapter.isScrollEnabled)
+    }
+
+    func testMissingSemanticRecoveryAppliesCommittedTargetPagingPolicy() throws {
+        let host = makeHost()
+        host.reload(
+            requestIdentifier: 1,
+            titles: ["A", "B"],
+            pageCount: 2,
+            selectedIndex: 0,
+            interactiveHorizontalPagingPermissions: [true, false]
+        )
+        let adapter = try XCTUnwrap(host.activeAdapter)
+
+        adapter.handleDidSelect(
+            at: 1,
+            animated: true,
+            reportedCurrentIndex: 1
+        )
+
+        XCTAssertFalse(adapter.isScrollEnabled)
+    }
+
+    func testDisabledPageStillAllowsAPIAndBarSelections() throws {
+        let apiHost = makeHost()
+        apiHost.reload(
+            requestIdentifier: 1,
+            titles: ["A", "B"],
+            pageCount: 2,
+            selectedIndex: 1,
+            interactiveHorizontalPagingPermissions: [true, false]
+        )
+        let apiAdapter = try XCTUnwrap(apiHost.activeAdapter)
+        XCTAssertFalse(apiAdapter.isScrollEnabled)
+        XCTAssertTrue(apiHost.setSelectedIndex(0, animated: false))
+        let apiIdentifier = try XCTUnwrap(
+            apiHost.activeSelectionRequestForTesting?.identifier
+        )
+        apiHost.pagingAdapter(
+            apiAdapter,
+            didComplete: apiIdentifier,
+            finished: true,
+            currentIndex: 0
+        )
+        XCTAssertTrue(apiAdapter.isScrollEnabled)
+        apiHost.pagingAdapter(
+            apiAdapter,
+            executorDidBecomeReadyFor: apiIdentifier
+        )
+        XCTAssertNil(apiHost.activeSelectionRequestForTesting)
+
+        let barHost = makeHost()
+        barHost.reload(
+            requestIdentifier: 2,
+            titles: ["A", "B"],
+            pageCount: 2,
+            selectedIndex: 1,
+            interactiveHorizontalPagingPermissions: [true, false]
+        )
+        let barAdapter = try XCTUnwrap(barHost.activeAdapter)
+        barHost.pagingAdapter(barAdapter, didRequestBarSelectionAt: 0)
+        let barRequest = try XCTUnwrap(barHost.activeSelectionRequestForTesting)
+        XCTAssertEqual(barRequest.targetIndex, 0)
+        barHost.pagingAdapter(
+            barAdapter,
+            didComplete: barRequest.identifier,
+            finished: true,
+            currentIndex: 0
+        )
+        XCTAssertTrue(barAdapter.isScrollEnabled)
+        barHost.pagingAdapter(
+            barAdapter,
+            executorDidBecomeReadyFor: barRequest.identifier
+        )
+        XCTAssertNil(barHost.activeSelectionRequestForTesting)
+    }
+
     func testMissingWillSelectRecoveryDoesNotBypassRejectedHostAdmission() throws {
         let host = makeHost()
         let delegate = RecordingPagingHostDelegate()
