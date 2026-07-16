@@ -146,6 +146,7 @@ final class AnchorPagerPagingHostViewController: UIViewController {
     private var nextSelectionRequestIdentifier: AnchorPagerPagingSelectionRequestIdentifier = 1
     private var committedSelectionIndex: Int?
     private var committedSelectionPageCount = 0
+    private var committedInteractiveHorizontalPagingPermissions: [Bool] = []
     private var activeSelectionTransaction: AnchorPagerPagingSelectionTransaction?
     private var pendingExplicitSelectionRequest: AnchorPagerPagingSelectionRequest?
     private var forwardedWillSelectRequestIdentifier: AnchorPagerPagingSelectionRequestIdentifier?
@@ -194,8 +195,12 @@ final class AnchorPagerPagingHostViewController: UIViewController {
         selectedIndex: Int,
         interactiveHorizontalPagingPermissions: [Bool]? = nil
     ) {
-        let resolvedPermissions = interactiveHorizontalPagingPermissions
+        let requestedPermissions = interactiveHorizontalPagingPermissions
             ?? Array(repeating: true, count: max(0, pageCount))
+        let resolvedPermissions = resolvedInteractiveHorizontalPagingPermissions(
+            requestedPermissions,
+            pageCount: pageCount
+        )
         let request = ReloadRequest(
             identifier: requestIdentifier,
             titles: titles,
@@ -216,6 +221,24 @@ final class AnchorPagerPagingHostViewController: UIViewController {
 
         pendingReloadRequest = nil
         _ = performReload(request)
+    }
+
+    private func resolvedInteractiveHorizontalPagingPermissions(
+        _ permissions: [Bool],
+        pageCount: Int
+    ) -> [Bool] {
+        guard permissions.count == max(0, pageCount) else {
+            AnchorPagerAssertions.failure(
+                "AnchorPager interactive paging metadata must match page count."
+            )
+            AnchorPagerLogger.log(
+                .error,
+                category: .paging,
+                event: "paging.interactivePaging.invalidMetadata"
+            )
+            return Array(repeating: false, count: max(0, pageCount))
+        }
+        return permissions
     }
 
     @discardableResult
@@ -595,17 +618,35 @@ final class AnchorPagerPagingHostViewController: UIViewController {
         }
         if didCommitTerminal {
             lastReportedBarInsets = finalBarInsets
+            committedInteractiveHorizontalPagingPermissions =
+                request.interactiveHorizontalPagingPermissions
             switch terminal {
             case let .page(index):
                 committedSelectionIndex = index
                 committedSelectionPageCount = request.pageCount
+                applyCommittedInteractivePagingPolicy(to: activeAdapter, at: index)
             case .empty:
                 committedSelectionIndex = nil
                 committedSelectionPageCount = 0
+                committedInteractiveHorizontalPagingPermissions = []
             }
         }
         finishingReloadRequestIdentifier = nil
         requestDeferredWorkDrain()
+    }
+
+    private func applyCommittedInteractivePagingPolicy(
+        to adapter: AnchorPagerPagingAdapter?,
+        at index: Int
+    ) {
+        guard let adapter else { return }
+        guard committedInteractiveHorizontalPagingPermissions.indices.contains(index) else {
+            adapter.setInteractiveHorizontalPagingEnabled(false)
+            return
+        }
+        adapter.setInteractiveHorizontalPagingEnabled(
+            committedInteractiveHorizontalPagingPermissions[index]
+        )
     }
 
     private func requestDeferredWorkDrain() {

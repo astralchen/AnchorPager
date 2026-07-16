@@ -56,6 +56,132 @@ final class AnchorPagerPagingHostViewControllerTests: XCTestCase {
         XCTAssertNil(host.pendingReloadRequestIdentifierForTesting)
     }
 
+    func testReloadAppliesInteractivePagingPolicyOnlyAfterAcknowledgedTerminal() throws {
+        let host = makeHost()
+        let delegate = RecordingRequestPagingHostDelegate()
+        host.eventDelegate = delegate
+        host.reload(
+            requestIdentifier: 1,
+            titles: ["A", "B"],
+            pageCount: 2,
+            selectedIndex: 0,
+            interactiveHorizontalPagingPermissions: [true, false]
+        )
+        let adapter = try XCTUnwrap(host.activeAdapter)
+        XCTAssertTrue(adapter.isScrollEnabled)
+
+        host.setDeferredWorkExecutionSuspended(true)
+        host.reload(
+            requestIdentifier: 2,
+            titles: ["A", "B"],
+            pageCount: 2,
+            selectedIndex: 1,
+            interactiveHorizontalPagingPermissions: [true, false]
+        )
+        XCTAssertTrue(adapter.isScrollEnabled)
+
+        host.setDeferredWorkExecutionSuspended(false)
+        XCTAssertTrue(host.performPendingReloadIfPossible())
+        XCTAssertFalse(adapter.isScrollEnabled)
+
+        host.pagingAdapter(
+            adapter,
+            didReloadAt: 0,
+            terminalBarInsets: .zero,
+            requestIdentifier: 1
+        )
+        XCTAssertFalse(adapter.isScrollEnabled)
+    }
+
+    func testRejectedReloadTerminalDoesNotPublishInteractivePagingPolicy() throws {
+        let host = makeHost()
+        let delegate = RecordingRequestPagingHostDelegate()
+        host.eventDelegate = delegate
+        host.reload(
+            requestIdentifier: 1,
+            titles: ["A"],
+            pageCount: 1,
+            selectedIndex: 0,
+            interactiveHorizontalPagingPermissions: [true]
+        )
+        let adapter = try XCTUnwrap(host.activeAdapter)
+        delegate.terminalAcknowledgements[2] = false
+
+        host.reload(
+            requestIdentifier: 2,
+            titles: ["A"],
+            pageCount: 1,
+            selectedIndex: 0,
+            interactiveHorizontalPagingPermissions: [false]
+        )
+
+        XCTAssertTrue(adapter.isScrollEnabled)
+
+        host.reload(
+            requestIdentifier: 3,
+            titles: ["A"],
+            pageCount: 1,
+            selectedIndex: 0,
+            interactiveHorizontalPagingPermissions: [false]
+        )
+        XCTAssertFalse(adapter.isScrollEnabled)
+    }
+
+    func testEmptyReloadClearsInteractivePolicyBeforeReplacementAdapter() throws {
+        let host = makeHost()
+        host.reload(
+            requestIdentifier: 1,
+            titles: ["A"],
+            pageCount: 1,
+            selectedIndex: 0,
+            interactiveHorizontalPagingPermissions: [false]
+        )
+        let oldAdapter = try XCTUnwrap(host.activeAdapter)
+        XCTAssertFalse(oldAdapter.isScrollEnabled)
+
+        host.reload(
+            requestIdentifier: 2,
+            titles: [],
+            pageCount: 0,
+            selectedIndex: 0,
+            interactiveHorizontalPagingPermissions: []
+        )
+        XCTAssertNil(host.activeAdapter)
+
+        host.reload(
+            requestIdentifier: 3,
+            titles: ["Replacement"],
+            pageCount: 1,
+            selectedIndex: 0
+        )
+        XCTAssertTrue(try XCTUnwrap(host.activeAdapter).isScrollEnabled)
+    }
+
+    func testInvalidInteractivePagingMetadataFailsClosedAndLogsOnce() throws {
+        let host = makeHost()
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+
+        AnchorPagerAssertions.$isEnabled.withValue(false) {
+            host.reload(
+                requestIdentifier: 7,
+                titles: ["A", "B"],
+                pageCount: 2,
+                selectedIndex: 0,
+                interactiveHorizontalPagingPermissions: [true]
+            )
+        }
+
+        XCTAssertFalse(try XCTUnwrap(host.activeAdapter).isScrollEnabled)
+        XCTAssertEqual(
+            events.filter {
+                $0.event == "paging.interactivePaging.invalidMetadata"
+            }.count,
+            1
+        )
+    }
+
     func testSuspendedSelectionKeepsLatestExplicitRequestUntilExternalDrain() throws {
         let host = makeHost()
         host.reload(titles: ["A", "B", "C"], pageCount: 3, selectedIndex: 0)
