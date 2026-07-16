@@ -473,9 +473,11 @@ final class AnchorPagerExampleUITests: XCTestCase {
         let stateProbe = scrollCoordinationStateProbe(in: app)
         let horizontalScrollView = app.scrollViews["horizontal-business-scroll"]
         let ownershipProbe = app.otherElements["horizontal-business-probe"]
+        let firstCard = app.staticTexts["横向业务内容 1"]
 
         XCTAssertTrue(horizontalScrollView.waitForExistence(timeout: 3))
         XCTAssertTrue(ownershipProbe.waitForExistence(timeout: 3))
+        XCTAssertTrue(firstCard.waitForExistence(timeout: 3))
         XCTAssertNotNil(waitForScrollState(from: stateProbe) {
             $0.page == "horizontal"
                 && !$0.hasScrollTarget
@@ -483,6 +485,7 @@ final class AnchorPagerExampleUITests: XCTestCase {
                 && abs($0.headerCollapse) < 0.5
         })
         stateProbe.tap()
+        let initialFirstCardMinX = firstCard.frame.minX
 
         let start = horizontalScrollView.coordinate(
             withNormalizedOffset: CGVector(dx: 0.82, dy: 0.45)
@@ -503,15 +506,359 @@ final class AnchorPagerExampleUITests: XCTestCase {
                 && $0.collapse < 0.01
                 && abs($0.headerCollapse) < 0.5
                 && $0.hasZeroPresentationMetrics
-        })
+        }, "probe：\(String(describing: stateProbe.value))")
         XCTAssertFalse(state.hasScrollTarget)
         XCTAssertLessThan(state.collapse, 0.01)
         XCTAssertLessThan(abs(state.headerCollapse), 0.5)
         XCTAssertTrue(state.hasZeroPresentationMetrics)
+        XCTAssertLessThan(
+            firstCard.frame.minX,
+            initialFirstCardMinX - 20,
+            "业务横向内容必须产生真实位移"
+        )
         XCTAssertEqual(
             ownershipProbe.value as? String,
             "scrollDelegate=1;panDelegate=1;bounces=1;alwaysBounceVertical=0;isScrollEnabled=1;horizontalRange=1"
         )
+    }
+
+    @MainActor
+    func testCompositionalVerticalRegionHandsOffToCollectionView() throws {
+        let app = launchPage(index: 5, mode: "container")
+        let stateProbe = scrollCoordinationStateProbe(in: app)
+        let compositionalProbe = compositionalScrollProbe(in: app)
+        let verticalCard = app.cells["compositional-vertical-card-1"]
+
+        XCTAssertTrue(verticalCard.waitForExistence(timeout: 3))
+        XCTAssertNotNil(waitForScrollState(from: stateProbe) {
+            $0.page == "compositional"
+                && $0.hasScrollTarget
+                && $0.collapse < 0.01
+        })
+        reset(trace: stateProbe)
+
+        let start = verticalCard.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.5, dy: 0.75)
+        )
+        let end = app.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.5, dy: 0.22)
+        )
+        start.press(
+            forDuration: 0.1,
+            thenDragTo: end,
+            withVelocity: .slow,
+            thenHoldForDuration: 0.05
+        )
+
+        let state = try XCTUnwrap(waitForScrollState(from: stateProbe, timeout: 5) {
+            $0.page == "compositional"
+                && $0.hasScrollTarget
+                && $0.collapse >= 0.99
+                && $0.distance > 0.5
+                && $0.containerToChild
+                && $0.invariantMax <= 0.5
+        })
+        let compositional = try XCTUnwrap(
+            CompositionalScrollState(value: compositionalProbe.value as? String)
+        )
+
+        XCTAssertEqual(state.page, "compositional")
+        XCTAssertTrue(state.hasScrollTarget)
+        XCTAssertGreaterThan(state.distance, 0.5)
+        XCTAssertTrue(compositional.hasStableOwnership)
+        XCTAssertTrue(compositional.hasVerticalRange)
+    }
+
+    @MainActor
+    func testCompositionalOrthogonalRegionOwnsHorizontalDrag() throws {
+        let app = launchPage(index: 5, mode: "container")
+        let stateProbe = scrollCoordinationStateProbe(in: app)
+        let compositionalProbe = compositionalScrollProbe(in: app)
+        let trace = selectionTraceProbe(in: app)
+        let firstCard = app.cells["compositional-horizontal-card-1"]
+        let secondCard = app.cells["compositional-horizontal-card-2"]
+
+        XCTAssertTrue(firstCard.waitForExistence(timeout: 3))
+        XCTAssertNotNil(waitForScrollState(from: stateProbe) {
+            $0.page == "compositional"
+                && $0.hasScrollTarget
+                && $0.collapse < 0.01
+        })
+        reset(trace: stateProbe)
+        reset(trace: compositionalProbe)
+        reset(trace: trace)
+        let initialFirstFrame = firstCard.frame
+        let initialSecondFrame = secondCard.frame
+
+        let leftStart = firstCard.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.82, dy: 0.45)
+        )
+        let leftEnd = firstCard.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.18, dy: 0.55)
+        )
+        leftStart.press(
+            forDuration: 0.1,
+            thenDragTo: leftEnd,
+            withVelocity: .slow,
+            thenHoldForDuration: 0.05
+        )
+
+        let movedForwardCandidate = waitForCompositionalState(
+            from: compositionalProbe,
+            timeout: 5
+        ) {
+            $0.maximumHorizontalOffset > 30
+                && $0.currentHorizontalOffset > 20
+        }
+        XCTAssertNotNil(
+            movedForwardCandidate,
+            "组合横向进度未建立；probe=\(String(describing: compositionalProbe.value));"
+                + "state=\(String(describing: stateProbe.value));"
+                + "selection=\(String(describing: trace.value));"
+                + "firstFrame=\(initialFirstFrame)->\(firstCard.frame);"
+                + "secondFrame=\(initialSecondFrame)->\(secondCard.frame)"
+        )
+        let movedForward = try XCTUnwrap(movedForwardCandidate)
+        let forwardOffset = movedForward.currentHorizontalOffset
+        let forwardScrollState = try XCTUnwrap(waitForScrollState(
+            from: stateProbe,
+            timeout: 5
+        ) {
+            $0.page == "compositional"
+                && $0.hasScrollTarget
+                && $0.collapse < 0.01
+                && abs($0.headerCollapse) < 0.5
+                && $0.distance < 0.5
+                && $0.hasZeroPresentationMetrics
+        })
+
+        XCTAssertEqual(selectionEventSequence(from: trace), [])
+        XCTAssertTrue(forwardScrollState.hasZeroPresentationMetrics)
+
+        let visibleCard = try XCTUnwrap(
+            hittableCompositionalHorizontalCards(in: app).first
+        )
+        let rightStart = visibleCard.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.18, dy: 0.55)
+        )
+        let rightEnd = visibleCard.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.82, dy: 0.45)
+        )
+        rightStart.press(
+            forDuration: 0.1,
+            thenDragTo: rightEnd,
+            withVelocity: .slow,
+            thenHoldForDuration: 0.05
+        )
+
+        let movedBackward = try XCTUnwrap(waitForCompositionalState(
+            from: compositionalProbe,
+            timeout: 5
+        ) {
+            $0.currentHorizontalOffset < forwardOffset - 20
+        })
+        let backwardScrollState = try XCTUnwrap(waitForScrollState(
+            from: stateProbe,
+            timeout: 5
+        ) {
+            $0.page == "compositional"
+                && $0.hasScrollTarget
+                && $0.collapse < 0.01
+                && abs($0.headerCollapse) < 0.5
+                && $0.distance < 0.5
+                && $0.hasZeroPresentationMetrics
+        })
+
+        XCTAssertLessThan(movedBackward.currentHorizontalOffset, forwardOffset - 20)
+        XCTAssertEqual(backwardScrollState.page, "compositional")
+        XCTAssertEqual(selectionEventSequence(from: trace), [])
+    }
+
+    @MainActor
+    func testCompositionalPageDisablesNonOrthogonalSwipeButKeepsBarSelection() throws {
+        let app = launchPage(index: 5, mode: "container")
+        let stateProbe = scrollCoordinationStateProbe(in: app)
+        let trace = selectionTraceProbe(in: app)
+        let verticalCard = app.cells["compositional-vertical-card-1"]
+
+        XCTAssertTrue(verticalCard.waitForExistence(timeout: 3))
+        XCTAssertNotNil(waitForScrollState(from: stateProbe) {
+            $0.page == "compositional" && $0.hasScrollTarget
+        })
+        reset(trace: trace)
+
+        let start = verticalCard.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.18, dy: 0.52)
+        )
+        let end = verticalCard.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.82, dy: 0.48)
+        )
+        start.press(
+            forDuration: 0.1,
+            thenDragTo: end,
+            withVelocity: .slow,
+            thenHoldForDuration: 0.05
+        )
+
+        let stateAfterSwipe = try XCTUnwrap(waitForScrollState(from: stateProbe) {
+            $0.page == "compositional" && $0.hasScrollTarget
+        })
+        XCTAssertEqual(stateAfterSwipe.page, "compositional")
+        XCTAssertEqual(selectionEventSequence(from: trace), [])
+
+        app.descendants(matching: .any)["横向业务页"].tap()
+        XCTAssertTrue(
+            app.scrollViews["horizontal-business-scroll"].waitForExistence(timeout: 5)
+        )
+        XCTAssertEqual(waitForSelectionTrace(from: trace, matching: [4]), [4])
+    }
+
+    @MainActor
+    func testCompositionalPageKeepsPublicSelectionAvailable() throws {
+        let app = launchInteractionPage(
+            initialIndex: 5,
+            rapidTargets: "4",
+            recordsAppearance: true
+        )
+        let trace = selectionTraceProbe(in: app)
+        reset(trace: trace)
+
+        rapidSelectionTrigger(in: app).tap()
+
+        XCTAssertEqual(waitForSelectionTrace(from: trace, matching: [4]), [4])
+        XCTAssertTrue(
+            app.scrollViews["horizontal-business-scroll"].waitForExistence(timeout: 5)
+        )
+    }
+
+    @MainActor
+    func testEnabledPageCanSwipeIntoDisabledHorizontalPageThenBarToCompositional() throws {
+        let app = launchPage(index: 3, mode: "container")
+        let stateProbe = scrollCoordinationStateProbe(in: app)
+        let trace = selectionTraceProbe(in: app)
+        reset(trace: trace)
+        let pageStart = app.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.82, dy: 0.78)
+        )
+        let pageEnd = app.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.18, dy: 0.78)
+        )
+        pageStart.press(forDuration: 0.1, thenDragTo: pageEnd)
+
+        let horizontalScrollView = app.scrollViews["horizontal-business-scroll"]
+        XCTAssertTrue(horizontalScrollView.waitForExistence(timeout: 5))
+        XCTAssertEqual(waitForSelectionTrace(from: trace, matching: [4]), [4])
+        XCTAssertNotNil(waitForScrollState(from: stateProbe, timeout: 5) {
+            $0.page == "horizontal"
+                && !$0.hasScrollTarget
+                && $0.hasZeroPresentationMetrics
+        })
+
+        let firstCard = app.staticTexts["横向业务内容 1"]
+        XCTAssertTrue(firstCard.waitForExistence(timeout: 3))
+        let initialMinX = firstCard.frame.minX
+        let businessStart = horizontalScrollView.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.82, dy: 0.45)
+        )
+        let businessEnd = horizontalScrollView.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.18, dy: 0.55)
+        )
+        businessStart.press(
+            forDuration: 0.1,
+            thenDragTo: businessEnd,
+            withVelocity: .slow,
+            thenHoldForDuration: 0.05
+        )
+
+        XCTAssertLessThan(firstCard.frame.minX, initialMinX - 20)
+        XCTAssertEqual(selectionEventSequence(from: trace), [4])
+        XCTAssertNotNil(waitForScrollState(from: stateProbe, timeout: 5) {
+            $0.page == "horizontal"
+                && !$0.hasScrollTarget
+                && $0.hasZeroPresentationMetrics
+        })
+
+        let compositionalItem = app.descendants(matching: .any)["组合布局页"]
+        XCTAssertTrue(compositionalItem.waitForExistence(timeout: 3))
+        compositionalItem.tap()
+
+        let card = app.cells["compositional-horizontal-card-1"]
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        XCTAssertEqual(waitForSelectionTrace(from: trace, matching: [4, 5]), [4, 5])
+
+        let compositionalProbe = compositionalScrollProbe(in: app)
+        reset(trace: compositionalProbe)
+        let cardStart = card.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.82, dy: 0.48)
+        )
+        let cardEnd = card.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.18, dy: 0.52)
+        )
+        cardStart.press(
+            forDuration: 0.1,
+            thenDragTo: cardEnd,
+            withVelocity: .slow,
+            thenHoldForDuration: 0.05
+        )
+
+        XCTAssertNotNil(waitForCompositionalState(
+            from: compositionalProbe,
+            timeout: 5
+        ) {
+            $0.maximumHorizontalOffset > 20
+        })
+        XCTAssertEqual(selectionEventSequence(from: trace), [4, 5])
+    }
+
+    @MainActor
+    func testCompositionalReloadRebindsRootVerticalTarget() throws {
+        let app = launchPage(index: 5, mode: "container")
+        let stateProbe = scrollCoordinationStateProbe(in: app)
+        let generationOne = app.staticTexts["page-generation-1-compositional"]
+
+        XCTAssertTrue(generationOne.waitForExistence(timeout: 3))
+        XCTAssertNotNil(waitForScrollState(from: stateProbe) {
+            $0.page == "compositional" && $0.hasScrollTarget
+        })
+
+        let reload = app.navigationBars.buttons["重新加载页面"]
+        XCTAssertTrue(reload.waitForExistence(timeout: 3))
+        reload.tap()
+
+        let generationTwo = app.staticTexts["page-generation-2-compositional"]
+        XCTAssertTrue(generationTwo.waitForExistence(timeout: 5))
+        XCTAssertFalse(generationOne.exists)
+        XCTAssertNotNil(waitForScrollState(from: stateProbe, timeout: 5) {
+            $0.page == "compositional"
+                && $0.hasScrollTarget
+                && $0.hasZeroPresentationMetrics
+        })
+
+        let compositionalProbe = compositionalScrollProbe(in: app)
+        let card = app.cells["compositional-horizontal-card-1"]
+        XCTAssertTrue(card.waitForExistence(timeout: 3))
+        reset(trace: compositionalProbe)
+        let start = card.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.82, dy: 0.48)
+        )
+        let end = card.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.18, dy: 0.52)
+        )
+        start.press(
+            forDuration: 0.1,
+            thenDragTo: end,
+            withVelocity: .slow,
+            thenHoldForDuration: 0.05
+        )
+
+        XCTAssertNotNil(waitForCompositionalState(
+            from: compositionalProbe,
+            timeout: 5
+        ) {
+            $0.maximumHorizontalOffset > 20
+                && $0.hasStableOwnership
+                && $0.hasVerticalRange
+        })
     }
 
     @MainActor
@@ -1279,6 +1626,25 @@ final class AnchorPagerExampleUITests: XCTestCase {
     }
 
     @MainActor
+    private func compositionalScrollProbe(in app: XCUIApplication) -> XCUIElement {
+        let probe = app.buttons["compositional-scroll-probe"]
+        XCTAssertTrue(probe.waitForExistence(timeout: 3))
+        return probe
+    }
+
+    @MainActor
+    private func hittableCompositionalHorizontalCards(
+        in app: XCUIApplication
+    ) -> [XCUIElement] {
+        app.cells.matching(
+            NSPredicate(
+                format: "identifier BEGINSWITH %@",
+                "compositional-horizontal-card-"
+            )
+        ).allElementsBoundByIndex.filter(\.isHittable)
+    }
+
+    @MainActor
     private func drag(in app: XCUIApplication, from startY: CGFloat, to endY: CGFloat) {
         let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: startY))
         let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: endY))
@@ -1340,6 +1706,29 @@ final class AnchorPagerExampleUITests: XCTestCase {
     }
 
     @MainActor
+    private func waitForCompositionalState(
+        from probe: XCUIElement,
+        timeout: TimeInterval,
+        matching predicate: @escaping (CompositionalScrollState) -> Bool
+    ) -> CompositionalScrollState? {
+        let expectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in
+                guard let state = CompositionalScrollState(
+                    value: probe.value as? String
+                ) else {
+                    return false
+                }
+                return predicate(state)
+            },
+            object: nil
+        )
+        guard XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed else {
+            return nil
+        }
+        return CompositionalScrollState(value: probe.value as? String)
+    }
+
+    @MainActor
     private func waitForStableScrollState(
         from probe: XCUIElement,
         timeout: TimeInterval,
@@ -1377,6 +1766,63 @@ final class AnchorPagerExampleUITests: XCTestCase {
         return nil
     }
 
+}
+
+private struct CompositionalScrollState {
+    let scrollDelegateIsStable: Bool
+    let panDelegateIsStable: Bool
+    let bounces: Bool
+    let alwaysBounceVertical: Bool
+    let isScrollEnabled: Bool
+    let hasVerticalRange: Bool
+    let currentHorizontalOffset: CGFloat
+    let maximumHorizontalOffset: CGFloat
+    let leadingHorizontalItem: Int
+
+    var hasStableOwnership: Bool {
+        scrollDelegateIsStable
+            && panDelegateIsStable
+            && bounces
+            && alwaysBounceVertical
+            && isScrollEnabled
+    }
+
+    init?(value: String?) {
+        let fields = Dictionary(
+            uniqueKeysWithValues: (value ?? "")
+                .split(separator: ";")
+                .compactMap { component -> (String, String)? in
+                    let parts = component
+                        .split(separator: "=", maxSplits: 1)
+                        .map(String.init)
+                    guard parts.count == 2 else { return nil }
+                    return (parts[0], parts[1])
+                }
+        )
+        guard let scrollDelegate = fields["scrollDelegate"],
+              let panDelegate = fields["panDelegate"],
+              let bounces = fields["bounces"],
+              let alwaysBounceVertical = fields["alwaysBounceVertical"],
+              let isScrollEnabled = fields["isScrollEnabled"],
+              let verticalRange = fields["verticalRange"],
+              let horizontalCurrentValue = fields["horizontalCurrent"],
+              let horizontalCurrent = Double(horizontalCurrentValue),
+              let horizontalMaxValue = fields["horizontalMax"],
+              let horizontalMax = Double(horizontalMaxValue),
+              let leadingValue = fields["leading"],
+              let leading = Int(leadingValue) else {
+            return nil
+        }
+        scrollDelegateIsStable = scrollDelegate == "1"
+        panDelegateIsStable = panDelegate == "1"
+        self.bounces = bounces == "1"
+        self.alwaysBounceVertical = alwaysBounceVertical == "1"
+        self.isScrollEnabled = isScrollEnabled == "1"
+        hasVerticalRange = verticalRange == "1"
+        currentHorizontalOffset = CGFloat(horizontalCurrent)
+        maximumHorizontalOffset = CGFloat(horizontalMax)
+        leadingHorizontalItem = leading
+    }
 }
 
 private struct ScrollCoordinationState {
