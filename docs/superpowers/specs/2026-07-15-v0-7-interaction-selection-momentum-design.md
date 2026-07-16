@@ -2,7 +2,7 @@
 
 **日期：** 2026-07-15
 
-**状态：** Task 0–15 与 2026-07-16 横向-only 页面纵向目标回归专项均已完成；v0.7 Ready
+**状态：** Task 0–15、横向-only 纵向目标回归与 Compositional Layout 页面级分页专项均已完成；v0.7 Ready
 
 **适用范围：** v0.7 interaction state、快速选择请求、Tabman bar 点击、Pageboy 横向 pan、纵向跨 owner 惯性、reload/layout/尺寸仲裁、系统返回优先级和业务横向手势可行性边界
 
@@ -540,3 +540,9 @@ v0.7 只有同时满足以下条件才可标记 Ready：
 Task 12 的 Example 第五页把只承担横向业务内容的 `UIScrollView` 显式登记为 `anchorPagerScrollView`。这使它错误进入 managed inset、snapshot、ScrollCoordinator binding 和 container simultaneous pair，横向拖动的纵向分量因而可以带动 `verticalScrollView`。根因修复不增加全局方向锁，而是关闭该页默认 lookup、提交 nil 纵向 target，并明确 `anchorPagerScrollView` 只表示纵向协调目标。详细设计与计划见 `docs/superpowers/specs/2026-07-16-horizontal-only-page-vertical-scroll-target-design.md` 和 `docs/superpowers/plans/2026-07-16-horizontal-only-page-vertical-scroll-target.md`。
 
 修复生产代码 HEAD `984a009`。Example unit 16/16、新真实横向手势 UI 1/1、相邻 UI 3/3、Framework 426/426、Example 全量 61/61（16 单元 + 45 UI）和 generic Simulator build 全部通过；0 fail、0 skip、0 error、0 warning、0 analyzer warning，运行时问题关键字零命中。fresh-pass 终态 Critical 0、Important 0、Minor 0；v0.7 恢复 Ready。
+
+## 2026-07-16 Compositional Layout 页面级分页修订
+
+追加第六页后，原第五页不再位于 Pageboy 末端，真实 UI 暴露出旧用例的边界依赖：业务横向区域拖动会提交第六页。根因方案新增 `pagerViewController(_:allowsInteractiveHorizontalPagingAt:)`，默认 `true`；策略与 reload metadata 同 generation 采集，由 PagingHost 唯一 committed snapshot 管理，Adapter 只执行 Pageboy 自有 `isScrollEnabled`。Example index 4、index 5 返回 `false`，业务横向内容到边界后不向 Pageboy 接力；index 3→4 验证 enabled-to-disabled terminal，index 4↔5 通过 bar/API 切换。详细设计与计划见 `docs/superpowers/specs/2026-07-16-compositional-layout-mixed-axis-gesture-validation-design.md` 和 `docs/superpowers/plans/2026-07-16-compositional-layout-mixed-axis-gesture-validation.md`。
+
+生产代码 HEAD `db4b9bc`。Framework 439/439，结果包 `/private/tmp/AnchorPagerCompositionalPolicyFramework-20260716.xcresult`；Example 70/70（19 单元 + 51 UI），结果包 `/private/tmp/AnchorPagerCompositionalPolicyExample-20260716.xcresult`；generic Simulator build 结果包 `/private/tmp/AnchorPagerCompositionalPolicyBuild-20260716.xcresult`。全部 0 fail、0 skip、0 error、0 warning、0 analyzer warning，运行时问题关键字零命中；fresh-pass 终态 Critical 0、Important 0、Minor 0，v0.7 继续为 Ready。

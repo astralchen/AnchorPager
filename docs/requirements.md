@@ -26,6 +26,8 @@ v0.5/v0.6 初次独立复审的 3 个 Important 已在 `f81ca1e` 修复，第二
 
 2026-07-16 v0.7 原最终生产 HEAD `07a3443` 已完成统一 interaction/selection、系统返回优先级和双向跨 owner 惯性。后续横向-only Example 页面纵向目标缺口修复到生产代码 HEAD `984a009`：横向业务 scroll 不再登记为纵向 target，Public symbol、Framework ScrollCoordinator/Paging/containment 与业务所有权不变。最终 Framework 426/426、Example 61/61（16 单元 + 45 UI）与 generic Simulator build 全部通过，0 fail、0 skip、0 error/warning/analyzer warning；fresh-pass 终态 Critical 0、Important 0、Minor 0，v0.7 为 Ready。
 
+2026-07-16 Compositional Layout 混合轴专项生产代码 HEAD `db4b9bc` 已增加逐页交互分页策略与第六页真实验收。`allowsInteractiveHorizontalPagingAt` 默认 `true`；`false` 只关闭 committed page 的 Pageboy 横向拖拽，bar/API 仍可用。Example index 4、index 5 为 `false`，根 CollectionView 是组合布局页唯一纵向 target，orthogonal 内部 scroll 不进入 discovery/inset/snapshot/binding。Framework 439/439、Example 70/70（19 单元 + 51 UI）与 generic Simulator build 全部通过，0 fail、0 skip、0 error/warning/analyzer warning；运行时问题关键字零命中，fresh-pass 终态 Critical 0、Important 0、Minor 0。
+
 ## 3. 参考项目
 
 1. JXPagingView：https://github.com/pujiaxin33/JXPagingView

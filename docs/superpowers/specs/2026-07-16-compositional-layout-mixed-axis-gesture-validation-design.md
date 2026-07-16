@@ -2,7 +2,7 @@
 
 **日期：** 2026-07-16
 
-**状态：** 页面级横向分页策略二次修订方向已确认；规格已更新，待用户书面复核后修订实施计划并继续 TDD
+**状态：** 页面级横向分页策略、混合轴 Example、完整门禁与 fresh-pass 均已完成；专项 Ready
 
 **适用范围：** Example 新增 `UICollectionViewCompositionalLayout` 页面、纵向根滚动目标、orthogonal section、Pageboy 横向分页竞争、真实手势探针与必要的框架根因修复。
 
@@ -379,7 +379,11 @@ enabled/disabled 只在 Adapter 实际状态变化时记录，reload/selection/p
 5. enabled-to-disabled 的真实 interactive terminal 由 index 3 拖入 index 4 验证；index 4 与 index 5 之间只通过 Tabman bar 或公开 API 切换。
 6. 横向业务页原“下半区域左右滑动切换页面”的提示与新策略冲突，实施时改为通过分段栏或公开入口切页的准确说明，不保留不可用的手势承诺。
 
-本文完成书面复核后，必须先修订现有实施计划，再从 Example 策略 RED、UI 合同迁移和 interactive-pop 隔离复验继续。
+二次修订已完成用户书面复核、计划同步、Example 策略 RED/GREEN、UI 合同迁移和 interactive-pop 隔离复验；最终实现未越过上述边界。
+
+### 最终验收
+
+生产代码 HEAD `db4b9bc`。Framework 439/439，结果包 `/private/tmp/AnchorPagerCompositionalPolicyFramework-20260716.xcresult`；Example 70/70（19 单元 + 51 UI），结果包 `/private/tmp/AnchorPagerCompositionalPolicyExample-20260716.xcresult`；generic Simulator build 结果包 `/private/tmp/AnchorPagerCompositionalPolicyBuild-20260716.xcresult`。三份结果均为 0 error、0 warning、0 analyzer warning，测试 0 fail、0 skip；诊断中的 UIKit 约束、gesture dependency cycle、appearance imbalance、KVO/observer 与 display-link/resource 问题关键字零命中。fresh-pass 覆盖 `0db297d...db4b9bc`，终态 Critical 0、Important 0、Minor 0。
 
 ## 文档与计划
 

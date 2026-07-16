@@ -196,6 +196,19 @@ final class HorizontalOnlyPageViewController: UIViewController {
 
 页面同时包含纵向父 scroll 和嵌套横向业务 scroll 时，只把纵向父 scroll 设置为 `anchorPagerScrollView`。默认查找保持确定性的深度优先规则，不依据 `contentSize` 或运行时手势推断轴向；接入方必须显式表达 horizontal-only 或混合页面的纵向目标语义。
 
+页面内的横向业务滚动需要稳定优先于 Pageboy 时，可按页面关闭交互式横向分页：
+
+```swift
+func pagerViewController(
+    _ pagerViewController: AnchorPagerViewController,
+    allowsInteractiveHorizontalPagingAt index: Int
+) -> Bool {
+    !pagesWithHorizontalBusinessContent.contains(index)
+}
+```
+
+该方法默认返回 `true`。返回 `false` 只关闭 committed current page 的 Pageboy 横向拖拽；分段栏与 `setSelectedIndex(_:animated:)` 仍可切页。策略是页面级静态门禁：业务横向内容到达边界后不会把同一次拖动交接给 Pageboy，也不支持同一页面按命中区域分别启停分页。策略与 page count/title 在同一 reload generation 原子提交，不会预加载页面或修改业务 scroll/pan delegate、bounce 与 `isScrollEnabled`。
+
 AnchorPager 接管目标 scroll view 时会把 `contentInsetAdjustmentBehavior` 设为 `.never`、把 `automaticallyAdjustsScrollIndicatorInsets` 设为 `false`，并在现有外部 inset 上差量叠加 managed top/bottom。页面被 reload 移除或容器释放时，只移除最后一次 managed 部分，并恢复两项原始自动调整状态。调用方运行时修改外部 inset 时，应基于当前总 inset 做增量修改；若直接用不包含 managed 部分的绝对值覆盖整个 `contentInset`，框架无法从 UIKit 单一属性推断调用方意图。
 
 ## 纵向协调与边界回弹
@@ -264,7 +277,9 @@ v0.7 最终生产代码 HEAD `07a3443` 已通过 Framework 426/426、Example 60/
 
 2026-07-16 横向-only 页面纵向目标修复生产代码 HEAD `984a009` 已把 Example 第五页改为 original Pageboy page + nil 纵向 target；横向业务 scroll 不再进入 managed inset、snapshot、纵向 binding 或 container/current-child simultaneous pair。Framework 426/426、Example 61/61（16 单元 + 45 UI）与 generic iOS Simulator build 全部通过，0 fail、0 skip、0 error、0 warning、0 analyzer warning；fresh-pass 终态 Critical 0、Important 0、Minor 0，v0.7 恢复 Ready。
 
-当前不保证页面内部任意横向 `UIScrollView` 自动优先于 Pageboy。真实 UIKit 验收证明 direct failure relation 与无侵入 guard 都无法在不接管既有 delegate、不重置手势、不依赖私有层级且不阻塞页面其他区域的前提下稳定改变同向嵌套 scroll winner；框架因此不安装业务 child failure relation。需要该组合时，应暂时由接入方调整页面交互布局，后续版本若提供能力将先定义显式接入契约。
+2026-07-16 Compositional Layout 混合轴专项生产代码 HEAD `db4b9bc` 已追加第六页：根 `UICollectionView` 是唯一纵向 target，orthogonal section 只走业务横向路径；Example index 4、index 5 显式关闭 Pageboy 交互分页，index 3→4 验证 enabled-to-disabled terminal，index 4↔5 只使用分段栏/API。Framework 439/439、Example 70/70（19 单元 + 51 UI）与 generic Simulator build 全部通过，0 fail、0 skip、0 error、0 warning、0 analyzer warning；运行时问题关键字零命中，fresh-pass 终态 Critical 0、Important 0、Minor 0。
+
+当前不保证默认 `true` 页面内部任意横向 `UIScrollView` 自动优先于 Pageboy。真实 UIKit 验收证明 direct failure relation 与无侵入 guard 都无法在不接管既有 delegate、不重置手势、不依赖私有层级且不阻塞页面其他区域的前提下稳定改变同向嵌套 scroll winner；框架因此不安装业务 child failure relation。需要业务横向手势稳定获胜时，接入方应对整个页面返回 `false`，并通过分段栏/API 离页。
 
 在 Xcode 26.3 / Swift 6.2.4 的 x86_64 iPhone 17 Simulator 验证中，把控制器同步析构改为
 `isolated deinit` 会在生命周期析构后稳定触发 allocator `pointer being freed was not allocated` 崩溃。

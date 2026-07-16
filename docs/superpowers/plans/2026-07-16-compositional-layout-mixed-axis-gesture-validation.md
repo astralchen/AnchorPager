@@ -38,7 +38,7 @@ db83bf3 按选择终态切换分页策略
 77a04dd 接入组合布局页面级分页策略
 ```
 
-当前仅 `AnchorPagerExampleUITests.swift` 保留预期未提交改动。已确认的后续证据为：
+Task 6 起点仅 `AnchorPagerExampleUITests.swift` 保留预期未提交改动。已确认的后续证据为：
 
 1. Example target-level unit GREEN 为 18/18；Swift Testing 的 method-level `-only-testing` 会运行 0 tests，后续必须使用 target-level selector。
 2. `/private/tmp/AnchorPagerTask6OrthogonalGreen-20260716-1520.xcresult` 中组合布局正交左右拖动通过。
@@ -47,6 +47,8 @@ db83bf3 按选择终态切换分页策略
 5. `/private/tmp/AnchorPagerTask6HorizontalDiagnostic-20260716.xcresult` 精确证明 index 4 业务区域拖动提交了 index 5，终态为 `page=compositional`，而全部纵向 presentation 为零。
 
 因此 Task 6 起按二次修订规格继续：先以单元 RED 让 index 4、index 5 都返回 `false`，再迁移真实 UI 契约；不得回退已经通过的 Framework Public/Host/Adapter 实现。
+
+最终执行记录：Task 1–9 已全部完成，生产代码 HEAD `db4b9bc`。Framework 439/439、Example 70/70（19 单元 + 51 UI）与 generic Simulator build 全部通过，0 fail、0 skip、0 error/warning/analyzer warning；运行时问题关键字零命中，fresh-pass 终态 Critical 0、Important 0、Minor 0。上述“当前仅 UI 文件未提交”为 Task 6 起点快照，最终工作区已收口。
 
 ## 文件与职责
 
@@ -1459,7 +1461,7 @@ git commit -m "验收组合布局重载与资源生命周期"
 - Consumes: Task 1–8 的新鲜 RED/GREEN、commit、真实 UI 和日志证据。
 - Produces: 长期 Public 契约、能力边界、最终测试统计、生产 HEAD 和复审结论。
 
-- [ ] **Step 1：同步长期文档的精确契约**
+- [x] **Step 1：同步长期文档的精确契约**
 
 文档统一写明：
 
@@ -1476,7 +1478,7 @@ Adapter 只写 Pageboy 自有 isScrollEnabled，不修改业务 child。
 
 只在完整门禁通过后把专项标记完成；先保留实际执行中的测试数量和结果包字段，运行后立即写入真实值，不预填数字。
 
-- [ ] **Step 2：运行静态门禁**
+- [x] **Step 2：运行静态门禁**
 
 ```bash
 git diff --check
@@ -1489,7 +1491,7 @@ rg -n 'isScrollEnabled\s*=' Sources/AnchorPager
 
 预期：Public 无第三方 import；Framework 不含 Example 业务命名；没有新增业务 child delegate/bounce 写入；`isScrollEnabled` 新增命中只允许出现在 Adapter 对 Pageboy 继承属性的封装入口。
 
-- [ ] **Step 3：运行 Framework 全量**
+- [x] **Step 3：运行 Framework 全量**
 
 ```bash
 xcodebuild -scheme AnchorPager \
@@ -1499,7 +1501,7 @@ xcodebuild -scheme AnchorPager \
 
 预期：0 fail、0 skip。
 
-- [ ] **Step 4：运行 Example 全量与 generic build**
+- [x] **Step 4：运行 Example 全量与 generic build**
 
 ```bash
 xcodebuild -project Examples/AnchorPagerExample.xcodeproj \
@@ -1515,7 +1517,7 @@ xcodebuild -project Examples/AnchorPagerExample.xcodeproj \
 
 预期：Example 0 fail、0 skip；generic Simulator build 成功。
 
-- [ ] **Step 5：检查 xcresult 与运行时诊断**
+- [x] **Step 5：检查 xcresult 与运行时诊断**
 
 ```bash
 xcrun xcresulttool get test-results summary --path /private/tmp/AnchorPagerCompositionalPolicyFramework-20260716.xcresult
@@ -1525,7 +1527,7 @@ xcrun xcresulttool get build-results --path /private/tmp/AnchorPagerCompositiona
 
 记录 `testsCount/passedTests/failedTests/skippedTests/errorCount/warningCount/analyzerWarningCount`；导出诊断并检索 UIKit `LayoutConstraints`、gesture dependency cycle、appearance imbalance、KVO/observer、display-link/resource lifecycle 关键词，要求零命中。
 
-- [ ] **Step 6：执行任务级自审**
+- [x] **Step 6：执行任务级自审**
 
 逐项检查：
 
@@ -1539,11 +1541,11 @@ xcrun xcresulttool get build-results --path /private/tmp/AnchorPagerCompositiona
 8. appearance、display link、layout handler 与闭包释放；
 9. 固定日志、隐私、测试和文档状态。
 
-- [ ] **Step 7：执行 fresh-pass**
+- [x] **Step 7：执行 fresh-pass**
 
 从设计提交 `91a49f0`、原计划提交 `f318029`、首次修订规格提交 `f51c657` 与二次修订规格提交 `9408bc7` 起重读完整 diff。按 Critical/Important/Minor 记录；任何 Critical/Important 必须补 RED、修复并重跑受影响聚焦与全量门禁。用户已选择当前会话 inline execution，在当前会话本地完成复审。
 
-- [ ] **Step 8：写入真实验收结果并提交文档**
+- [x] **Step 8：写入真实验收结果并提交文档**
 
 ```bash
 git diff --check
@@ -1552,6 +1554,8 @@ git commit -m "完成组合布局页面级分页验收"
 ```
 
 只有 Task 1–9、全量门禁和 fresh-pass 全部完成，才能把组合布局专项标记 Ready，并在 `AGENTS.md` 记录最终生产 HEAD。
+
+最终验收记录：生产代码 HEAD `db4b9bc`；Framework 439/439，结果包 `/private/tmp/AnchorPagerCompositionalPolicyFramework-20260716.xcresult`；Example 70/70（19 单元 + 51 UI），结果包 `/private/tmp/AnchorPagerCompositionalPolicyExample-20260716.xcresult`；generic Simulator build 结果包 `/private/tmp/AnchorPagerCompositionalPolicyBuild-20260716.xcresult`。全部 0 fail、0 skip、0 error、0 warning、0 analyzer warning；运行时问题关键字零命中。fresh-pass 终态 Critical 0、Important 0、Minor 0，专项 Ready。
 
 ## 计划自审
 

@@ -8,7 +8,7 @@
 
 **Tech Stack:** Swift 6.2、Swift 6 language mode、UIKit、iOS 14+、Swift Package Manager、Tabman 4.0.1、Pageboy 5.0.2、XCTest/XCUITest、Xcode 26.6、iPhone 17 Pro / iOS 26.5 Simulator。
 
-**当前状态：** Task 0–15 与 2026-07-16 横向-only 页面纵向目标回归专项均已完成；修复生产代码 HEAD `984a009`，v0.7 Ready。详细记录：`docs/superpowers/plans/2026-07-16-horizontal-only-page-vertical-scroll-target.md`。
+**当前状态：** Task 0–15、横向-only 纵向目标回归与 Compositional Layout 页面级分页专项均已完成；最新生产代码 HEAD `db4b9bc`，v0.7 Ready。详细记录：`docs/superpowers/plans/2026-07-16-horizontal-only-page-vertical-scroll-target.md` 与 `docs/superpowers/plans/2026-07-16-compositional-layout-mixed-axis-gesture-validation.md`。
 
 ## Global Constraints
 
@@ -1127,3 +1127,5 @@ git commit -m "完成 v0.7 全量验收与文档收口"
 只有 Task 0–15、全量门禁和 fresh-pass 全部完成，才能把 v0.7 标记为 Ready 并进入 v0.8。
 
 最终验收记录：fresh-pass 修复提交 `07a3443`。相邻四类聚焦测试 263/263，结果包 `/private/tmp/AnchorPagerV07Task15FreshPassFocusedFinal-20260716.xcresult`；Framework 426/426，结果包 `/private/tmp/AnchorPagerV07FrameworkFinal2-20260716.xcresult`；Example 60/60（16 单元 + 44 UI），结果包 `/private/tmp/AnchorPagerV07ExampleFinal2-20260716.xcresult`；generic Simulator build 结果包 `/private/tmp/AnchorPagerV07ExampleBuildFinal2-20260716.xcresult`。全部 0 fail、0 skip、0 error、0 warning、0 analyzer warning；运行时问题关键字零命中。fresh-pass 终态 Critical 0、Important 0、Minor 0。Task 15 完成，v0.7 Ready。
+
+2026-07-16 follow-up：Compositional Layout 页面级分页专项生产代码 HEAD `db4b9bc`。逐页 Bool、reload atomicity、Adapter 日志、selection terminal、第六页 root CollectionView/orthogonal、index 4/5 双禁用、index 3→4 incoming、bar/API、reload 与 sampler lifecycle 均完成 TDD 和真实 UI。Framework 439/439、Example 70/70（19 单元 + 51 UI）及 generic Simulator build 全部通过，0 fail、0 skip、0 error/warning/analyzer warning；运行时问题关键字零命中，fresh-pass 终态 Critical 0、Important 0、Minor 0，v0.7 继续为 Ready。
