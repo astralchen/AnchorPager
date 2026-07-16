@@ -53,6 +53,67 @@ final class AnchorPagerPagingAdapterTests: XCTestCase {
     }
 
     @MainActor
+    func testInteractivePagingSwitchOnlyChangesPageboySurfaceAndLogsTransitions() throws {
+        let adapter = AnchorPagerPagingAdapter()
+        let page = ScrollPageViewController()
+        reload(
+            adapter,
+            titles: ["Page"],
+            viewControllers: [page],
+            selectedIndex: 0
+        )
+        adapter.loadViewIfNeeded()
+        let surface = try XCTUnwrap(adapter.pagingSurface)
+        let businessScrollDelegate = page.scrollView.delegate
+        let businessPanDelegate = page.scrollView.panGestureRecognizer.delegate
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+
+        adapter.setInteractiveHorizontalPagingEnabled(false)
+        adapter.setInteractiveHorizontalPagingEnabled(false)
+
+        XCTAssertFalse(adapter.isScrollEnabled)
+        XCTAssertFalse(surface.scrollView.isScrollEnabled)
+        XCTAssertTrue(page.scrollView.isScrollEnabled)
+        XCTAssertTrue(page.scrollView.delegate === businessScrollDelegate)
+        XCTAssertTrue(page.scrollView.panGestureRecognizer.delegate === businessPanDelegate)
+        XCTAssertEqual(
+            events.filter { $0.event == "paging.interactivePaging.disabled" }.count,
+            1
+        )
+
+        adapter.setInteractiveHorizontalPagingEnabled(true)
+
+        XCTAssertTrue(adapter.isScrollEnabled)
+        XCTAssertTrue(surface.scrollView.isScrollEnabled)
+        XCTAssertEqual(
+            events.filter { $0.event == "paging.interactivePaging.enabled" }.count,
+            1
+        )
+    }
+
+    @MainActor
+    func testProgrammaticSelectionStillExecutesWhileInteractivePagingIsDisabled() {
+        let adapter = AnchorPagerPagingAdapter()
+        adapter.loadViewIfNeeded()
+        reload(
+            adapter,
+            titles: ["A", "B"],
+            viewControllers: [UIViewController(), UIViewController()],
+            selectedIndex: 0
+        )
+        adapter.setInteractiveHorizontalPagingEnabled(false)
+        let request = selectionRequest(
+            identifier: 71,
+            targetIndex: 1,
+            animated: false
+        )
+
+        XCTAssertTrue(adapter.executeSelection(request, previousIndex: 0))
+    }
+
+    @MainActor
     func testExplicitBarHeightConstrainsActualTabmanBarAndReportsInsets() {
         let adapter = AnchorPagerPagingAdapter()
         let delegate = RecordingPagingDelegate()

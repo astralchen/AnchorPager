@@ -185,6 +185,18 @@ final class AnchorPagerPagingAdapter: TabmanViewController, PageboyViewControlle
         updateBarHeightConstraintIfNeeded()
     }
 
+    func setInteractiveHorizontalPagingEnabled(_ isEnabled: Bool) {
+        guard isScrollEnabled != isEnabled else { return }
+        isScrollEnabled = isEnabled
+        AnchorPagerLogger.log(
+            .info,
+            category: .paging,
+            event: isEnabled
+                ? "paging.interactivePaging.enabled"
+                : "paging.interactivePaging.disabled"
+        )
+    }
+
     @discardableResult
     func setPagePresentationTranslationY(_ translationY: CGFloat) -> Bool {
         guard let pageViewController = children

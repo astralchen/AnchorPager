@@ -139,6 +139,23 @@ final class AnchorPagerLoggerTests: XCTestCase {
         XCTAssertTrue(events.allSatisfy { $0.category == .gesture })
     }
 
+    @MainActor
+    func testInteractivePagingLogsUseFixedPagingEventsWithoutPageMetadata() {
+        let adapter = AnchorPagerPagingAdapter()
+        var events: [AnchorPagerLogger.Event] = []
+        AnchorPagerLogger.sink = { events.append($0) }
+        defer { AnchorPagerLogger.sink = nil }
+
+        adapter.setInteractiveHorizontalPagingEnabled(false)
+        adapter.setInteractiveHorizontalPagingEnabled(true)
+
+        XCTAssertEqual(
+            events.map(\.event),
+            ["paging.interactivePaging.disabled", "paging.interactivePaging.enabled"]
+        )
+        XCTAssertTrue(events.allSatisfy { $0.category == .paging })
+    }
+
     func testVerticalDecelerationDriverUsesOnlyFixedLifecycleEvents() throws {
         let testFileURL = URL(fileURLWithPath: #filePath)
         let packageRootURL = testFileURL
