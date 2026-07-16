@@ -594,6 +594,10 @@
 - [x] 单元 RED/GREEN 固定 `anchorPagerUsesDefaultScrollViewLookup == false` 与 nil target，同时保持业务 delegate、pan delegate 和 bounce/enable 配置
 - [x] 真实横向命中区域 UI 回归固定业务 drag 不驱动 `verticalScrollView`、Header collapse 或纵向 presentation；Pageboy 横向切页、plain nil target 与纵向 rebind 相邻回归通过
 - [x] 本专项生产代码 HEAD `984a009` 全量验收：Framework 426/426、Example 61/61（16 单元 + 45 UI）、generic Simulator build，0 fail、0 skip、0 error/warning/analyzer warning；fresh-pass 终态 Critical 0、Important 0、Minor 0，恢复 v0.7 Ready
+- [x] 确认 Compositional Layout 混合轴 Example 设计：根 CollectionView 是唯一纵向 target，orthogonal section 只走 UIKit 横向路径，真实 UI 分别验证纵向 handoff、正交横向 winner 与非正交区域 Pageboy 分页
+- [ ] 完成 Compositional Layout 混合轴 Example 详细实施计划并由用户复核
+- [ ] 按 TDD 新增第六页、公开 handler 探针与三类真实手势验收；若暴露框架冲突，先按专项根因门禁修订设计再修复
+- [ ] 完成 Framework/Example/generic build、xcresult 诊断、ownership 自审、长期文档与 fresh-pass，记录本专项最终生产 HEAD
 
 ## v0.8：状态栏点击与尺寸变化版
 
