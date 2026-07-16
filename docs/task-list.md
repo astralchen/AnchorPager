@@ -599,6 +599,10 @@
 - [x] 按 TDD 新增逐页 `allowsInteractiveHorizontalPagingAt`、Host committed snapshot、Adapter Pageboy 开关、固定日志与第六页真实探针；Example index 4、index 5 显式 false
 - [x] 真实 UI 验收纵向 handoff、orthogonal 双向业务滚动、非正交禁用、index 3→4 terminal、index 4 业务横向 winner、bar/API、reload、appearance 与 interactive-pop
 - [x] 本专项生产代码 HEAD `db4b9bc` 全量验收：Framework 439/439、Example 70/70（19 单元 + 51 UI）、generic Simulator build，0 fail、0 skip、0 error/warning/analyzer warning；运行时问题关键字零命中，fresh-pass 终态 Critical 0、Important 0、Minor 0
+- [x] 确认横向业务边缘“下一次手势接力”设计：外部零配置、保留原生 orthogonal、框架以自有 route gate 和命中路径 `UIScrollView` 边界自动仲裁，不接管任何内建 pan delegate
+- [ ] 先完成 route gate 在普通横向 scroll 与原生 orthogonal 上的真实 UIKit 可行性硬门禁；失败则保留当前静态策略并停止生产迁移
+- [ ] 门禁通过后移除 `allowsInteractiveHorizontalPagingAt`、reload/Host committed Bool、Adapter `isScrollEnabled` 开关和 Example 静态策略
+- [ ] 按 TDD 验收业务中部滚动、同手势不接力、边缘下一手势 Pageboy、普通区域分页、interactive-pop、reload/lifecycle/resource 与全量回归
 
 ## v0.8：状态栏点击与尺寸变化版
 

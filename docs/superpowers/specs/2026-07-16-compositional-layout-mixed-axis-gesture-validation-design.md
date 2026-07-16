@@ -4,6 +4,8 @@
 
 **状态：** 页面级横向分页策略、混合轴 Example、完整门禁与 fresh-pass 均已完成；专项 Ready
 
+**后续设计：** 用户已确认以“业务横向内容到边缘后的下一次手势自动接力 Pageboy”取代本专项的逐页静态 Bool；当前生产事实仍以本文为准，后续尚未实现，详见 `2026-07-16-next-gesture-horizontal-boundary-paging-design.md`。
+
 **适用范围：** Example 新增 `UICollectionViewCompositionalLayout` 页面、纵向根滚动目标、orthogonal section、Pageboy 横向分页竞争、真实手势探针与必要的框架根因修复。
 
 ## 背景
