@@ -244,7 +244,7 @@ route gate 不是 selection、interaction 或 offset owner；它只决定 Pagebo
 除 Task 0 外，最终至少验收：
 
 - index 4 普通横向业务 scroll 的中部、两端与下一手势离页；
-- index 5 原生 orthogonal 双向内容滚动、两端下一手势离页、非正交区域分页；
+- index 5 原生 orthogonal 双向内容滚动、存在相邻页的 leading 边缘下一手势离页、非正交区域分页；trailing 边缘由 index 4 双边真实 UI 与纯模型共同覆盖；
 - 根 CollectionView 双向纵向 handoff、Header/bar/container 稳定；
 - Tabman bar、公开 API、interactive Pageboy、cancel、reload、appearance、surface replacement；
 - leading-edge interactive-pop；
