@@ -18,8 +18,26 @@ public protocol AnchorPagerViewControllerDataSource: AnyObject {
         viewControllerAt index: Int
     ) -> UIViewController
 
+    /// 返回指定页面是否允许通过横向拖拽进行交互式分页。
+    ///
+    /// 返回 `false` 只关闭该页面的横向拖拽分页；分段栏和
+    /// `setSelectedIndex(_:animated:)` 仍可切换页面。默认返回 `true`。
+    func pagerViewController(
+        _ pagerViewController: AnchorPagerViewController,
+        allowsInteractiveHorizontalPagingAt index: Int
+    ) -> Bool
+
     /// 返回 Header 内容。
     func headerContent(in pagerViewController: AnchorPagerViewController) -> AnchorPagerHeaderContent
+}
+
+public extension AnchorPagerViewControllerDataSource {
+    func pagerViewController(
+        _ pagerViewController: AnchorPagerViewController,
+        allowsInteractiveHorizontalPagingAt index: Int
+    ) -> Bool {
+        true
+    }
 }
 
 /// AnchorPager 的事件代理。

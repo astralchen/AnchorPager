@@ -352,6 +352,52 @@ final class AnchorPagerViewControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testInteractiveHorizontalPagingPolicyDefaultsToTrueAndIsCollectedByIndex() {
+        let pager = AnchorPagerViewController()
+        let legacy = LegacyPagingPolicyDataSource()
+        XCTAssertTrue(
+            legacy.pagerViewController(
+                pager,
+                allowsInteractiveHorizontalPagingAt: 0
+            )
+        )
+
+        let dataSource = StubDataSource(
+            count: 3,
+            interactiveHorizontalPagingPermissions: [true, false, true]
+        )
+        pager.dataSource = dataSource
+
+        pager.reloadData()
+
+        XCTAssertEqual(dataSource.requestedInteractivePagingIndexes, [0, 1, 2])
+    }
+
+    @MainActor
+    func testReloadDataInteractivePagingPolicyCallbackReentryKeepsLatestSnapshot() {
+        let pager = AnchorPagerViewController()
+        let dataSource = StubDataSource(
+            count: 2,
+            titles: ["Outer 0", "Outer 1"],
+            interactiveHorizontalPagingPermissions: [false, false]
+        )
+        pager.dataSource = dataSource
+        pager.loadViewIfNeeded()
+        dataSource.onInteractivePagingPermission = {
+            dataSource.count = 1
+            dataSource.titles = ["Latest"]
+            dataSource.viewControllers = [UIViewController()]
+            dataSource.interactiveHorizontalPagingPermissions = [true]
+            pager.reloadData()
+        }
+
+        pager.reloadData()
+
+        XCTAssertEqual(dataSource.requestedInteractivePagingIndexes, [0, 0])
+        XCTAssertEqual(pager.effectiveSelectedIndex, 0)
+    }
+
+    @MainActor
     func testReloadDataNegativeCountWritesSingleChildrenInvalidCountLog() {
         let pager = AnchorPagerViewController()
         let dataSource = StubDataSource(count: -1)
@@ -4323,25 +4369,32 @@ private final class StubDataSource: AnchorPagerViewControllerDataSource {
     var titles: [String]
     var viewControllers: [UIViewController]
     var headerContent: AnchorPagerHeaderContent
+    var interactiveHorizontalPagingPermissions: [Bool]
     var requestedViewControllerIndexes: [Int] = []
     var requestedTitleIndexes: [Int] = []
+    var requestedInteractivePagingIndexes: [Int] = []
     var numberOfViewControllersCallCount = 0
     var headerContentCallCount = 0
     var onNumberOfViewControllers: (() -> Void)?
     var onTitle: (() -> Void)?
     var onHeaderContent: (() -> Void)?
     var onViewController: (() -> Void)?
+    var onInteractivePagingPermission: (() -> Void)?
 
     init(
         count: Int,
         titles: [String]? = nil,
         viewControllers: [UIViewController]? = nil,
-        headerContent: AnchorPagerHeaderContent = .view(UIView())
+        headerContent: AnchorPagerHeaderContent = .view(UIView()),
+        interactiveHorizontalPagingPermissions: [Bool]? = nil
     ) {
         self.count = count
         self.titles = titles ?? (0..<max(0, count)).map { "Page \($0)" }
         self.viewControllers = viewControllers ?? (0..<max(0, count)).map { _ in UIViewController() }
         self.headerContent = headerContent
+        self.interactiveHorizontalPagingPermissions =
+            interactiveHorizontalPagingPermissions
+            ?? Array(repeating: true, count: max(0, count))
     }
 
     func numberOfViewControllers(in pagerViewController: AnchorPagerViewController) -> Int {
@@ -4386,11 +4439,55 @@ private final class StubDataSource: AnchorPagerViewControllerDataSource {
         return result
     }
 
+    func pagerViewController(
+        _ pagerViewController: AnchorPagerViewController,
+        allowsInteractiveHorizontalPagingAt index: Int
+    ) -> Bool {
+        requestedInteractivePagingIndexes.append(index)
+        let result = interactiveHorizontalPagingPermissions.indices.contains(index)
+            ? interactiveHorizontalPagingPermissions[index]
+            : true
+        let hook = onInteractivePagingPermission
+        onInteractivePagingPermission = nil
+        hook?()
+        return result
+    }
+
     func resetCallbackRecords() {
         requestedViewControllerIndexes.removeAll()
         requestedTitleIndexes.removeAll()
+        requestedInteractivePagingIndexes.removeAll()
         numberOfViewControllersCallCount = 0
         headerContentCallCount = 0
+    }
+}
+
+@MainActor
+private final class LegacyPagingPolicyDataSource: AnchorPagerViewControllerDataSource {
+    func numberOfViewControllers(
+        in pagerViewController: AnchorPagerViewController
+    ) -> Int {
+        1
+    }
+
+    func pagerViewController(
+        _ pagerViewController: AnchorPagerViewController,
+        titleForViewControllerAt index: Int
+    ) -> String {
+        "Legacy"
+    }
+
+    func pagerViewController(
+        _ pagerViewController: AnchorPagerViewController,
+        viewControllerAt index: Int
+    ) -> UIViewController {
+        UIViewController()
+    }
+
+    func headerContent(
+        in pagerViewController: AnchorPagerViewController
+    ) -> AnchorPagerHeaderContent {
+        .view(UIView())
     }
 }
 

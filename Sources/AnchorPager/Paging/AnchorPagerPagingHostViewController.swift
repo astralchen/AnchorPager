@@ -122,6 +122,7 @@ final class AnchorPagerPagingHostViewController: UIViewController {
         let titles: [String]
         let pageCount: Int
         let selectedIndex: Int
+        let interactiveHorizontalPagingPermissions: [Bool]
     }
 
     weak var pageProvider: AnchorPagerPageProviding? {
@@ -190,13 +191,17 @@ final class AnchorPagerPagingHostViewController: UIViewController {
         requestIdentifier: AnchorPagerPagingReloadRequestIdentifier,
         titles: [String],
         pageCount: Int,
-        selectedIndex: Int
+        selectedIndex: Int,
+        interactiveHorizontalPagingPermissions: [Bool]? = nil
     ) {
+        let resolvedPermissions = interactiveHorizontalPagingPermissions
+            ?? Array(repeating: true, count: max(0, pageCount))
         let request = ReloadRequest(
             identifier: requestIdentifier,
             titles: titles,
             pageCount: pageCount,
-            selectedIndex: selectedIndex
+            selectedIndex: selectedIndex,
+            interactiveHorizontalPagingPermissions: resolvedPermissions
         )
         pendingExplicitSelectionRequest = nil
         if isDeferredWorkExecutionSuspended ||

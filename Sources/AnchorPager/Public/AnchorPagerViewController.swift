@@ -9,6 +9,7 @@ open class AnchorPagerViewController: UIViewController {
         var selectedIndex: Int
         let headerContent: AnchorPagerHeaderContent?
         let titles: [String]
+        let interactiveHorizontalPagingPermissions: [Bool]
         var providerGenerationIsActive: Bool
     }
 
@@ -214,14 +215,22 @@ open class AnchorPagerViewController: UIViewController {
         guard isCurrentReloadTransaction(transactionIdentifier) else { return }
 
         var resolvedTitles: [String] = []
+        var resolvedInteractiveHorizontalPagingPermissions: [Bool] = []
         resolvedTitles.reserveCapacity(resolvedPageCount)
+        resolvedInteractiveHorizontalPagingPermissions.reserveCapacity(resolvedPageCount)
         for index in 0..<resolvedPageCount {
             let title = reloadDataSource?.pagerViewController(
                 self,
                 titleForViewControllerAt: index
             ) ?? ""
             guard isCurrentReloadTransaction(transactionIdentifier) else { return }
+            let allowsInteractivePaging = reloadDataSource?.pagerViewController(
+                self,
+                allowsInteractiveHorizontalPagingAt: index
+            ) ?? true
+            guard isCurrentReloadTransaction(transactionIdentifier) else { return }
             resolvedTitles.append(title)
+            resolvedInteractiveHorizontalPagingPermissions.append(allowsInteractivePaging)
         }
         guard isCurrentReloadTransaction(transactionIdentifier) else { return }
 
@@ -249,6 +258,8 @@ open class AnchorPagerViewController: UIViewController {
             selectedIndex: resolvedSelectedIndex,
             headerContent: resolvedHeaderContent,
             titles: resolvedTitles,
+            interactiveHorizontalPagingPermissions:
+                resolvedInteractiveHorizontalPagingPermissions,
             providerGenerationIsActive: false
         )
 
@@ -469,7 +480,9 @@ open class AnchorPagerViewController: UIViewController {
             requestIdentifier: snapshot.requestIdentifier,
             titles: snapshot.titles,
             pageCount: snapshot.pageCount,
-            selectedIndex: snapshot.selectedIndex
+            selectedIndex: snapshot.selectedIndex,
+            interactiveHorizontalPagingPermissions:
+                snapshot.interactiveHorizontalPagingPermissions
         )
         cancelVerticalDecelerationForDeferredWorkIfNeeded()
         requestDeferredWorkDrain()
