@@ -2,7 +2,7 @@
 
 **日期：** 2026-07-17
 
-**状态：** 设计已确认；生产实现、TDD、真实 UIKit 硬门禁、完整验收和 fresh-pass 尚未开始
+**状态：** 设计已确认；详细实施计划已完成并自审；生产实现、TDD、真实 UIKit 硬门禁、完整验收和 fresh-pass 尚未开始
 
 **适用范围：** AnchorPager 横向分页执行层、页面 `UIViewController` containment、分段栏与 indicator、普通横向业务 `UIScrollView`、`UICollectionViewCompositionalLayout` 原生 `.orthogonalScrollingBehavior`、下一次手势边缘接力、selection/reload transaction、系统侧滑返回、页面缓存、plain page presentation 和第三方依赖迁移。
 
@@ -765,4 +765,4 @@ Public 保留：
 
 ## 后续步骤
 
-本设计确认和提交后，必须单独编写实施计划，按 Task 拆分 RED -> GREEN -> 聚焦回归 -> 自审 -> 中文提交。实施计划的第一项必须是隔离真实 UIKit 停止门禁，不得先删除旧生产链路。
+详细实施计划见 `docs/superpowers/plans/2026-07-17-self-hosted-horizontal-paging-auto-handoff.md`。执行时按 Task 拆分 RED → GREEN → 聚焦回归 → 自审 → 中文提交；Task 1 必须先完成普通横向 scroll 与原生 orthogonal 的真实 Framework 停止门禁，未通过前不得删除旧生产链路。

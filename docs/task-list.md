@@ -607,7 +607,7 @@
 - [ ] **BLOCKED / 不再执行：** 按旧方案继续业务中部滚动、边缘下一手势 Pageboy、普通区域分页、interactive-pop、reload/lifecycle/resource 与全量验收；Task 4 及后续迁移保持历史未执行
 - [x] 确认自有横向分页架构设计：AnchorPager 自行实现 PagingContainer、PagingScrollView、分段栏、indicator 与 containment；PagingScrollView 不管理控制器，业务边缘采用自有 route 与 paging pan 的动态优先级，保留原生 orthogonal
 - [x] 确认退场缓存语义：消失页面 terminal 当场结束 appearance 并解除 containment，controller 实例进入有界 `recentlyRetired` 单槽，retention 与 managed inset ownership 解耦
-- [ ] 编写并复核自有横向分页与业务边缘自动接力实施计划；第一任务必须是普通横向 scroll 与原生 orthogonal 的隔离真实 UIKit 停止门禁
+- [x] 编写并自审自有横向分页与业务边缘自动接力实施计划：共 9 个任务，Task 1 直接装配真实 Framework 临时执行模式，以 4 条 UI 覆盖普通横向 scroll、原生 orthogonal、普通区域分页/boundary bounce 和无相邻页业务 bounce，连续三轮通过；任一路径失败即完整清理实验并停止
 - [ ] 按新计划完成 TDD、Host/Container 迁移、static Bool 与 Tabman/Pageboy 删除、完整验收和 fresh-pass；门禁通过前当前生产链保持不变
 
 ## v0.8：状态栏点击与尺寸变化版
