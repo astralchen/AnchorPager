@@ -652,6 +652,12 @@ Public 保留：
 
 普通 scroll 或 orthogonal 任一硬门禁不稳定，立即停止，不进入迁移阶段，不删除第三方依赖和 Public Bool。不得改用私有层级、业务 delegate proxy、recognizer reset 或 offset 注入。
 
+#### 2026-07-17 阶段 0 执行结论：未通过并已清理
+
+Task 1 按测试先行完成隔离 Router、route recognizer、PagingScrollView、最小 Container 和仅启动参数可达的 Host 临时链路。真实 UIKit 首轮 4 条 UI 门禁结果为 2/4：普通横向 `UIScrollView` 的内部滚动与下一手势分页通过，原生 orthogonal 外普通区域分页及页面 boundary bounce 通过；原生 orthogonal 回到起点后的下一次向外手势未分页，无相邻页业务候选的原生 bounce 探针也未成立。证据保留于 `/private/tmp/AnchorPagerSelfHostedTask1UIKitGate-1.xcresult`。
+
+依照本节停止规则，没有执行第二、三轮，也没有进入 Task 2。Task 1 的 6 个临时生产文件、全部临时测试、Host/ViewController/GesturePriority/Example 分支与探针均已用 `apply_patch` 清理；当前生产继续使用 Tabman/Pageboy、`AnchorPagerPagingAdapter` 和 `allowsInteractiveHorizontalPagingAt` 静态策略。该次失败只否定本设计当前阶段 0 的具体 recognizer/Container 装配，后续若要重启自有分页迁移，必须先修订设计并重新建立能够同时覆盖原生 orthogonal 与无相邻页业务 bounce 的真实 UIKit 停止门禁。
+
 ### 阶段 1：Container 与 lifecycle
 
 完成 source/target geometry、containment、appearance、interactive/programmatic terminal、recentlyRetired 和资源测试；旧生产 Adapter 仍可作为回退事实。

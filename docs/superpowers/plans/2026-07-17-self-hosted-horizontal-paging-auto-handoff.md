@@ -569,6 +569,13 @@ git add Sources/AnchorPager Tests/AnchorPagerTests Examples/AnchorPagerExample d
 git commit -m "验证自有分页横向手势硬门禁"
 ```
 
+#### Task 1 实际执行结果（2026-07-17）
+
+- 已按 RED → GREEN 完成纯 Router/recognizer、PagingScrollView/Container、Host 临时门禁链路及四条真实 UI 测试；聚焦 Framework、Example unit 与 generic Simulator build 在进入 UI 门禁前通过。
+- 首轮真实 UIKit 门禁为 4 tests、2 pass、2 fail：普通横向业务 scroll 与 orthogonal 外普通区域/boundary bounce 通过；`testSelfHostedGateNativeOrthogonalStopsThenNextGesturePages` 未在回到起点后的下一手势切页，`testSelfHostedGateTerminalBusinessEdgeKeepsBusinessBounce` 未观察到业务 boundary overflow。
+- 失败结果包：`/private/tmp/AnchorPagerSelfHostedTask1UIKitGate-1.xcresult`。硬分支已停止后续轮次与 Task 2，并完整删除本任务临时生产、测试、Example 探针和运行时开关；旧 Adapter/Public Bool/Tabman/Pageboy 生产事实保持不变。
+- Task 1 状态为 **Blocked / failed-cleaned**。任何后续实现必须先更新设计和计划，不能从本次已清理的实验继续堆叠。
+
 ---
 
 ### Task 2: 补齐路由模型、共享 Session 与分页滚动物理

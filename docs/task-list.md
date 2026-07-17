@@ -608,7 +608,9 @@
 - [x] 确认自有横向分页架构设计：AnchorPager 自行实现 PagingContainer、PagingScrollView、分段栏、indicator 与 containment；PagingScrollView 不管理控制器，业务边缘采用自有 route 与 paging pan 的动态优先级，保留原生 orthogonal
 - [x] 确认退场缓存语义：消失页面 terminal 当场结束 appearance 并解除 containment，controller 实例进入有界 `recentlyRetired` 单槽，retention 与 managed inset ownership 解耦
 - [x] 编写并自审自有横向分页与业务边缘自动接力实施计划：共 9 个任务，Task 1 直接装配真实 Framework 临时执行模式，以 4 条 UI 覆盖普通横向 scroll、原生 orthogonal、普通区域分页/boundary bounce 和无相邻页业务 bounce，连续三轮通过；任一路径失败即完整清理实验并停止
-- [ ] 按新计划完成 TDD、Host/Container 迁移、static Bool 与 Tabman/Pageboy 删除、完整验收和 fresh-pass；门禁通过前当前生产链保持不变
+- [x] 已执行自有分页 Task 1 首轮真实 UIKit 停止门禁：4 条 UI 为 2 pass、2 fail；普通横向业务 scroll 与普通区域/boundary bounce 通过，原生 orthogonal 下一手势分页和无相邻页业务 bounce 未通过；证据为 `/private/tmp/AnchorPagerSelfHostedTask1UIKitGate-1.xcresult`
+- [x] 已按失败硬分支用 `apply_patch` 完整清理 Task 1 临时生产、测试、Host/Example 开关与探针；未执行第二、三轮和 Task 2，Tabman/Pageboy、Adapter 与 `allowsInteractiveHorizontalPagingAt` 生产链保持不变
+- [ ] **BLOCKED：** 按当前自有分页设计继续 Task 2–9、Host/Container 迁移、static Bool 与 Tabman/Pageboy 删除、完整验收和 fresh-pass；重启前必须先修订能够同时满足原生 orthogonal 与无相邻页业务 bounce 的阶段 0 方案
 
 ## v0.8：状态栏点击与尺寸变化版
 
