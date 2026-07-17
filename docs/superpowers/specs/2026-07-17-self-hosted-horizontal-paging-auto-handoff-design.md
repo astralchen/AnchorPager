@@ -2,7 +2,7 @@
 
 **日期：** 2026-07-17
 
-**状态：** 设计已确认；详细实施计划已完成并自审；生产实现、TDD、真实 UIKit 硬门禁、完整验收和 fresh-pass 尚未开始
+**状态：** Task 1 已执行并在首轮真实 UIKit 停止门禁以 2/4 失败：原生 orthogonal 回到起点后的下一手势未分页，末页业务 bounce 探针未达到；实验已完整清理，Framework 439/439 与 Example generic Simulator build 通过。Task 2–9 Blocked，重启前必须修订阶段 0 设计；当前 Tabman/Pageboy 静态生产链保持不变
 
 **适用范围：** AnchorPager 横向分页执行层、页面 `UIViewController` containment、分段栏与 indicator、普通横向业务 `UIScrollView`、`UICollectionViewCompositionalLayout` 原生 `.orthogonalScrollingBehavior`、下一次手势边缘接力、selection/reload transaction、系统侧滑返回、页面缓存、plain page presentation 和第三方依赖迁移。
 
