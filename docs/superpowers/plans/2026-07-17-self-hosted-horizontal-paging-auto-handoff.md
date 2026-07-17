@@ -493,7 +493,7 @@ func testSelfHostedGateTerminalBusinessEdgeKeepsBusinessBounce() throws
 
 第三条必须证明 orthogonal 外普通区域直接分页，并在首/尾无相邻页面时由 PagingScrollView 呈现原生 boundary bounce 且 Public selection 计数不变。第四条必须在最后一页命中仍登记为业务候选的边缘，证明无相邻页时手势仍归业务 bounce、页面 index 和 Public selection 计数不变。
 
-原生 orthogonal 测试只能操作 `ExampleCompositionalPageViewController` 的 `.orthogonalScrollingBehavior = .groupPaging` section，不能寻找或替换其内部私有 scroll 类。
+原生 orthogonal 测试只能操作 `ExampleCompositionalPageViewController` 现有 `.orthogonalScrollingBehavior = .continuousGroupLeadingBoundary` section，不能改变该业务布局行为、寻找或替换其内部私有 scroll 类。
 
 - [ ] **Step 8: 运行真实 UIKit 停止门禁并执行硬分支**
 
@@ -1292,7 +1292,7 @@ func testRTLPhysicalEdgesMapToLogicalPreviousAndNext()
 func testVerticalRootCollectionAndHeaderHandoffRemainStableAfterHorizontalPaging()
 func testBarAndPublicSelectionShareLatestPendingQueueWithInteractivePaging()
 func testReloadAndSizeTransitionKeepSingleSelectionTerminal()
-func testRecentlyRetiredReusesReversePageThenReleasesAfterDifferentTransition()
+func testRecentlyRetiredReusesReversePageThenReplacesFrameworkSlotAfterDifferentTransition()
 ```
 
 资源单测同时弱持有 Host、Container、PagingScrollView、route recognizer、source/target、retired page 和 animator，分别在 reload empty、memory warning、teardown 后断言预期释放；只允许当前/adjacent/recentlyRetired 三类设计内强引用。

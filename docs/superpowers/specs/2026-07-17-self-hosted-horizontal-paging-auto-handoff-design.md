@@ -14,6 +14,7 @@
 2. 完成真实 UIKit 硬门禁和全量迁移后，从 `Package.swift` 删除 Tabman 4.0.1 与 Pageboy 5.0.2。
 3. 删除 Public DataSource 方法 `pagerViewController(_:allowsInteractiveHorizontalPagingAt:)` 及其 generation-aware 静态策略链，不增加替代 Public API。
 4. 保留 Compositional Layout 原生 `.orthogonalScrollingBehavior`，不改写为业务自建横向 CollectionView。
+   Example 已有 `.continuousGroupLeadingBoundary` 行为保持不变；专项只增加测试探针，不改为其他 orthogonal case。
 5. 业务横向内容到边缘的同一次手势不接力；松手后下一次继续向外拖时自动分页。
 6. AnchorPager 不设置业务 `UIScrollView.delegate`、业务内建 pan delegate，也不写业务 offset、bounce 或 `isScrollEnabled`。
 7. 自有 route recognizer 与自有 PagingScrollView 原生 pan 共享一次路由决策；当前命中路径上的业务 pan 只在本次触摸的动态仲裁中等待 route，业务仍可消费时 route/paging 都失败并释放业务 pan，已在边缘且存在相邻页时 route 与 paging pan 同时开始并使业务 pan 失败。
