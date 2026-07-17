@@ -2,10 +2,12 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **执行状态（2026-07-16）：BLOCKED。** Task 1/2 已完成为未装配的内部实验基础；Task 3 的
+> **执行状态（2026-07-16）：BLOCKED。** Task 1/2 曾完成为未装配的内部实验基础；Task 3 的
 > Framework RED/GREEN 已执行，临时装配聚焦测试 51/51 通过，但真实 UIKit 硬门禁 0/2：普通业务
 > 横向 scroll 与原生 orthogonal 都在第一笔 interior 拖动时无法消费。已触发停止条件并用
-> `apply_patch` 清理 Task 3 生产、测试与 Example 临时变更；清理后 Task 1/2 聚焦回归 21/21 通过。
+> `apply_patch` 清理 Task 3 生产、测试与 Example 临时变更；删除 Task 1/2 实验基础前，其聚焦回归
+> 21/21 通过。用户随后确认删除未装配的 Task 1/2 实验源码、专属测试和日志断言，只保留失败证据
+> 与本计划的历史尝试正文；清理后 Framework 439/439 与 Example generic Simulator build 通过。
 > 当前生产继续使用 `allowsInteractiveHorizontalPagingAt` 及其 metadata/Host/Adapter 静态策略链；
 > Task 4–7 均未开始，不得按本计划继续执行。
 >
@@ -14,6 +16,9 @@
 > 真实 UIKit FAIL：`/private/tmp/AnchorPagerTask3UIKitGate-20260716-1840.xcresult`；
 > 清理后 21/21：
 > `/Users/sondra/Library/Developer/Xcode/DerivedData/AnchorPager-doqoqfcvrimbvshlhdiujkppdgrb/Logs/Test/Test-AnchorPager-2026.07.16_18-44-33-+0800.xcresult`。
+> 清理后 Framework 439/439：
+> `/Users/sondra/Library/Developer/Xcode/DerivedData/AnchorPager-doqoqfcvrimbvshlhdiujkppdgrb/Logs/Test/Test-AnchorPager-2026.07.17_09-42-12-+0800.xcresult`；
+> Example generic Simulator build：`** BUILD SUCCEEDED **`。
 
 **Goal:** 删除逐页静态横向分页开关，以框架自有 route gate 自动判断触点路径上的横向 `UIScrollView` 边界，使业务内容在当前手势内完整滚动，并在边缘后的下一次向外拖中由 Pageboy 原生分页。
 

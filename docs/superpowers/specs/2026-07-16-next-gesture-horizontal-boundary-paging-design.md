@@ -8,15 +8,18 @@
 
 ## 真实 UIKit 停止门禁结论
 
-2026-07-16 按本设计的停止规则执行了 Task 3。Task 1 的纯边界模型和 Task 2 的独立 route gate
-保留为**未装配的内部实验基础**；它们只能证明纯几何决策与 gate 自身行为，不构成已交付的自动路由能力。
+2026-07-16 按本设计的停止规则执行了 Task 3。Task 1 曾完成纯边界模型，Task 2 曾完成独立 route gate；
+它们只能证明纯几何决策与 gate 自身行为，不构成已交付的自动路由能力。用户随后确认删除这两项未装配
+实验源码、专属测试和日志断言，只保留失败证据与以下历史设计记录。
 Task 3 临时把 gate 装配到 paging surface，并建立 `pagingPan -> routeGate` 公开失败依赖后，Framework
 聚焦测试为 51/51；但两条真实 UIKit UI 门禁为 0/2：普通横向业务 scroll 的 interior 左拖卡片位移为
 `16 -> 16`，原生 orthogonal section 在 5 秒内未形成 `horizontalCurrent > 30`。两条路径都在“内容应消费”
 阶段即被阻断，无法继续证明边缘后的下一手势分页。
 
 失败证据为 `/private/tmp/AnchorPagerTask3UIKitGate-20260716-1840.xcresult`。实验装配、临时 Example
-全 `true` 策略与两条 UI 测试已按计划用 `apply_patch` 清理；清理后 Task 1/2 聚焦回归 21/21 通过。
+全 `true` 策略与两条 UI 测试已按计划用 `apply_patch` 清理；删除 Task 1/2 实验基础前，其聚焦回归
+21/21 通过。删除未装配基础后，Framework 439/439 与 Example generic Simulator build 通过；生产静态策略
+未改变。
 因此当前公开 UIKit 与既有 delegate/pan/offset/enable/bounce ownership 约束下，本方案已被真实门禁否定。
 未经新的设计确认，不得继续 Task 4、删除静态 Bool 链，或改用内建 delegate proxy、私有层级、
 Pageboy fork、业务 offset 注入及 recognizer reset。以下正文保留为本次被否定方案的设计与验收记录，

@@ -601,7 +601,8 @@
 - [x] 本专项生产代码 HEAD `db4b9bc` 全量验收：Framework 439/439、Example 70/70（19 单元 + 51 UI）、generic Simulator build，0 fail、0 skip、0 error/warning/analyzer warning；运行时问题关键字零命中，fresh-pass 终态 Critical 0、Important 0、Minor 0
 - [x] 确认横向业务边缘“下一次手势接力”设计：外部零配置、保留原生 orthogonal、框架以自有 route gate 和命中路径 `UIScrollView` 边界自动仲裁，不接管任何内建 pan delegate
 - [x] 完成横向业务边缘下一手势分页接力详细 TDD 计划并复核双边真实 UI 可达性
-- [x] 已执行 route gate 普通横向 scroll 与原生 orthogonal 真实 UIKit 可行性停止门禁：Framework 临时装配 51/51，但 UI 0/2，两类内容的首笔 interior 拖动均未消费；实验装配已清理，Task 1/2 基线 21/21 通过，当前静态策略保留
+- [x] 已执行 route gate 普通横向 scroll 与原生 orthogonal 真实 UIKit 可行性停止门禁：Framework 临时装配 51/51，但 UI 0/2，两类内容的首笔 interior 拖动均未消费；实验装配已清理，清理前 Task 1/2 基线 21/21 通过，当前静态策略保留
+- [x] 经用户确认删除未装配的 Task 1/2 纯边界模型、独立 route gate、专属测试和日志断言；失败证据及历史设计/计划正文保留，不改变 `allowsInteractiveHorizontalPagingAt` 生产链；清理后 Framework 439/439 与 Example generic Simulator build 通过
 - [ ] **BLOCKED / 未开始：** 移除 `allowsInteractiveHorizontalPagingAt`、reload/Host committed Bool、Adapter `isScrollEnabled` 开关和 Example 静态策略；当前 route-gate 方案已被真实门禁否定，未经新设计不得执行
 - [ ] **BLOCKED / 未开始：** 业务中部滚动、同手势不接力、边缘下一手势 Pageboy、普通区域分页、interactive-pop、reload/lifecycle/resource 与全量验收；Task 4 及后续迁移未开始
 
