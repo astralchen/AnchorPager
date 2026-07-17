@@ -2,6 +2,8 @@
 
 本文档面向维护者，记录当前 page generation、固定分页 viewport、纵向 handoff、边界 bounce、顶部 owner 路由，以及 v0.7 selection/interaction/跨 owner 惯性与页面级交互分页策略的架构边界。v0.5 Task 7、v0.6 与 v0.7 均已完成实现、最终全量验收和 fresh-pass，当前为 Ready。
 
+> **已确认但尚未实施的后续架构：** 2026-07-17 用户确认在隔离真实 UIKit 门禁通过后，以 AnchorPager 自有 `AnchorPagerPagingContainerViewController`、`AnchorPagerPagingScrollView` 和分段栏/indicator 取代 Tabman/Pageboy，并删除逐页静态 Bool。新设计见 `docs/superpowers/specs/2026-07-17-self-hosted-horizontal-paging-auto-handoff-design.md`。本文件下文继续准确描述当前生产 HEAD；新 Container、动态 route priority 和 `recentlyRetired` 尚不是生产事实。
+
 ## Container Top Inset 与固定高度 Header
 
 最终设计与验收记录见 `docs/superpowers/specs/2026-07-14-container-top-inset-fixed-header-presentation-design.md`。旧的“container top inset 恒为零、raw 稳定区间固定为 `0...collapsibleDistance`、折叠热路径缩小 Header host”契约已被取代，不得在后续版本恢复。

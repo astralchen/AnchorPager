@@ -4,6 +4,8 @@
 
 **状态：** 真实 UIKit 停止门禁已执行并失败；自动 route-gate 方案在当前公开 UIKit/ownership 约束下已否定，静态逐页 Bool 策略继续作为生产事实，Task 4 及后续迁移未开始
 
+> **后续设计（2026-07-17）：** 用户已授权替换 Pageboy/`UIPageViewController` 分页架构，并确认由 AnchorPager 自行实现分页 Container、PagingScrollView、分段栏、indicator 与 containment。新的自有分页和业务边缘自动接力设计见 `2026-07-17-self-hosted-horizontal-paging-auto-handoff-design.md`。本文及原实施计划继续保留为 Pageboy 外挂 route-gate 的失败记录，不得继续执行。
+
 **适用范围：** 横向业务 `UIScrollView`、`UICollectionViewCompositionalLayout` 原生 orthogonal section、Pageboy 横向分页手势起点仲裁、旧逐页静态分页开关移除、系统返回优先级、reload/surface replacement 与真实 UIKit 验收。
 
 ## 真实 UIKit 停止门禁结论

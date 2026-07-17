@@ -4,6 +4,8 @@
 
 AnchorPager 是一个全新的独立 UIKit 容器框架，用于实现可变 Header、吸顶分段栏、多页面横向分页、纵向嵌套滚动和顶部 overscroll 事件处理。
 
+> **2026-07-17 已确认迁移：** 本文中 Tabman/Pageboy、Pageboy containment、Tabman bar 和逐页 `allowsInteractiveHorizontalPagingAt` 仍描述当前生产事实。用户已确认在普通横向 scroll 与原生 orthogonal 的新真实 UIKit 停止门禁通过后，由 AnchorPager 自行实现 PagingContainer、PagingScrollView、分段栏、indicator 与 containment，并删除 Tabman/Pageboy 和旧 Public Bool；正式边界见 `docs/superpowers/specs/2026-07-17-self-hosted-horizontal-paging-auto-handoff-design.md`。实施计划、TDD 和验收尚未开始，门禁通过前不得提前改写本文其余条目为已完成事实。
+
 框架必须从零开发，与任何现有项目没有关系。不得迁移、引用、复用或沿用任何旧项目代码、API、目录结构、文档或测试。
 
 ## 2. 基础信息

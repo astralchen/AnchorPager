@@ -1,5 +1,7 @@
 # 横向业务边缘下一手势分页接力实施计划
 
+> **后续计划入口（2026-07-17）：** 本计划对应的 Pageboy 外挂 route-gate 已被真实 UIKit 门禁否定，仍保持 BLOCKED，不得恢复执行。用户已确认由 AnchorPager 自行实现 PagingContainer、PagingScrollView、分段栏、indicator 与 containment；新设计见 `docs/superpowers/specs/2026-07-17-self-hosted-horizontal-paging-auto-handoff-design.md`。新实施计划尚未编写。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 > **执行状态（2026-07-16）：BLOCKED。** Task 1/2 曾完成为未装配的内部实验基础；Task 3 的

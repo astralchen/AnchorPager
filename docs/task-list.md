@@ -603,8 +603,12 @@
 - [x] 完成横向业务边缘下一手势分页接力详细 TDD 计划并复核双边真实 UI 可达性
 - [x] 已执行 route gate 普通横向 scroll 与原生 orthogonal 真实 UIKit 可行性停止门禁：Framework 临时装配 51/51，但 UI 0/2，两类内容的首笔 interior 拖动均未消费；实验装配已清理，清理前 Task 1/2 基线 21/21 通过，当前静态策略保留
 - [x] 经用户确认删除未装配的 Task 1/2 纯边界模型、独立 route gate、专属测试和日志断言；失败证据及历史设计/计划正文保留，不改变 `allowsInteractiveHorizontalPagingAt` 生产链；清理后 Framework 439/439 与 Example generic Simulator build 通过
-- [ ] **BLOCKED / 未开始：** 移除 `allowsInteractiveHorizontalPagingAt`、reload/Host committed Bool、Adapter `isScrollEnabled` 开关和 Example 静态策略；当前 route-gate 方案已被真实门禁否定，未经新设计不得执行
-- [ ] **BLOCKED / 未开始：** 业务中部滚动、同手势不接力、边缘下一手势 Pageboy、普通区域分页、interactive-pop、reload/lifecycle/resource 与全量验收；Task 4 及后续迁移未开始
+- [ ] **BLOCKED / 不再执行：** 按旧 Pageboy 外挂 route-gate 方案移除 `allowsInteractiveHorizontalPagingAt`、reload/Host committed Bool、Adapter `isScrollEnabled` 开关和 Example 静态策略；该方案已被真实门禁否定并由 2026-07-17 自有分页设计取代
+- [ ] **BLOCKED / 不再执行：** 按旧方案继续业务中部滚动、边缘下一手势 Pageboy、普通区域分页、interactive-pop、reload/lifecycle/resource 与全量验收；Task 4 及后续迁移保持历史未执行
+- [x] 确认自有横向分页架构设计：AnchorPager 自行实现 PagingContainer、PagingScrollView、分段栏、indicator 与 containment；PagingScrollView 不管理控制器，业务边缘采用自有 route 与 paging pan 的动态优先级，保留原生 orthogonal
+- [x] 确认退场缓存语义：消失页面 terminal 当场结束 appearance 并解除 containment，controller 实例进入有界 `recentlyRetired` 单槽，retention 与 managed inset ownership 解耦
+- [ ] 编写并复核自有横向分页与业务边缘自动接力实施计划；第一任务必须是普通横向 scroll 与原生 orthogonal 的隔离真实 UIKit 停止门禁
+- [ ] 按新计划完成 TDD、Host/Container 迁移、static Bool 与 Tabman/Pageboy 删除、完整验收和 fresh-pass；门禁通过前当前生产链保持不变
 
 ## v0.8：状态栏点击与尺寸变化版
 
